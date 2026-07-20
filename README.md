@@ -10,6 +10,7 @@
 - **重启作用域** — 右上角刷新图标，一键强制停止背屏或主题商店（需 root）
 - **底栏样式** — 普通底栏 / 悬浮底栏 / 液态玻璃底栏三级切换
 - **毛玻璃效果** — 顶栏和底栏使用 Miuix `textureBlur`，悬浮底栏使用液态玻璃（GLSL 折射）
+- **国际化** — 支持中英文，通过 Android 字符串资源实现
 
 ## 安装
 
@@ -30,6 +31,17 @@ $env:ANDROID_HOME='D:\RuanJian\Android\Sdk'
 ```
 
 输出：`app/build/outputs/apk/debug/app-debug.apk`
+
+## UI 规范
+
+本项目遵循 Miuix 官方 UI 规范，详见 [MiuixSpec.md](MiuixSpec.md)。
+
+主要规范：
+- 所有 UI 组件使用 Miuix（Card、TopAppBar、NavigationBar、SmallTitle 等）
+- 自定义形状元素使用 squircle modifier，不使用 RoundedCornerShape
+- 所有用户字符串通过 `stringResource` 资源化
+- 可复用组件必须暴露 `modifier` 参数
+- contentPadding 仅设 top，末尾通过 Spacer 处理导航栏留白
 
 ## 已知限制
 

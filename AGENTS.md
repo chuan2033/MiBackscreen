@@ -32,6 +32,8 @@ $env:ANDROID_HOME='D:\RuanJian\Android\Sdk'
 | `app/src/main/java/hook/HyperBackscreen/ui/HomeScreen.kt` | 主界面、Tab 导航、重启作用域 |
 | `app/src/main/java/hook/HyperBackscreen/ui/home/HomePage.kt` | 主页：功能设置 + 系统信息 |
 | `app/src/main/java/hook/HyperBackscreen/ui/config/ConfigPage.kt` | 配置页：导航栏 + 当前配置 |
+| `app/src/main/res/values/strings.xml` | 英文字符串资源 |
+| `app/src/main/res/values-zh-rCN/strings.xml` | 中文字符串资源 |
 
 ## 项目规则
 
@@ -41,3 +43,5 @@ $env:ANDROID_HOME='D:\RuanJian\Android\Sdk'
 - `textureBlur` 组件不要放进同一个 `layerBackdrop` 采样子树
 - 新增开关需同时更新 HomePage 和 PrefsBridge 默认值
 - 修改 Xposed 目标包时，同步更新 `scope.list` 和文档
+- 所有用户字符串走 `stringResource`，禁止硬编码
+- 新增字符串同时加到 `values/strings.xml` 和 `values-zh-rCN/strings.xml`
