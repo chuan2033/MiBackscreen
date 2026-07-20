@@ -32,17 +32,6 @@ $env:ANDROID_HOME='D:\RuanJian\Android\Sdk'
 
 输出：`app/build/outputs/apk/debug/app-debug.apk`
 
-## UI 规范
-
-本项目遵循 Miuix 官方 UI 规范，详见 [MiuixSpec.md](MiuixSpec.md)。
-
-主要规范：
-- 所有 UI 组件使用 Miuix（Card、TopAppBar、NavigationBar、SmallTitle 等）
-- 自定义形状元素使用 squircle modifier，不使用 RoundedCornerShape
-- 所有用户字符串通过 `stringResource` 资源化
-- 可复用组件必须暴露 `modifier` 参数
-- contentPadding 仅设 top，末尾通过 Spacer 处理导航栏留白
-
 ## 已知限制
 
 - Hook 使用 R8 混淆名，目标应用更新后可能失效

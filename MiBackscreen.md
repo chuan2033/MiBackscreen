@@ -78,7 +78,6 @@ app/src/main/res/
 - 悬浮底栏：自定义 `FloatingBottomBar`，液态效果链 `vibrancy()` → `blur(4dp)` → `lens(refractionHeight=24dp, refractionAmount=24dp)`，选中指示器带 `chromaticAberration=0.5f` + `InnerShadow`
 - 毛玻璃警告：不要把 `textureBlur` 放进同一个 `layerBackdrop` 采样子树，否则触发 `libhwui` 原生崩溃
 - i18n：所有用户字符串通过 `stringResource` 资源化，支持中英文（`values/strings.xml` + `values-zh-rCN/strings.xml`）
-- UI 规范：遵循 Miuix 官方规范，使用 squircle 替代 RoundedCornerShape，contentPadding 仅设 top，首尾 Spacer 处理呼吸和导航栏留白
 
 ## 技术栈
 
