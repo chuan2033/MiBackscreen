@@ -13,3 +13,8 @@ captures/
 *.keystore
 **/build/
 **/.cxx/
+
+# 内部文档
+AGENTS.md
+MiBackscreen.md
+UI规范.md
