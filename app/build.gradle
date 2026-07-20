@@ -1,0 +1,62 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.plugin.compose'
+}
+
+kotlin {
+    jvmToolchain(21)
+}
+
+android {
+    namespace 'hook.HyperBackscreen'
+    compileSdk 37
+    buildToolsVersion "37.0.0"
+
+    defaultConfig {
+        applicationId "hook.HyperBackscreen"
+        minSdk 35
+        targetSdk 35
+        versionCode 2
+        versionName "1.1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+
+    buildFeatures {
+        buildConfig true
+        compose true
+    }
+
+    packaging {
+        resources {
+            merges += ["META-INF/xposed/*"]
+            excludes += ["**"]
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.activity:activity-compose:1.13.0'
+    implementation 'top.yukonga.miuix.kmp:miuix-ui-android:0.9.3'
+    implementation 'top.yukonga.miuix.kmp:miuix-preference-android:0.9.3'
+    implementation 'top.yukonga.miuix.kmp:miuix-icons-android:0.9.3'
+    implementation 'top.yukonga.miuix.kmp:miuix-blur-android:0.9.3'
+    compileOnly 'io.github.libxposed:api:102.0.0'
+    implementation files('libs/interface-102.0.0.jar', 'libs/service-102.0.0.jar')
+}

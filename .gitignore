@@ -1,0 +1,15 @@
+.gradle/
+.idea/
+.kotlin/
+.miuix-temp/
+local.properties
+captures/
+*.iml
+*.log
+*.apk
+*.ap_
+*.aab
+*.jks
+*.keystore
+**/build/
+**/.cxx/

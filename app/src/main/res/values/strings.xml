@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common -->
+    <string name="common_back">Back</string>
+    <string name="common_select_all">Select All</string>
+    <string name="common_confirm">Confirm</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_version">Version %1$s</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_config">Config</string>
+    <string name="nav_about">About</string>
+
+    <!-- Home Page -->
+    <string name="home_settings_title">Settings</string>
+    <string name="home_disable_long_press_title">Disable rear screen long press to switch wallpaper</string>
+    <string name="home_disable_long_press_summary_on">Currently intercepting long press to enter edit mode</string>
+    <string name="home_disable_long_press_summary_off">Currently restoring factory long press behavior</string>
+    <string name="home_remove_wallpaper_limit_title">Remove rear screen wallpaper count limit</string>
+    <string name="home_remove_wallpaper_limit_summary_on">Removed 15 wallpaper limit</string>
+    <string name="home_remove_wallpaper_limit_summary_off">Currently keeping default 15 limit</string>
+    <string name="home_fix_apply_title">Fix rear screen apply failure</string>
+    <string name="home_fix_apply_summary">Requires theme crack to be used together</string>
+    <string name="home_system_info_title">System Info</string>
+    <string name="home_module_version">Module Version</string>
+    <string name="home_device">Device</string>
+    <string name="home_system_version">System Version</string>
+    <string name="home_android_version">Android Version</string>
+
+    <!-- Config Page -->
+    <string name="config_nav_bar_title">Navigation Bar</string>
+    <string name="config_floating_bar_title">Floating Bar</string>
+    <string name="config_floating_bar_summary_on">Currently using floating bar</string>
+    <string name="config_floating_bar_summary_off">Currently using standard bar</string>
+    <string name="config_liquid_glass_title">Liquid Glass</string>
+    <string name="config_liquid_glass_summary_on">Liquid glass effect enabled</string>
+    <string name="config_liquid_glass_summary_off">Liquid glass effect disabled</string>
+    <string name="config_current_config_title">Current Config</string>
+    <string name="config_long_press_disabled">Long Press Disabled</string>
+    <string name="config_wallpaper_limit">Wallpaper Limit</string>
+    <string name="config_apply_fix">Apply Fix</string>
+    <string name="config_bar_style">Bar Style</string>
+    <string name="config_liquid_glass_status">Liquid Glass</string>
+    <string name="config_status_on">On</string>
+    <string name="config_status_off">Off</string>
+    <string name="config_status_removed">Removed</string>
+    <string name="config_status_default">Default</string>
+    <string name="config_status_floating">Floating</string>
+    <string name="config_status_standard">Standard</string>
+
+    <!-- About Page -->
+    <string name="about_developer_title">Developer</string>
+    <string name="about_project_url_title">Project URL</string>
+    <string name="about_credits_title">Credits</string>
+    <string name="about_miuix_summary">This project uses Miuix UI components</string>
+    <string name="about_miuix_lib">miuix-kotlin-multiplatform (Apache-2.0)</string>
+    <string name="about_open_source_licenses">Open Source Licenses</string>
+    <string name="about_view_licenses">View dependencies and license information</string>
+
+    <!-- License Page -->
+    <string name="license_title">Open Source Licenses</string>
+
+    <!-- Restart Scope Dialog -->
+    <string name="restart_title">Quick Restart App</string>
+    <string name="restart_scope">Restart Scope</string>
+    <string name="restart_backscreen">Rear Screen</string>
+    <string name="restart_theme_manager">Theme Store</string>
+</resources>

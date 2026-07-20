@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common -->
+    <string name="common_back">返回</string>
+    <string name="common_select_all">全选</string>
+    <string name="common_confirm">确定</string>
+    <string name="common_cancel">取消</string>
+    <string name="common_version">版本 %1$s</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">主页</string>
+    <string name="nav_config">配置</string>
+    <string name="nav_about">关于</string>
+
+    <!-- Home Page -->
+    <string name="home_settings_title">功能设置</string>
+    <string name="home_disable_long_press_title">禁用背屏长按切换壁纸</string>
+    <string name="home_disable_long_press_summary_on">当前会拦截长按进入编辑态</string>
+    <string name="home_disable_long_press_summary_off">当前恢复原厂长按行为</string>
+    <string name="home_remove_wallpaper_limit_title">去除背屏壁纸数量限制</string>
+    <string name="home_remove_wallpaper_limit_summary_on">已去除15张壁纸上限</string>
+    <string name="home_remove_wallpaper_limit_summary_off">当前保持默认15张上限</string>
+    <string name="home_fix_apply_title">修复背屏应用失败</string>
+    <string name="home_fix_apply_summary">需搭配主题破解使用</string>
+    <string name="home_system_info_title">当前系统信息</string>
+    <string name="home_module_version">模块版本</string>
+    <string name="home_device">机型</string>
+    <string name="home_system_version">系统版本</string>
+    <string name="home_android_version">安卓版本</string>
+
+    <!-- Config Page -->
+    <string name="config_nav_bar_title">导航栏</string>
+    <string name="config_floating_bar_title">悬浮底栏</string>
+    <string name="config_floating_bar_summary_on">当前使用悬浮底栏</string>
+    <string name="config_floating_bar_summary_off">当前使用普通底栏</string>
+    <string name="config_liquid_glass_title">液态玻璃</string>
+    <string name="config_liquid_glass_summary_on">已启用液态玻璃效果</string>
+    <string name="config_liquid_glass_summary_off">关闭液态玻璃效果</string>
+    <string name="config_current_config_title">当前配置</string>
+    <string name="config_long_press_disabled">长按禁用</string>
+    <string name="config_wallpaper_limit">壁纸限制</string>
+    <string name="config_apply_fix">应用修复</string>
+    <string name="config_bar_style">底栏样式</string>
+    <string name="config_liquid_glass_status">液态玻璃</string>
+    <string name="config_status_on">开启</string>
+    <string name="config_status_off">关闭</string>
+    <string name="config_status_removed">已去除</string>
+    <string name="config_status_default">保持默认</string>
+    <string name="config_status_floating">悬浮底栏</string>
+    <string name="config_status_standard">普通底栏</string>
+
+    <!-- About Page -->
+    <string name="about_developer_title">开发者</string>
+    <string name="about_project_url_title">项目地址</string>
+    <string name="about_credits_title">引用</string>
+    <string name="about_miuix_summary">本项目使用 Miuix UI 组件构建</string>
+    <string name="about_miuix_lib">miuix-kotlin-multiplatform (Apache-2.0)</string>
+    <string name="about_open_source_licenses">开源许可</string>
+    <string name="about_view_licenses">查看依赖与许可证信息</string>
+
+    <!-- License Page -->
+    <string name="license_title">开源许可</string>
+
+    <!-- Restart Scope Dialog -->
+    <string name="restart_title">快速重启应用</string>
+    <string name="restart_scope">重启作用域</string>
+    <string name="restart_backscreen">背屏</string>
+    <string name="restart_theme_manager">主题商店</string>
+</resources>
