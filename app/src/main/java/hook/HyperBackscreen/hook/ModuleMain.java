@@ -6,30 +6,25 @@ import android.view.MotionEvent;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.List;
 
 import hook.HyperBackscreen.bridge.PrefsBridge;
-import hook.HyperBackscreen.bridge.SettingsSyncBridge;
 import hook.HyperBackscreen.common.Constants;
 import io.github.libxposed.api.XposedModule;
 
 public class ModuleMain extends XposedModule {
-    private static volatile ModuleMain runningInstance;
     private volatile boolean hooksInstalled = false;
-    private volatile boolean hookContextReady = false;
-
-    @Nullable
-    public static ModuleMain getRunningInstance() {
-        return runningInstance;
-    }
+    private volatile boolean themeStoreHooksInstalled = false;
 
     @Override
     public void onModuleLoaded(@NonNull ModuleLoadedParam param) {
-        runningInstance = this;
         log(Log.INFO, Constants.LOG_TAG, "onModuleLoaded: " + param.getProcessName());
     }
-
-    private volatile boolean themeStoreHooksInstalled = false;
 
     @Override
     public void onPackageReady(@NonNull PackageReadyParam param) {
@@ -40,7 +35,6 @@ public class ModuleMain extends XposedModule {
             synchronized (this) {
                 if (hooksInstalled) return;
                 try {
-                    installHookContextBootstrap(param.getClassLoader());
                     installLongPressHooks(param.getClassLoader());
                     hooksInstalled = true;
                     log(Log.INFO, Constants.LOG_TAG, "Hooks installed for " + Constants.TARGET_PACKAGE);
@@ -67,31 +61,6 @@ public class ModuleMain extends XposedModule {
         }
     }
 
-    private void installHookContextBootstrap(@NonNull ClassLoader classLoader) {
-        Class<?> mainPanelClass = findClass(Constants.MAIN_PANEL_CLASS, classLoader);
-        if (mainPanelClass == null) {
-            log(Log.WARN, Constants.LOG_TAG, "Hook target missing: " + Constants.MAIN_PANEL_CLASS);
-            return;
-        }
-        hookMethodIfPresent(
-                mainPanelClass,
-                "dispatchTouchEvent",
-                new Class[]{MotionEvent.class},
-                "MainPanel#dispatchTouchEvent",
-                chain -> {
-                    if (!hookContextReady) {
-                        Object thisObject = chain.getThisObject();
-                        if (thisObject instanceof android.view.View view) {
-                            PrefsBridge.setHookContext(view.getContext());
-                            SettingsSyncBridge.ensureHookReceiverInstalled(view.getContext());
-                            hookContextReady = true;
-                        }
-                    }
-                    return chain.proceed();
-                }
-        );
-    }
-
     private void installLongPressHooks(@NonNull ClassLoader classLoader) {
         Class<?> newGestureClass = findClass(Constants.HOOK_CLASS_LONG_PRESS_NEW, classLoader);
         if (newGestureClass != null) {
@@ -116,10 +85,10 @@ public class ModuleMain extends XposedModule {
         hookMethodIfPresent(
                 viewModelClass,
                 Constants.THEME_APPLY_CHECK_METHOD,
-                new Class[]{java.util.List.class},
-                "RearScreenDetailViewModel#o5",
+                new Class[]{List.class},
+                Constants.THEME_REAR_VIEWMODEL_CLASS + "#" + Constants.THEME_APPLY_CHECK_METHOD,
                 chain -> {
-                    if (PrefsBridge.shouldRemoveWallpaperLimit()) {
+                    if (PrefsBridge.shouldRemoveWallpaperLimit(this)) {
                         return true;
                     }
                     return chain.proceed();
@@ -128,26 +97,24 @@ public class ModuleMain extends XposedModule {
     }
 
     private void installRearScreenApplyFixHook(@NonNull ClassLoader classLoader) {
-        if (!PrefsBridge.shouldFixRearScreenApply()) {
-            return;
-        }
-
-        Class<?> applyResultClass = findClass("com.rearScreen.manager.RearScreenResOperationHelper$Companion$apply$applyResult$1", classLoader);
+        Class<?> applyResultClass = findClass(Constants.THEME_APPLY_RESULT_CLASS, classLoader);
         if (applyResultClass == null) {
             return;
         }
 
         hookMethodIfPresent(
                 applyResultClass,
-                "invokeSuspend",
+                Constants.THEME_APPLY_RESULT_METHOD,
                 new Class[]{Object.class},
-                "RearScreenResOperationHelper$Companion$apply$applyResult$1#invokeSuspend",
+                Constants.THEME_APPLY_RESULT_CLASS + "#" + Constants.THEME_APPLY_RESULT_METHOD,
                 chain -> {
-                    Object bean = getFieldValue(chain.getThisObject(), "$bean");
-                    if (bean != null) {
-                        fillSnapshotPaths(bean);
-                        patchRightsPath(bean, classLoader);
-                        patchMtzPath(bean);
+                    if (PrefsBridge.shouldFixRearScreenApply(this)) {
+                        Object bean = getFieldValue(chain.getThisObject(), Constants.THEME_APPLY_BEAN_FIELD);
+                        if (bean != null) {
+                            fillSnapshotPaths(bean);
+                            patchRightsPath(bean, classLoader);
+                            patchMtzPath(bean);
+                        }
                     }
                     return chain.proceed();
                 }
@@ -158,15 +125,16 @@ public class ModuleMain extends XposedModule {
         try {
             String localPath = (String) callMethod(bean, "getResLocalPath");
             String snapshotPath = (String) callMethod(bean, "getResSnapshotPath");
-            if (isEmpty(snapshotPath) && !isEmpty(localPath) && new java.io.File(localPath).exists()) {
+            if (isEmpty(snapshotPath) && !isEmpty(localPath) && new File(localPath).exists()) {
                 callMethod(bean, "setResSnapshotPath", localPath);
             }
             String metaSrc = (String) callMethod(bean, "getMetaPath");
             String metaSnap = (String) callMethod(bean, "getMetaSnapshotPath");
-            if (isEmpty(metaSnap) && !isEmpty(metaSrc) && new java.io.File(metaSrc).exists()) {
+            if (isEmpty(metaSnap) && !isEmpty(metaSrc) && new File(metaSrc).exists()) {
                 callMethod(bean, "setMetaSnapshotPath", metaSrc);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "fillSnapshotPaths failed", e);
         }
     }
 
@@ -182,25 +150,25 @@ public class ModuleMain extends XposedModule {
             }
 
             String rightsDir = resolveRightsDir(classLoader);
-            String baseName = new java.io.File(rightPath).getName();
+            String baseName = new File(rightPath).getName();
             if (!baseName.startsWith("rearscreen_")) {
                 baseName = "rearscreen_" + baseName;
             }
             String target = rightsDir + baseName;
 
-            java.io.File targetFile = new java.io.File(target);
+            File targetFile = new File(target);
             if (targetFile.exists()) {
-                setWorldAccessible(targetFile);
+                grantReadAccess(targetFile);
                 callMethod(bean, "setRightPath", target);
                 return;
             }
 
-            java.io.File sourceFile = new java.io.File(rightPath);
+            File sourceFile = new File(rightPath);
             if (!sourceFile.exists()) {
-                java.io.File fallback = findNewestRightsFile(rightsDir, target);
+                File fallback = findNewestRightsFile(rightsDir, target);
                 if (fallback != null) {
                     safeCopy(fallback, targetFile);
-                    setWorldAccessible(targetFile);
+                    grantReadAccess(targetFile);
                     callMethod(bean, "setRightPath", target);
                 } else {
                     callMethod(bean, "setRightPath", target);
@@ -210,10 +178,11 @@ public class ModuleMain extends XposedModule {
 
             if (!targetFile.exists()) {
                 safeCopy(sourceFile, targetFile);
-                setWorldAccessible(targetFile);
+                grantReadAccess(targetFile);
             }
             callMethod(bean, "setRightPath", target);
-        } catch (Throwable ignored) {
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "patchRightsPath failed", e);
         }
     }
 
@@ -223,7 +192,7 @@ public class ModuleMain extends XposedModule {
             if (isEmpty(srcMtz)) {
                 return;
             }
-            java.io.File srcFile = new java.io.File(srcMtz);
+            File srcFile = new File(srcMtz);
             if (!srcFile.exists() || srcFile.isDirectory() || !srcMtz.endsWith(".mrc")) {
                 return;
             }
@@ -234,36 +203,37 @@ public class ModuleMain extends XposedModule {
             if (isEmpty(destMtz)) {
                 return;
             }
-            java.io.File destFile = new java.io.File(destMtz);
+            File destFile = new File(destMtz);
             if (!destFile.exists()) {
                 safeCopy(srcFile, destFile);
-                setWorldAccessible(destFile);
+                grantReadAccess(destFile);
             }
             callMethod(bean, "setResLocalPath", destMtz);
             callMethod(bean, "setResSnapshotPath", destMtz);
-        } catch (Throwable ignored) {
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "patchMtzPath failed", e);
         }
     }
 
     private String resolveRightsDir(ClassLoader classLoader) {
         String dir = getStaticStringField(classLoader,
-                "com.android.thememanager.basemodule.resource.constants.ThemeResourceConstants", "cmzf");
+                Constants.THEME_RESOURCE_CONSTANTS_CLASS, Constants.THEME_RIGHTS_DIR_FIELD_PRIMARY);
         if (!isEmpty(dir)) return dir;
         dir = getStaticStringField(classLoader,
-                "com.android.thememanager.basemodule.resource.constants.ThemeResourceConstants", "qp5l");
+                Constants.THEME_RESOURCE_CONSTANTS_CLASS, Constants.THEME_RIGHTS_DIR_FIELD_FALLBACK);
         if (!isEmpty(dir)) return dir;
-        return "/data/system/theme/rights/";
+        return Constants.THEME_RIGHTS_DIR_DEFAULT;
     }
 
-    private java.io.File findNewestRightsFile(String dirPath, String excludePath) {
-        java.io.File dir = new java.io.File(dirPath);
-        java.io.File[] files = dir.listFiles();
+    private File findNewestRightsFile(String dirPath, String excludePath) {
+        File dir = new File(dirPath);
+        File[] files = dir.listFiles();
         if (files == null || files.length == 0) {
             return null;
         }
-        java.io.File newest = null;
+        File newest = null;
         long newestTime = Long.MIN_VALUE;
-        for (java.io.File f : files) {
+        for (File f : files) {
             if (f == null || !f.isFile()) continue;
             String name = f.getName();
             if (!name.startsWith("rearscreen_") || !name.endsWith(".mra")) continue;
@@ -276,26 +246,28 @@ public class ModuleMain extends XposedModule {
         return newest;
     }
 
-    private void setWorldAccessible(java.io.File file) {
+    private void grantReadAccess(File file) {
+        // 仅设为全局可读（供主题服务跨进程读取）；写权限限所有者，且不置可执行位
         file.setReadable(true, false);
-        file.setWritable(true, false);
-        file.setExecutable(true, false);
+        file.setWritable(true, true);
+        file.setExecutable(false, false);
     }
 
-    private void safeCopy(java.io.File src, java.io.File dst) {
-        java.io.File parent = dst.getParentFile();
+    private void safeCopy(File src, File dst) {
+        File parent = dst.getParentFile();
         if (parent != null && !parent.exists()) {
             parent.mkdirs();
         }
-        try (java.io.FileInputStream in = new java.io.FileInputStream(src);
-             java.io.FileOutputStream out = new java.io.FileOutputStream(dst)) {
+        try (FileInputStream in = new FileInputStream(src);
+             FileOutputStream out = new FileOutputStream(dst)) {
             byte[] buf = new byte[8192];
             int n;
             while ((n = in.read(buf)) != -1) {
                 out.write(buf, 0, n);
             }
             out.getFD().sync();
-        } catch (Throwable ignored) {
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "safeCopy failed", e);
         }
     }
 
@@ -305,7 +277,7 @@ public class ModuleMain extends XposedModule {
 
     private static Object getFieldValue(Object target, String field) {
         try {
-            java.lang.reflect.Field f = target.getClass().getDeclaredField(field);
+            Field f = target.getClass().getDeclaredField(field);
             f.setAccessible(true);
             return f.get(target);
         } catch (Throwable e) {
@@ -316,18 +288,29 @@ public class ModuleMain extends XposedModule {
     private static Object callMethod(Object target, String method, Object... args) throws Throwable {
         Class<?>[] paramTypes = new Class[args.length];
         for (int i = 0; i < args.length; i++) {
-            paramTypes[i] = args[i].getClass();
-            if (paramTypes[i] == Boolean.class) paramTypes[i] = boolean.class;
-            else if (paramTypes[i] == Integer.class) paramTypes[i] = int.class;
-            else if (paramTypes[i] == Long.class) paramTypes[i] = long.class;
+            Object a = args[i];
+            if (a == null) {
+                paramTypes[i] = Object.class;
+                continue;
+            }
+            Class<?> c = a.getClass();
+            if (c == Boolean.class) c = boolean.class;
+            else if (c == Integer.class) c = int.class;
+            else if (c == Long.class) c = long.class;
+            else if (c == Float.class) c = float.class;
+            else if (c == Double.class) c = double.class;
+            else if (c == Short.class) c = short.class;
+            else if (c == Byte.class) c = byte.class;
+            else if (c == Character.class) c = char.class;
+            paramTypes[i] = c;
         }
-        java.lang.reflect.Method m = findMethod(target.getClass(), method, paramTypes);
+        Method m = findMethod(target.getClass(), method, paramTypes);
         if (m == null) throw new NoSuchMethodException(method);
         m.setAccessible(true);
         return m.invoke(target, args);
     }
 
-    private static java.lang.reflect.Method findMethod(Class<?> clazz, String name, Class<?>[] paramTypes) {
+    private static Method findMethod(Class<?> clazz, String name, Class<?>[] paramTypes) {
         while (clazz != null) {
             try {
                 return clazz.getDeclaredMethod(name, paramTypes);
@@ -341,7 +324,7 @@ public class ModuleMain extends XposedModule {
     private static String getStaticStringField(ClassLoader classLoader, String className, String fieldName) {
         try {
             Class<?> clazz = Class.forName(className, false, classLoader);
-            java.lang.reflect.Field field = clazz.getDeclaredField(fieldName);
+            Field field = clazz.getDeclaredField(fieldName);
             field.setAccessible(true);
             Object value = field.get(null);
             if (value instanceof String) {

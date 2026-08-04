@@ -10,7 +10,7 @@ kotlin {
 android {
     namespace 'hook.HyperBackscreen'
     compileSdk 37
-    buildToolsVersion "37.0.0"
+    buildToolsVersion = "37.0.0"
 
     defaultConfig {
         applicationId "hook.HyperBackscreen"
@@ -27,9 +27,8 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            minifyEnabled false
+            shrinkResources false
         }
     }
 
@@ -46,7 +45,6 @@ android {
     packaging {
         resources {
             merges += ["META-INF/xposed/*"]
-            excludes += ["**"]
         }
     }
 }

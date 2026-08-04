@@ -13,6 +13,7 @@ captures/
 *.keystore
 **/build/
 **/.cxx/
+.tmp-modules_config.db
 
 # 内部文档
 AGENTS.md

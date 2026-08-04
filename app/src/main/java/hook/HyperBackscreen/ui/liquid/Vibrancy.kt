@@ -6,7 +6,7 @@ package hook.HyperBackscreen.ui.liquid
 import top.yukonga.miuix.kmp.blur.BackdropEffectScope
 import top.yukonga.miuix.kmp.blur.colorControls
 
-fun BackdropEffectScope.vibrancy() {
+internal fun BackdropEffectScope.vibrancy() {
     colorControls(
         brightness = 0f,
         contrast = 1f,

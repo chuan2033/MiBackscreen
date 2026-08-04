@@ -1,8 +1,5 @@
 package hook.HyperBackscreen.ui.about
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,12 +13,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
+import hook.HyperBackscreen.ui.components.AboutArrowPreference
+import hook.HyperBackscreen.ui.components.BlurredBar
 import hook.HyperBackscreen.ui.components.CardBlock
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -29,15 +26,10 @@ import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
-import top.yukonga.miuix.kmp.blur.BlendColorEntry
-import top.yukonga.miuix.kmp.blur.BlurDefaults
-import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
-import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.utils.overScrollVertical
@@ -70,7 +62,12 @@ private val licenses = listOf(
         url = "https://github.com/libxposed/api"
     ),
     LicenseItem(
-        name = "AndroidLiquidGlass (KernelSU)",
+        name = "AndroidLiquidGlass",
+        license = "Apache-2.0",
+        url = "https://github.com/Kyant0/AndroidLiquidGlass"
+    ),
+    LicenseItem(
+        name = "KernelSU (FloatingBottomBar)",
         license = "GPL-3.0",
         url = "https://github.com/tiann/KernelSU"
     )
@@ -78,18 +75,11 @@ private val licenses = listOf(
 
 @Composable
 internal fun LicensePage(onBack: () -> Unit) {
-    val context = LocalContext.current
     val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
     val surfaceColor = MiuixTheme.colorScheme.surface
     val backdrop = rememberLayerBackdrop {
         drawRect(surfaceColor)
         drawContent()
-    }
-    val blurActive = backdrop != null
-    val barColor = if (blurActive) {
-        Color.Transparent
-    } else {
-        surfaceColor
     }
 
     BackHandler(onBack = onBack)
@@ -98,11 +88,11 @@ internal fun LicensePage(onBack: () -> Unit) {
         modifier = Modifier.fillMaxSize(),
         containerColor = MiuixTheme.colorScheme.surface,
         topBar = {
-            BlurredBar(backdrop, blurActive) {
+            BlurredBar(backdrop) {
                 TopAppBar(
                     title = stringResource(R.string.license_title),
                     largeTitle = stringResource(R.string.license_title),
-                    color = barColor,
+                    color = Color.Transparent,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
                         IconButton(onClick = onBack) {
@@ -117,7 +107,7 @@ internal fun LicensePage(onBack: () -> Unit) {
             }
         }
     ) { paddingValues ->
-        Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
+        Box(modifier = Modifier.layerBackdrop(backdrop)) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -134,10 +124,10 @@ internal fun LicensePage(onBack: () -> Unit) {
                 }
                 items(licenses) { license ->
                     CardBlock {
-                        ArrowPreference(
+                        AboutArrowPreference(
                             title = license.name,
                             summary = "${license.license} · ${license.url}",
-                            onClick = { openUrl(context, license.url) }
+                            url = license.url
                         )
                     }
                 }
@@ -147,36 +137,4 @@ internal fun LicensePage(onBack: () -> Unit) {
             }
         }
     }
-}
-
-@Composable
-private fun BlurredBar(
-    backdrop: LayerBackdrop?,
-    blurEnabled: Boolean,
-    content: @Composable () -> Unit
-) {
-    Box(
-        modifier = if (blurEnabled && backdrop != null) {
-            Modifier.textureBlur(
-                backdrop = backdrop,
-                shape = RectangleShape,
-                blurRadius = 25f,
-                colors = BlurDefaults.blurColors(
-                    blendColors = listOf(
-                        BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(0.8f))
-                    )
-                )
-            )
-        } else {
-            Modifier
-        }
-    ) {
-        content()
-    }
-}
-
-private fun openUrl(context: Context, url: String) {
-    try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-    } catch (_: Exception) {}
 }

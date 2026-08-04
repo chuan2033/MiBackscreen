@@ -10,7 +10,7 @@ import top.yukonga.miuix.kmp.blur.BackdropEffectScope
 import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.runtimeShaderEffect
 
-fun BackdropEffectScope.lens(
+internal fun BackdropEffectScope.lens(
     refractionHeight: Float,
     refractionAmount: Float,
     depthEffect: Boolean = false,
@@ -124,7 +124,7 @@ float circleMap(float x) {
 half4 main(float2 coord) {
     float2 halfSize = size * 0.5;
     float2 centeredCoord = (coord + offset) - halfSize;
-    float radius = radiusAt(coord, cornerRadii);
+    float radius = radiusAt(centeredCoord, cornerRadii);
 
     float sd = sdRoundedRect(centeredCoord, halfSize, radius);
     if (-sd >= refractionHeight) {
@@ -161,7 +161,7 @@ float circleMap(float x) {
 half4 main(float2 coord) {
     float2 halfSize = size * 0.5;
     float2 centeredCoord = (coord + offset) - halfSize;
-    float radius = radiusAt(coord, cornerRadii);
+    float radius = radiusAt(centeredCoord, cornerRadii);
 
     float sd = sdRoundedRect(centeredCoord, halfSize, radius);
     if (-sd >= refractionHeight) {

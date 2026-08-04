@@ -1,6 +1,5 @@
 package hook.HyperBackscreen.ui.animation
 
-import android.annotation.SuppressLint
 import android.graphics.RuntimeShader
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
@@ -20,8 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.intellij.lang.annotations.Language
 
-@SuppressLint("NewApi")
-class InteractiveHighlight(
+internal class InteractiveHighlight(
     val animationScope: CoroutineScope,
     val position: (size: Size, offset: Offset) -> Offset = { _, offset -> offset }
 ) {

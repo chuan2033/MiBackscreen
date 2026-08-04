@@ -9,16 +9,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
@@ -36,22 +35,19 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import hook.HyperBackscreen.R
 import androidx.compose.ui.unit.sp
+import hook.HyperBackscreen.R
+import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.ui.about.AboutPage
 import hook.HyperBackscreen.ui.about.LicensePage
-import hook.HyperBackscreen.ui.config.ConfigPage
-import hook.HyperBackscreen.ui.home.HomePage
-import top.yukonga.miuix.kmp.blur.BlendColorEntry
-import top.yukonga.miuix.kmp.blur.BlurDefaults
-import top.yukonga.miuix.kmp.blur.LayerBackdrop
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.blur.textureBlur
+import hook.HyperBackscreen.ui.components.BlurredBar
 import hook.HyperBackscreen.ui.components.FloatingBottomBar
 import hook.HyperBackscreen.ui.components.FloatingBottomBarItem
+import hook.HyperBackscreen.ui.config.ConfigPage
+import hook.HyperBackscreen.ui.home.HomePage
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
@@ -60,7 +56,11 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
-import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.blur.BlendColorEntry
+import top.yukonga.miuix.kmp.blur.BlurDefaults
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Info
@@ -68,10 +68,10 @@ import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.preference.CheckboxLocation
 import top.yukonga.miuix.kmp.preference.CheckboxPreference
-import top.yukonga.miuix.kmp.window.WindowDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import top.yukonga.miuix.kmp.window.WindowDialog
 
 private val navItems = listOf(
     R.string.nav_home to MiuixIcons.Home,
@@ -85,8 +85,8 @@ private data class RestartScopeItem(
 )
 
 private val restartScopeItems = listOf(
-    RestartScopeItem(R.string.restart_backscreen, "com.xiaomi.subscreencenter"),
-    RestartScopeItem(R.string.restart_theme_manager, "com.android.thememanager")
+    RestartScopeItem(R.string.restart_backscreen, Constants.TARGET_PACKAGE),
+    RestartScopeItem(R.string.restart_theme_manager, Constants.THEME_STORE_PACKAGE)
 )
 
 @Composable
@@ -164,12 +164,6 @@ private fun MainContent(
         drawRect(surfaceColor)
         drawContent()
     }
-    val blurActive = backdrop != null
-    val barColor = if (blurActive) {
-        Color.Transparent
-    } else {
-        surfaceColor
-    }
     val glassBlurColors = BlurDefaults.blurColors(
         blendColors = listOf(
             BlendColorEntry(
@@ -185,10 +179,10 @@ private fun MainContent(
         modifier = Modifier.fillMaxSize(),
         containerColor = MiuixTheme.colorScheme.surface,
         topBar = {
-            BlurredBar(backdrop, blurActive) {
+            BlurredBar(backdrop) {
                 TopAppBar(
                     title = stringResource(navItems[selected].first),
-                    color = barColor,
+                    color = Color.Transparent,
                     scrollBehavior = scrollBehavior,
                     actions = {
                         Box(
@@ -210,7 +204,7 @@ private fun MainContent(
         }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
+            Box(modifier = Modifier.layerBackdrop(backdrop)) {
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -281,7 +275,7 @@ private fun MainContent(
                 }
             }
 
-            if (floatingNavBar && backdrop != null) {
+            if (floatingNavBar) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -293,7 +287,7 @@ private fun MainContent(
                         onSelected = { onSelectedChange(it) },
                         backdrop = backdrop,
                         tabsCount = navItems.size,
-                        isBlurEnabled = liquidGlass && blurActive
+                        isBlurEnabled = liquidGlass
                     ) {
                         navItems.forEachIndexed { index, (labelRes, icon) ->
                             FloatingBottomBarItem(
@@ -363,31 +357,5 @@ private fun MainContent(
                 content = { Text(stringResource(R.string.common_confirm)) }
             )
         }
-    }
-}
-
-@Composable
-private fun BlurredBar(
-    backdrop: LayerBackdrop?,
-    blurEnabled: Boolean,
-    content: @Composable () -> Unit
-) {
-    Box(
-        modifier = if (blurEnabled && backdrop != null) {
-            Modifier.textureBlur(
-                backdrop = backdrop,
-                shape = RectangleShape,
-                blurRadius = 25f,
-                colors = BlurDefaults.blurColors(
-                    blendColors = listOf(
-                        BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(0.8f))
-                    )
-                )
-            )
-        } else {
-            Modifier
-        }
-    ) {
-        content()
     }
 }

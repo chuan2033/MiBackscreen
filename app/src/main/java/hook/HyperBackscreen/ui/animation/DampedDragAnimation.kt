@@ -1,5 +1,6 @@
 package hook.HyperBackscreen.ui.animation
 
+import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.MutatorMutex
@@ -15,7 +16,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-class DampedDragAnimation(
+internal class DampedDragAnimation(
     private val animationScope: CoroutineScope,
     val initialValue: Float,
     val valueRange: ClosedRange<Float>,
@@ -132,8 +133,9 @@ class DampedDragAnimation(
     }
 
     private fun updateVelocity() {
+        // 用单调时钟：墙上时钟被系统或用户调整时会导致速度计算出现异常尖峰
         velocityTracker.addPosition(
-            System.currentTimeMillis(),
+            SystemClock.uptimeMillis(),
             Offset(value, 0f)
         )
         val targetVelocity = velocityTracker.calculateVelocity().x / (valueRange.endInclusive - valueRange.start)

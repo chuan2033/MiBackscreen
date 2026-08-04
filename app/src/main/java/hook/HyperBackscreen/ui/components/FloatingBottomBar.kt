@@ -8,6 +8,7 @@ import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -79,7 +80,7 @@ import kotlin.math.sign
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-val LocalFloatingBottomBarTabScale = staticCompositionLocalOf { { 1f } }
+internal val LocalFloatingBottomBarTabScale = staticCompositionLocalOf { { 1f } }
 
 private val iosIndicatorSpecular: Highlight = Highlight(
     width = 1.dp,
@@ -142,7 +143,7 @@ private fun rememberGravityRotatedHighlight(
 }
 
 @Composable
-fun RowScope.FloatingBottomBarItem(
+internal fun RowScope.FloatingBottomBarItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
@@ -160,9 +161,9 @@ fun RowScope.FloatingBottomBarItem(
             .fillMaxHeight()
             .weight(1f)
             .graphicsLayer {
-                val scale = scale()
-                scaleX = scale
-                scaleY = scale
+                val currentScale = scale()
+                scaleX = currentScale
+                scaleY = currentScale
             },
         verticalArrangement = Arrangement.spacedBy(1.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -171,17 +172,17 @@ fun RowScope.FloatingBottomBarItem(
 }
 
 @Composable
-fun FloatingBottomBar(
-    modifier: Modifier = Modifier,
+internal fun FloatingBottomBar(
     selectedIndex: () -> Int,
     onSelected: (index: Int) -> Unit,
     backdrop: Backdrop,
     tabsCount: Int,
+    modifier: Modifier = Modifier,
     isBlurEnabled: Boolean = true,
     content: @Composable RowScope.() -> Unit
 ) {
-    val isInDark = false
-    val pillShape = remember { CircleShape }
+    val isInDark = isSystemInDarkTheme()
+    val pillShape = CircleShape
     val accentColor = MiuixTheme.colorScheme.primary
     val surfaceContainer = MiuixTheme.colorScheme.surfaceContainer
     val containerColor = if (isBlurEnabled) surfaceContainer.copy(0.4f) else surfaceContainer

@@ -1,25 +1,35 @@
 package hook.HyperBackscreen.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
+/** 上下两行式信息条：标签在上、值在下。 */
 @Composable
-internal fun InfoRow(modifier: Modifier = Modifier, label: String, value: String) {
+internal fun InfoRow(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    minHeight: Dp = HomeUiTokens.InfoRowHeight
+) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
+            .heightIn(min = minHeight)
             .padding(horizontal = HomeUiTokens.ListHorizontalPadding, vertical = 16.dp),
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center
+        verticalArrangement = Arrangement.Center
     ) {
         Text(
             text = label,
@@ -31,17 +41,23 @@ internal fun InfoRow(modifier: Modifier = Modifier, label: String, value: String
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             style = MiuixTheme.textStyles.body2,
             maxLines = 1,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
 
+/** 左右两端式信息条：标签在左、值在右。 */
 @Composable
-internal fun SettingsInfoRow(modifier: Modifier = Modifier, label: String, value: String, height: androidx.compose.ui.unit.Dp = 56.dp) {
-    androidx.compose.foundation.layout.Row(
+internal fun SettingsInfoRow(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    minHeight: Dp = HomeUiTokens.InfoRowHeight
+) {
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = height)
+            .heightIn(min = minHeight)
             .padding(horizontal = HomeUiTokens.ListHorizontalPadding, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -56,7 +72,7 @@ internal fun SettingsInfoRow(modifier: Modifier = Modifier, label: String, value
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             style = MiuixTheme.textStyles.body2,
             maxLines = 1,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

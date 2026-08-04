@@ -1,8 +1,5 @@
 package hook.HyperBackscreen.ui.components
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
+import hook.HyperBackscreen.ui.util.openUrl
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -47,9 +45,9 @@ internal fun CardBlock(
 
 @Composable
 internal fun AboutArrowPreference(
-    modifier: Modifier = Modifier,
     title: String,
     summary: String?,
+    modifier: Modifier = Modifier,
     url: String? = null,
     onClick: (() -> Unit)? = null
 ) {
@@ -66,11 +64,4 @@ internal fun AboutArrowPreference(
             }
         }
     )
-}
-
-private fun openUrl(context: Context, url: String) {
-    try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-    } catch (_: android.content.ActivityNotFoundException) {
-    }
 }

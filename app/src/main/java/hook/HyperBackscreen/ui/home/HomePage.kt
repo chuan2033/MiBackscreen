@@ -2,14 +2,12 @@ package hook.HyperBackscreen.ui.home
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.BuildConfig
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.components.InfoRow
-import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import hook.HyperBackscreen.ui.util.currentDeviceName
 import hook.HyperBackscreen.ui.util.currentHyperOSVersion
 import hook.HyperBackscreen.ui.util.currentSystemVersion
@@ -19,7 +17,6 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 @Composable
 internal fun HomePage(
-    modifier: Modifier = Modifier,
     disableLongPress: Boolean,
     removeWallpaperLimit: Boolean,
     fixRearScreenApply: Boolean,

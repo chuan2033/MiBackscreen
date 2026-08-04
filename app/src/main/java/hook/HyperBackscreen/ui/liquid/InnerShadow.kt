@@ -30,7 +30,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 
 @Immutable
-data class InnerShadow(
+internal data class InnerShadow(
     val radius: Dp = 24.dp,
     val offset: DpOffset = DpOffset(0.dp, radius),
     val color: Color = Color.Black.copy(alpha = 0.15f),
@@ -43,7 +43,7 @@ data class InnerShadow(
     }
 }
 
-fun Modifier.innerShadow(
+internal fun Modifier.innerShadow(
     shape: Shape,
     shadow: () -> InnerShadow?,
 ): Modifier = this then InnerShadowElement(shape, shadow)
