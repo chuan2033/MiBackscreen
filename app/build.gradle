@@ -12,6 +12,19 @@ android {
     compileSdk 37
     buildToolsVersion = "37.0.0"
 
+    // 从已被 gitignore 的 local.properties 读取签名密码
+    def localProps = new Properties()
+    file(rootProject.file('local.properties')).withInputStream { localProps.load(it) }
+
+    signingConfigs {
+        release {
+            storeFile file('release-key.jks')
+            storePassword localProps['RELEASE_STORE_PASSWORD']
+            keyAlias 'hyperbackscreen'
+            keyPassword localProps['RELEASE_KEY_PASSWORD']
+        }
+    }
+
     defaultConfig {
         applicationId "hook.HyperBackscreen"
         minSdk 35
@@ -25,6 +38,7 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
         debug {
             minifyEnabled false
