@@ -22,6 +22,12 @@
         </activity>
 
         <provider
+            android:name=".bridge.PreferenceBridgeProvider"
+            android:authorities="${applicationId}.PanelPreferences"
+            android:exported="true"
+            android:permission="android.permission.MANAGE_ACTIVITY_TASKS" />
+
+        <provider
             android:name="io.github.libxposed.service.XposedProvider"
             android:authorities="${applicationId}.XposedService"
             android:exported="true"

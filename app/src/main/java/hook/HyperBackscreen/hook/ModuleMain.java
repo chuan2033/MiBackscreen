@@ -1,7 +1,14 @@
 package hook.HyperBackscreen.hook;
 
+import android.app.Activity;
+import android.graphics.Rect;
+import android.os.Bundle;
+import android.os.SystemClock;
 import android.util.Log;
+import android.util.TypedValue;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.View;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -11,18 +18,27 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.WeakHashMap;
 
 import hook.HyperBackscreen.bridge.PrefsBridge;
 import hook.HyperBackscreen.common.Constants;
+import hook.HyperBackscreen.ui.SwipePanelHost;
 import io.github.libxposed.api.XposedModule;
 
 public class ModuleMain extends XposedModule {
     private volatile boolean hooksInstalled = false;
     private volatile boolean themeStoreHooksInstalled = false;
+    private final Map<Activity, SwipeState> swipeStates = new WeakHashMap<>();
+    private final Set<Activity> exclusionApplied = Collections.newSetFromMap(new WeakHashMap<>());
 
     @Override
     public void onModuleLoaded(@NonNull ModuleLoadedParam param) {
+        // 供被 Hook 进程（背屏）内的 PrefsBridge 取远程偏好使用
+        PrefsBridge.attachModule(this);
         log(Log.INFO, Constants.LOG_TAG, "onModuleLoaded: " + param.getProcessName());
     }
 
@@ -36,6 +52,7 @@ public class ModuleMain extends XposedModule {
                 if (hooksInstalled) return;
                 try {
                     installLongPressHooks(param.getClassLoader());
+                    installSwipePanelHook(param.getClassLoader());
                     hooksInstalled = true;
                     log(Log.INFO, Constants.LOG_TAG, "Hooks installed for " + Constants.TARGET_PACKAGE);
                 } catch (Throwable throwable) {
@@ -73,6 +90,219 @@ public class ModuleMain extends XposedModule {
         if (legacyGestureClass != null && legacyGestureClass != newGestureClass) {
             hookLongPressMethod(legacyGestureClass, Constants.HOOK_METHOD_GATE, new Class[]{MotionEvent.class}, false);
             hookLongPressMethod(legacyGestureClass, Constants.HOOK_METHOD_RUN, new Class[]{}, null);
+        }
+    }
+
+    private void installSwipePanelHook(@NonNull ClassLoader classLoader) {
+        Class<?> launcherClass = findClass(Constants.HOOK_CLASS_SUBSCREEN_LAUNCHER, classLoader);
+        if (launcherClass == null) {
+            log(Log.WARN, Constants.LOG_TAG, "Swipe panel hook target missing: " + Constants.HOOK_CLASS_SUBSCREEN_LAUNCHER);
+            return;
+        }
+        // 在背屏主 Activity 的 dispatchTouchEvent 中做观察者式手势检测：
+        // 不替换任何监听器、不消费事件，识别"底部边缘上滑"后把面板挂到本进程窗口上。
+        hookMethodIfPresent(
+                launcherClass,
+                "dispatchTouchEvent",
+                new Class[]{MotionEvent.class},
+                Constants.HOOK_CLASS_SUBSCREEN_LAUNCHER + "#dispatchTouchEvent",
+                chain -> {
+                    try {
+                        MotionEvent e = (MotionEvent) chain.getArgs().get(0);
+                        if (e != null && chain.getThisObject() instanceof Activity) {
+                            Activity activity = (Activity) chain.getThisObject();
+                            if (SwipePanelHost.isShowing()) {
+                                // Send events straight to DecorView so our overlay still receives taps and
+                                // downward-dismiss gestures, while bypassing the launcher's own gesture manager.
+                                return activity.getWindow().superDispatchTouchEvent(e);
+                            }
+                            handleSwipeGesture(activity, e);
+                        }
+                    } catch (Throwable ignored) {
+                        // 绝不影响原事件分发
+                    }
+                    return chain.proceed();
+                }
+        );
+        // 面板打开时拦截返回键关闭（背屏系统 Activity 不会把焦点给浮层，View 的 OnKeyListener 收不到返回键）
+        hookMethodIfPresent(
+                findMethod(launcherClass, "dispatchKeyEvent", new Class[]{KeyEvent.class}),
+                Constants.HOOK_CLASS_SUBSCREEN_LAUNCHER + "#dispatchKeyEvent",
+                chain -> {
+                    try {
+                        KeyEvent e = (KeyEvent) chain.getArgs().get(0);
+                        if (e != null && e.getAction() == KeyEvent.ACTION_UP
+                                && e.getKeyCode() == KeyEvent.KEYCODE_BACK
+                                && SwipePanelHost.isShowing()) {
+                            SwipePanelHost.dismiss();
+                            return true;
+                        }
+                    } catch (Throwable ignored) {
+                        // 不影响原分发
+                    }
+                    return chain.proceed();
+                }
+        );
+
+        // 手势排除区必须在触摸开始前设置；等 ACTION_DOWN 才设置已经来不及影响当前手势。
+        hookMethodIfPresent(
+                findMethod(launcherClass, "onWindowFocusChanged", new Class[]{boolean.class}),
+                Constants.HOOK_CLASS_SUBSCREEN_LAUNCHER + "#onWindowFocusChanged",
+                chain -> {
+                    Object result = chain.proceed();
+                    try {
+                        Object hasFocus = chain.getArgs().get(0);
+                        if (Boolean.TRUE.equals(hasFocus) && chain.getThisObject() instanceof Activity) {
+                            Activity activity = (Activity) chain.getThisObject();
+                            activity.getWindow().getDecorView().post(() -> ensureGestureExclusion(activity));
+                        } else if (chain.getThisObject() instanceof Activity) {
+                            resetSwipeState((Activity) chain.getThisObject());
+                        }
+                    } catch (Throwable ignored) {
+                        // 不影响宿主焦点回调
+                    }
+                    return result;
+                }
+        );
+        log(Log.INFO, Constants.LOG_TAG, "Swipe panel gesture hook installed");
+    }
+
+    /**
+     * 识别"底部边缘上滑"：从屏幕底部 70% 区域起手、上滑超过阈值即触发面板。
+     * 每个 Activity 维护独立手势状态，避免一次滑动内重复触发。
+     */
+    private void handleSwipeGesture(@NonNull Activity activity, @NonNull MotionEvent e) {
+        SwipeState st = swipeStates.get(activity);
+        if (st == null) {
+            st = new SwipeState();
+            swipeStates.put(activity, st);
+        }
+        if (!activity.hasWindowFocus()
+                || isHostPanelShowing(activity)
+                || !PrefsBridge.shouldEnableSwipePanel(this)
+                || e.getPointerCount() != 1) {
+            st.reset();
+            return;
+        }
+        float threshold = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP,
+                Constants.GESTURE_SWIPE_UP_DP,
+                activity.getResources().getDisplayMetrics());
+        int action = e.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            st.downTime = e.getDownTime();
+            st.startX = e.getRawX();
+            st.startY = e.getRawY();
+            int decorHeight = activity.getWindow().getDecorView().getHeight();
+            st.armed = decorHeight > 0
+                    && e.getRawY() > decorHeight * Constants.GESTURE_BOTTOM_EDGE_RATIO;
+            st.fired = false;
+        } else if (action == MotionEvent.ACTION_MOVE || action == MotionEvent.ACTION_CANCEL) {
+            if (!st.armed || st.downTime != e.getDownTime()) {
+                st.reset();
+                return;
+            }
+            if (st.armed && !st.fired) {
+                float dy = st.startY - e.getRawY();
+                float dx = Math.abs(e.getRawX() - st.startX);
+                if (dy > threshold && dy > dx * 1.15f) {
+                    st.fired = true;
+                    long now = SystemClock.uptimeMillis();
+                    if (now - st.lastTrigger > Constants.GESTURE_TRIGGER_COOLDOWN_MS) {
+                        st.lastTrigger = now;
+                        triggerPanel(activity);
+                    }
+                }
+            }
+            // MIUI's separate bottom gesture window commonly takes ownership mid-swipe.
+            // Evaluate that final CANCEL position above before clearing our state.
+            if (action == MotionEvent.ACTION_CANCEL) {
+                st.reset();
+            }
+        } else if (action == MotionEvent.ACTION_UP) {
+            st.reset();
+        }
+    }
+
+    private void resetSwipeState(@NonNull Activity activity) {
+        SwipeState state = swipeStates.get(activity);
+        if (state != null) state.reset();
+    }
+
+    /** Do not open our panel while Xiaomi's notification/service-assistant panel is visible. */
+    private boolean isHostPanelShowing(@NonNull Activity activity) {
+        try {
+            int notificationId = activity.getResources().getIdentifier(
+                    "notification_panel", "id", Constants.TARGET_PACKAGE);
+            View notificationPanel = notificationId != 0 ? activity.findViewById(notificationId) : null;
+            if (notificationPanel != null
+                    && notificationPanel.getVisibility() == View.VISIBLE
+                    && notificationPanel.getAlpha() > 0.01f) {
+                return true;
+            }
+
+            int assistantId = activity.getResources().getIdentifier(
+                    "smart_assistant_panel", "id", Constants.TARGET_PACKAGE);
+            View assistantPanel = assistantId != 0 ? activity.findViewById(assistantId) : null;
+            if (assistantPanel != null
+                    && assistantPanel.getVisibility() == View.VISIBLE
+                    && assistantPanel.getTranslationY() > -activity.getWindow().getDecorView().getHeight() + 1) {
+                return true;
+            }
+        } catch (Throwable ignored) {
+            // A future host version may rename these views; session validation still prevents stale events.
+        }
+        return false;
+    }
+
+    private void triggerPanel(@NonNull Activity activity) {
+        if (activity.isFinishing() || activity.isDestroyed()) return;
+        // dispatchTouchEvent 正在遍历 View 树时不要同步 addView；放到下一轮消息可避免输入目标错乱。
+        activity.getWindow().getDecorView().post(() -> {
+            if (activity.isFinishing() || activity.isDestroyed()
+                    || !activity.hasWindowFocus() || isHostPanelShowing(activity)) return;
+            try {
+                Log.d(Constants.LOG_TAG, "Swipe-up detected, showing panel");
+                SwipePanelHost.show(activity);
+            } catch (Throwable t) {
+                Log.e(Constants.LOG_TAG, "Failed to show swipe panel", t);
+            }
+        });
+    }
+
+    /**
+     * 把背屏底部边缘区域从系统手势中排除，避免上滑被系统导航抢走
+     * （系统导航响应该手势时副屏会闪一下黑，与我们的面板撞车）。仅设置一次。
+     */
+    private void ensureGestureExclusion(@NonNull Activity activity) {
+        if (exclusionApplied.contains(activity)) return;
+        try {
+            View decor = activity.getWindow().getDecorView();
+            if (decor.getWidth() <= 0 || decor.getHeight() <= 0) return;
+            int top = Math.max(0, (int) (decor.getHeight() * Constants.GESTURE_BOTTOM_EDGE_RATIO));
+            Rect rect = new Rect(0, top, decor.getWidth(), decor.getHeight());
+            decor.setSystemGestureExclusionRects(Collections.singletonList(rect));
+            exclusionApplied.add(activity);
+            log(Log.DEBUG, Constants.LOG_TAG, "Bottom-edge gesture exclusion set");
+        } catch (Throwable ignored) {
+            // 部分 ROM 不支持，忽略
+        }
+    }
+
+    private static final class SwipeState {
+        float startX;
+        float startY;
+        long downTime;
+        boolean armed;
+        boolean fired;
+        long lastTrigger;
+
+        void reset() {
+            startX = 0f;
+            startY = 0f;
+            downTime = 0L;
+            armed = false;
+            fired = false;
         }
     }
 

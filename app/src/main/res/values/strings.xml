@@ -60,6 +60,19 @@
     <!-- License Page -->
     <string name="license_title">Open Source Licenses</string>
 
+    <!-- Swipe-up Panel -->
+    <string name="config_swipe_panel_title">Rear screen swipe-up panel</string>
+    <string name="config_swipe_panel_summary_on">Swipe up from bottom edge to open quick panel</string>
+    <string name="config_swipe_panel_summary_off">Swipe-up panel disabled</string>
+    <string name="panel_title">Rear Screen Quick Panel</string>
+    <string name="panel_disable_long_press_title">Disable long-press wallpaper switching</string>
+    <string name="panel_disable_long_press_on">Factory long-press switching is disabled</string>
+    <string name="panel_disable_long_press_off">Factory long-press behavior is enabled</string>
+    <string name="panel_remove_limit_title">Remove rear wallpaper count limit</string>
+    <string name="panel_remove_limit_on">The 15-wallpaper limit is removed</string>
+    <string name="panel_remove_limit_off">The default 15-wallpaper limit is active</string>
+    <string name="panel_save_failed">Save failed; change this setting in the main app</string>
+
     <!-- Restart Scope Dialog -->
     <string name="restart_title">Quick Restart App</string>
     <string name="restart_scope">Restart Scope</string>

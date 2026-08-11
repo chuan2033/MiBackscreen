@@ -96,11 +96,13 @@ internal fun HomeScreen(
     fixRearScreenApply: Boolean,
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
+    enableSwipePanel: Boolean,
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
+    onEnableSwipePanelChange: (Boolean) -> Unit,
     onForceStopPackage: (String) -> Unit
 ) {
     var selected by remember { mutableIntStateOf(0) }
@@ -129,11 +131,13 @@ internal fun HomeScreen(
                 fixRearScreenApply = fixRearScreenApply,
                 floatingNavBar = floatingNavBar,
                 liquidGlass = liquidGlass,
+                enableSwipePanel = enableSwipePanel,
                 onDisableLongPressChange = onDisableLongPressChange,
                 onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
                 onFixRearScreenApplyChange = onFixRearScreenApplyChange,
                 onFloatingNavBarChange = onFloatingNavBarChange,
                 onLiquidGlassChange = onLiquidGlassChange,
+                onEnableSwipePanelChange = onEnableSwipePanelChange,
                 onLicenseClick = { showLicense = true },
                 onForceStopPackage = onForceStopPackage
             )
@@ -150,11 +154,13 @@ private fun MainContent(
     fixRearScreenApply: Boolean,
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
+    enableSwipePanel: Boolean,
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
+    onEnableSwipePanelChange: (Boolean) -> Unit,
     onLicenseClick: () -> Unit,
     onForceStopPackage: (String) -> Unit
 ) {
@@ -238,7 +244,9 @@ private fun MainContent(
                                 onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
                                 onFixRearScreenApplyChange = onFixRearScreenApplyChange,
                                 onFloatingNavBarChange = onFloatingNavBarChange,
-                                onLiquidGlassChange = onLiquidGlassChange
+                                onLiquidGlassChange = onLiquidGlassChange,
+                                enableSwipePanel = enableSwipePanel,
+                                onEnableSwipePanelChange = onEnableSwipePanelChange
                             )
                         }
                         2 -> item {

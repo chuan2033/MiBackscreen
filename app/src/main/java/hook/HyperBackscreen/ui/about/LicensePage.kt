@@ -42,11 +42,6 @@ private data class LicenseItem(
 
 private val licenses = listOf(
     LicenseItem(
-        name = "MiBackscreen",
-        license = "GPL-3.0",
-        url = "https://www.gnu.org/licenses/gpl-3.0.html"
-    ),
-    LicenseItem(
         name = "compose-miuix-ui (miuix library)",
         license = "Apache-2.0",
         url = "https://github.com/compose-miuix-ui/miuix"

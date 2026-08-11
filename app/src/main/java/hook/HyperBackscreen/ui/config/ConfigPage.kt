@@ -18,12 +18,28 @@ internal fun ConfigPage(
     fixRearScreenApply: Boolean,
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
+    enableSwipePanel: Boolean,
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFloatingNavBarChange: (Boolean) -> Unit,
-    onLiquidGlassChange: (Boolean) -> Unit
+    onLiquidGlassChange: (Boolean) -> Unit,
+    onEnableSwipePanelChange: (Boolean) -> Unit
 ) {
+    SmallTitle(text = stringResource(R.string.config_swipe_panel_title), insideMargin = PaddingValues(16.dp, 8.dp))
+    CardBlock(pressFeedbackType = PressFeedbackType.None) {
+        SwitchPreference(
+            checked = enableSwipePanel,
+            onCheckedChange = onEnableSwipePanelChange,
+            title = stringResource(R.string.config_swipe_panel_title),
+            summary = if (enableSwipePanel) {
+                stringResource(R.string.config_swipe_panel_summary_on)
+            } else {
+                stringResource(R.string.config_swipe_panel_summary_off)
+            }
+        )
+    }
+
     SmallTitle(text = stringResource(R.string.config_nav_bar_title), insideMargin = PaddingValues(16.dp, 8.dp))
     CardBlock(pressFeedbackType = PressFeedbackType.None) {
         SwitchPreference(

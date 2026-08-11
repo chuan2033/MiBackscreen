@@ -9,6 +9,11 @@ public final class Constants {
     public static final String KEY_FIX_REAR_SCREEN_APPLY = "fix_rear_screen_apply";
     public static final String KEY_FLOATING_NAV_BAR = "floating_nav_bar";
     public static final String KEY_LIQUID_GLASS = "liquid_glass";
+    public static final String KEY_ENABLE_SWIPE_PANEL = "enable_swipe_panel";
+    public static final String PANEL_PREFERENCE_AUTHORITY = MODULE_PACKAGE + ".PanelPreferences";
+    public static final String PANEL_PREFERENCE_METHOD_SET = "set_panel_preference";
+    public static final String EXTRA_PREFERENCE_VALUE = "preference_value";
+    public static final String EXTRA_PREFERENCE_ACCEPTED = "preference_accepted";
 
     // Theme store hook targets
     // 注意：以下 R8 混淆名（o5、cmzf、qp5l 等）与目标应用版本绑定，主题商店一更新即可能失效。
@@ -38,6 +43,13 @@ public final class Constants {
     public static final String HOOK_METHOD_GATE_NEW = "g";
     public static final String HOOK_METHOD_LONG_PRESS_TOUCH_NEW = "f";
     public static final String HOOK_METHOD_RUN = "run";
+
+    // 背屏上滑面板：手势挂在背屏主 Activity 上（manifest 中的清晰类名，相对稳定但仍受版本影响）
+    public static final String HOOK_CLASS_SUBSCREEN_LAUNCHER = "com.xiaomi.subscreencenter.SubScreenLauncher";
+    // 从屏幕 70% 高度以下起手；32dp 可在 MIUI 底部手势窗口抢走事件前完成识别。
+    public static final float GESTURE_BOTTOM_EDGE_RATIO = 0.7f;
+    public static final float GESTURE_SWIPE_UP_DP = 32f;
+    public static final long GESTURE_TRIGGER_COOLDOWN_MS = 800L;
 
     // logcat 过滤用：旧名 RearScreenLongPressToggle 仅覆盖长按开关，已不符实际功能范围
     public static final String LOG_TAG = "MiBackscreen";

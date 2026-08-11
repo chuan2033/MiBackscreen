@@ -2,6 +2,8 @@ package hook.HyperBackscreen.bridge;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.net.Uri;
+import android.os.Bundle;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -14,14 +16,24 @@ import io.github.libxposed.service.XposedService;
 
 public final class PrefsBridge {
     private static final String TAG = Constants.LOG_TAG + ":PrefsBridge";
+    private static final String PENDING_PANEL_PREFIX = "__pending_panel__";
 
     public static final boolean DEFAULT_DISABLE_LONG_PRESS_EDIT = true;
     public static final boolean DEFAULT_REMOVE_WALLPAPER_LIMIT = true;
     public static final boolean DEFAULT_FIX_REAR_SCREEN_APPLY = false;
     private static final boolean DEFAULT_FLOATING_NAV_BAR = false;
     private static final boolean DEFAULT_LIQUID_GLASS = false;
+    public static final boolean DEFAULT_ENABLE_SWIPE_PANEL = true;
 
     private PrefsBridge() {
+    }
+
+    /** 被 Hook 进程（如背屏）里 ModuleApp 服务通常为 null，此时用 XposedModule 实例取远程偏好。 */
+    @Nullable
+    private static XposedModule sModule;
+
+    public static void attachModule(@Nullable XposedModule module) {
+        sModule = module;
     }
 
     @NonNull
@@ -33,14 +45,21 @@ public final class PrefsBridge {
     private static SharedPreferences remote() {
         try {
             XposedService service = ModuleApp.getService();
-            if (service == null) {
-                return null;
+            if (service != null) {
+                return service.getRemotePreferences(Constants.PREF_GROUP);
             }
-            return service.getRemotePreferences(Constants.PREF_GROUP);
-        } catch (Throwable e) {
-            Log.w(TAG, "Failed to get remote prefs", e);
-            return null;
+        } catch (Throwable ignored) {
+            // 回落到 XposedModule 实例
         }
+        // 被 Hook 进程内 ModuleApp 服务不可用，用 XposedModule 实例的远程偏好（与 Hook 端同源）
+        if (sModule != null) {
+            try {
+                return sModule.getRemotePreferences(Constants.PREF_GROUP);
+            } catch (Throwable e) {
+                Log.w(TAG, "Failed to get remote prefs via module", e);
+            }
+        }
+        return null;
     }
 
     /** UI 侧读取：远程优先并回写本地缓存；服务未就绪时退回本地值。 */
@@ -103,6 +122,14 @@ public final class PrefsBridge {
         writeFromUi(context, Constants.KEY_FIX_REAR_SCREEN_APPLY, enabled);
     }
 
+    public static boolean readEnableSwipePanelForUi(@NonNull Context context) {
+        return readForUi(context, Constants.KEY_ENABLE_SWIPE_PANEL, DEFAULT_ENABLE_SWIPE_PANEL);
+    }
+
+    public static void writeEnableSwipePanelFromUi(@NonNull Context context, boolean enabled) {
+        writeFromUi(context, Constants.KEY_ENABLE_SWIPE_PANEL, enabled);
+    }
+
     /** 纯 UI 外观项，Hook 端不消费，只存本地。 */
     public static boolean readFloatingNavBar(@NonNull Context context) {
         return local(context).getBoolean(Constants.KEY_FLOATING_NAV_BAR, DEFAULT_FLOATING_NAV_BAR);
@@ -132,14 +159,110 @@ public final class PrefsBridge {
         return readForHook(module, Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
     }
 
+    public static boolean shouldEnableSwipePanel(@NonNull XposedModule module) {
+        return readForHook(module, Constants.KEY_ENABLE_SWIPE_PANEL, DEFAULT_ENABLE_SWIPE_PANEL);
+    }
+
+    /**
+     * 被 Hook 进程内（如背屏面板上）专用：只通过 XposedModule 实例读写 LSPosed 远程偏好，
+     * 不触碰被 Hook 应用的本地 SharedPreferences（那和模块主 App 不是同一个文件）。
+     */
+    private static SharedPreferences remotePrefsFromModule() {
+        if (sModule == null) return null;
+        try {
+            return sModule.getRemotePreferences(Constants.PREF_GROUP);
+        } catch (Throwable e) {
+            Log.w(TAG, "remote prefs via module failed", e);
+            return null;
+        }
+    }
+
+    public static boolean readDisableLongPressForRemote() {
+        SharedPreferences prefs = remotePrefsFromModule();
+        return prefs != null
+                ? prefs.getBoolean(Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT)
+                : DEFAULT_DISABLE_LONG_PRESS_EDIT;
+    }
+
+    public static boolean requestDisableLongPressWrite(@NonNull Context context, boolean disabled) {
+        return requestPanelPreferenceWrite(context, Constants.KEY_DISABLE_LONG_PRESS_EDIT, disabled);
+    }
+
+    public static boolean readRemoveWallpaperLimitForRemote() {
+        SharedPreferences prefs = remotePrefsFromModule();
+        return prefs != null
+                ? prefs.getBoolean(Constants.KEY_REMOVE_WALLPAPER_LIMIT, DEFAULT_REMOVE_WALLPAPER_LIMIT)
+                : DEFAULT_REMOVE_WALLPAPER_LIMIT;
+    }
+
+    public static boolean requestRemoveWallpaperLimitWrite(@NonNull Context context, boolean enabled) {
+        return requestPanelPreferenceWrite(context, Constants.KEY_REMOVE_WALLPAPER_LIMIT, enabled);
+    }
+
+    private static boolean requestPanelPreferenceWrite(@NonNull Context context,
+                                                       @NonNull String key,
+                                                       boolean value) {
+        try {
+            Bundle extras = new Bundle();
+            extras.putBoolean(Constants.EXTRA_PREFERENCE_VALUE, value);
+            Bundle result = context.getContentResolver().call(
+                    Uri.parse("content://" + Constants.PANEL_PREFERENCE_AUTHORITY),
+                    Constants.PANEL_PREFERENCE_METHOD_SET,
+                    key,
+                    extras);
+            return result != null
+                    && result.getBoolean(Constants.EXTRA_PREFERENCE_ACCEPTED, false);
+        } catch (Throwable e) {
+            Log.w(TAG, "Failed to request panel preference write for " + key, e);
+            return false;
+        }
+    }
+
+    static boolean isPanelWritableKey(@Nullable String key) {
+        return Constants.KEY_DISABLE_LONG_PRESS_EDIT.equals(key)
+                || Constants.KEY_REMOVE_WALLPAPER_LIMIT.equals(key);
+    }
+
+    static boolean stagePanelPreference(@NonNull Context context,
+                                        @NonNull String key,
+                                        boolean value) {
+        if (!isPanelWritableKey(key)) return false;
+        return local(context).edit()
+                .putBoolean(key, value)
+                .putBoolean(PENDING_PANEL_PREFIX + key, value)
+                .commit();
+    }
+
+    static boolean flushPanelPreference(@NonNull Context context,
+                                        @NonNull String key) {
+        if (!isPanelWritableKey(key)) return false;
+        SharedPreferences localPrefs = local(context);
+        String pendingKey = PENDING_PANEL_PREFIX + key;
+        if (!localPrefs.contains(pendingKey)) return true;
+        XposedService service = ModuleApp.getService();
+        if (service == null) return false;
+        try {
+            boolean value = localPrefs.getBoolean(pendingKey, false);
+            SharedPreferences remotePrefs = service.getRemotePreferences(Constants.PREF_GROUP);
+            if (!remotePrefs.edit().putBoolean(key, value).commit()) return false;
+            return localPrefs.edit().putBoolean(key, value).remove(pendingKey).commit();
+        } catch (Throwable e) {
+            Log.w(TAG, "Failed to flush panel preference " + key, e);
+            return false;
+        }
+    }
+
     /** 服务就绪时对齐本地与远程：远程有值以远程为准，否则用本地值补齐远程，都没有则写入默认值。 */
     public static void syncOnServiceAvailable(@NonNull Context context, @NonNull XposedService service) {
         try {
             SharedPreferences localPrefs = local(context);
             SharedPreferences remotePrefs = service.getRemotePreferences(Constants.PREF_GROUP);
+            flushPanelPreference(context, Constants.KEY_DISABLE_LONG_PRESS_EDIT);
+            flushPanelPreference(context, Constants.KEY_REMOVE_WALLPAPER_LIMIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT, DEFAULT_REMOVE_WALLPAPER_LIMIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
+            syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_SWIPE_PANEL, DEFAULT_ENABLE_SWIPE_PANEL);
         } catch (Throwable e) {
             Log.w(TAG, "Failed to sync prefs on service available", e);
         }
