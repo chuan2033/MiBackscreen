@@ -4,11 +4,13 @@ import android.app.Activity;
 import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -24,7 +26,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import hook.HyperBackscreen.bridge.PrefsBridge;
+import hook.HyperBackscreen.bridge.DiagnosticLogStore;
 import hook.HyperBackscreen.common.Constants;
 import hook.HyperBackscreen.ui.SwipePanelHost;
 import io.github.libxposed.api.XposedModule;
@@ -53,6 +59,7 @@ public class ModuleMain extends XposedModule {
                 try {
                     installLongPressHooks(param.getClassLoader());
                     installSwipePanelHook(param.getClassLoader());
+                    installRearScreenSelectionSyncHook(param.getClassLoader());
                     hooksInstalled = true;
                     log(Log.INFO, Constants.LOG_TAG, "Hooks installed for " + Constants.TARGET_PACKAGE);
                 } catch (Throwable throwable) {
@@ -69,6 +76,7 @@ public class ModuleMain extends XposedModule {
                 try {
                     installWallpaperLimitHook(param.getClassLoader());
                     installRearScreenApplyFixHook(param.getClassLoader());
+                    installThemeSettingsSelectionSyncHook(param.getClassLoader());
                     themeStoreHooksInstalled = true;
                     log(Log.INFO, Constants.LOG_TAG, "Theme store hooks installed");
                 } catch (Throwable throwable) {
@@ -111,12 +119,16 @@ public class ModuleMain extends XposedModule {
                         MotionEvent e = (MotionEvent) chain.getArgs().get(0);
                         if (e != null && chain.getThisObject() instanceof Activity) {
                             Activity activity = (Activity) chain.getThisObject();
+                            if (SwipePanelHost.isOpeningDrag()) {
+                                handleSwipeGesture(activity, e);
+                                return true;
+                            }
                             if (SwipePanelHost.isShowing()) {
                                 // Send events straight to DecorView so our overlay still receives taps and
                                 // downward-dismiss gestures, while bypassing the launcher's own gesture manager.
                                 return activity.getWindow().superDispatchTouchEvent(e);
                             }
-                            handleSwipeGesture(activity, e);
+                            if (handleSwipeGesture(activity, e)) return true;
                         }
                     } catch (Throwable ignored) {
                         // 绝不影响原事件分发
@@ -168,21 +180,121 @@ public class ModuleMain extends XposedModule {
     }
 
     /**
-     * 识别"底部边缘上滑"：从屏幕底部 70% 区域起手、上滑超过阈值即触发面板。
-     * 每个 Activity 维护独立手势状态，避免一次滑动内重复触发。
+     * 背屏长按选择壁纸后，宿主只把所选下标保存到自己的 user_pref.json。
+     * 系统设置页不读这个下标，而是直接预览 Secure Settings 中 theme_rear_widget
+     * 的第一项，因此两边会长期显示不同壁纸。
      */
-    private void handleSwipeGesture(@NonNull Activity activity, @NonNull MotionEvent e) {
+    private void installRearScreenSelectionSyncHook(@NonNull ClassLoader classLoader) {
+        Class<?> mainPanelClass = findClass(Constants.HOOK_CLASS_MAIN_PANEL, classLoader);
+        if (mainPanelClass == null) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Rear selection sync target missing: " + Constants.HOOK_CLASS_MAIN_PANEL);
+            return;
+        }
+
+        hookMethodIfPresent(
+                mainPanelClass,
+                Constants.HOOK_METHOD_SAVE_USER_SELECTION,
+                new Class[]{},
+                Constants.HOOK_CLASS_MAIN_PANEL + "#"
+                        + Constants.HOOK_METHOD_SAVE_USER_SELECTION,
+                chain -> {
+                    Object result = chain.proceed();
+                    if (PrefsBridge.shouldFixRearScreenApply(this)
+                            && chain.getThisObject() instanceof View panel) {
+                        syncSelectedWallpaperToSettings(panel);
+                    }
+                    return result;
+                }
+        );
+    }
+
+    private void syncSelectedWallpaperToSettings(@NonNull View panel) {
+        try {
+            Object listValue = getFieldValue(panel, Constants.HOOK_FIELD_WIDGET_LIST);
+            Object indexValue = getFieldValue(panel, Constants.HOOK_FIELD_SELECTED_INDEX);
+            if (!(listValue instanceof List<?> widgets) || !(indexValue instanceof Number)) {
+                return;
+            }
+
+            int selectedIndex = ((Number) indexValue).intValue();
+            if (selectedIndex < 0 || selectedIndex >= widgets.size()) return;
+            Object selectedWidget = widgets.get(selectedIndex);
+            Object bean = getFieldValue(selectedWidget, Constants.HOOK_FIELD_WIDGET_BEAN);
+            Object idValue = getFieldValue(bean, Constants.HOOK_FIELD_WIDGET_ID);
+            if (!(idValue instanceof Number)) return;
+            int selectedId = ((Number) idValue).intValue();
+
+            String raw = Settings.Secure.getString(
+                    panel.getContext().getContentResolver(),
+                    Constants.SECURE_THEME_REAR_WIDGET);
+            if (isEmpty(raw)) return;
+
+            JSONObject root = new JSONObject(raw);
+            JSONArray data = root.optJSONArray("data");
+            if (data == null || data.length() == 0) return;
+
+            JSONObject selected = null;
+            JSONArray remaining = new JSONArray();
+            boolean alreadySynchronized = false;
+            for (int i = 0; i < data.length(); i++) {
+                JSONObject item = data.optJSONObject(i);
+                if (item == null) continue;
+                if (item.optInt("id") == selectedId) {
+                    selected = item;
+                    alreadySynchronized = i == 0 && item.optBoolean("changed", false);
+                } else {
+                    item.put("changed", false);
+                    remaining.put(item);
+                }
+            }
+            if (selected == null) return;
+
+            // 即使已在首位，也要修正其他项可能残留的 changed 标记。
+            selected.put("changed", true);
+            JSONArray reordered = new JSONArray();
+            reordered.put(selected);
+            for (int i = 0; i < remaining.length(); i++) {
+                reordered.put(remaining.get(i));
+            }
+            root.put("data", reordered);
+            root.put("updateTime", System.currentTimeMillis());
+
+            if (Settings.Secure.putString(
+                    panel.getContext().getContentResolver(),
+                    Constants.SECURE_THEME_REAR_WIDGET,
+                    root.toString())) {
+                log(Log.INFO, Constants.LOG_TAG,
+                        "Synced rear selection to Settings: id=" + selectedId
+                                + ", index=" + selectedIndex
+                                + (alreadySynchronized ? " (markers refreshed)" : ""));
+            } else {
+                log(Log.WARN, Constants.LOG_TAG,
+                        "Failed to write rear selection to Settings: id=" + selectedId);
+            }
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "syncSelectedWallpaperToSettings failed", e);
+        }
+    }
+
+    /**
+     * 识别并接管"底部边缘上滑"：超过阈值后，面板顶部持续跟随手指；松手时再根据
+     * 拖动距离和末端速度决定展开或退回。每个 Activity 维护独立手势状态。
+     */
+    private boolean handleSwipeGesture(@NonNull Activity activity, @NonNull MotionEvent e) {
         SwipeState st = swipeStates.get(activity);
         if (st == null) {
             st = new SwipeState();
             swipeStates.put(activity, st);
         }
+        boolean wasDragging = st.draggingPanel;
         if (!activity.hasWindowFocus()
                 || isHostPanelShowing(activity)
                 || !PrefsBridge.shouldEnableSwipePanel(this)
                 || e.getPointerCount() != 1) {
+            if (wasDragging) SwipePanelHost.finishOpeningDrag(false, 0f);
             st.reset();
-            return;
+            return wasDragging;
         }
         float threshold = TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP,
@@ -193,34 +305,89 @@ public class ModuleMain extends XposedModule {
             st.downTime = e.getDownTime();
             st.startX = e.getRawX();
             st.startY = e.getRawY();
+            st.lastY = st.startY;
+            st.lastEventTime = e.getEventTime();
+            st.velocityY = 0f;
             int decorHeight = activity.getWindow().getDecorView().getHeight();
             st.armed = decorHeight > 0
                     && e.getRawY() > decorHeight * Constants.GESTURE_BOTTOM_EDGE_RATIO;
-            st.fired = false;
-        } else if (action == MotionEvent.ACTION_MOVE || action == MotionEvent.ACTION_CANCEL) {
+            st.draggingPanel = false;
+            return false;
+        } else if (action == MotionEvent.ACTION_MOVE) {
             if (!st.armed || st.downTime != e.getDownTime()) {
+                if (st.draggingPanel) SwipePanelHost.finishOpeningDrag(false, 0f);
                 st.reset();
-                return;
+                return wasDragging;
             }
-            if (st.armed && !st.fired) {
+            if (st.draggingPanel) {
+                updateSwipeVelocity(st, e);
+                SwipePanelHost.updateOpeningDrag(e.getRawY());
+                return true;
+            }
+            if (st.armed) {
                 float dy = st.startY - e.getRawY();
                 float dx = Math.abs(e.getRawX() - st.startX);
                 if (dy > threshold && dy > dx * 1.15f) {
-                    st.fired = true;
                     long now = SystemClock.uptimeMillis();
                     if (now - st.lastTrigger > Constants.GESTURE_TRIGGER_COOLDOWN_MS) {
                         st.lastTrigger = now;
-                        triggerPanel(activity);
+                        st.draggingPanel = true;
+                        updateSwipeVelocity(st, e);
+                        SwipePanelHost.beginOpeningDrag(activity, e.getRawY());
+                        cancelHostTouchTarget(activity, e);
+                        Log.d(Constants.LOG_TAG, "Swipe-up drag started");
+                        return true;
                     }
                 }
             }
-            // MIUI's separate bottom gesture window commonly takes ownership mid-swipe.
-            // Evaluate that final CANCEL position above before clearing our state.
-            if (action == MotionEvent.ACTION_CANCEL) {
+            return false;
+        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            if (st.draggingPanel) {
+                updateSwipeVelocity(st, e);
+                SwipePanelHost.updateOpeningDrag(e.getRawY());
+                int height = activity.getWindow().getDecorView().getHeight();
+                float distance = st.startY - e.getRawY();
+                float minDistance = Math.max(threshold * 2f, height * 0.22f);
+                float minFlingVelocity = Math.max(
+                        threshold * 6f,
+                        ViewConfiguration.get(activity).getScaledMinimumFlingVelocity() * 4f);
+                boolean open = distance >= minDistance
+                        || (action == MotionEvent.ACTION_UP && st.velocityY <= -minFlingVelocity);
+                float velocityY = st.velocityY;
+                SwipePanelHost.finishOpeningDrag(open, velocityY);
+                Log.d(Constants.LOG_TAG, "Swipe-up drag finished: open=" + open
+                        + ", distance=" + distance + ", velocityY=" + velocityY);
+                String diagnostic = "swipe drag finished: open=" + open
+                        + ", distance=" + Math.round(distance)
+                        + ", velocityY=" + Math.round(velocityY);
+                activity.getWindow().getDecorView().post(
+                        () -> DiagnosticLogStore.recordRemote(activity, diagnostic));
                 st.reset();
+                return true;
             }
-        } else if (action == MotionEvent.ACTION_UP) {
             st.reset();
+            return false;
+        }
+        return wasDragging;
+    }
+
+    private static void updateSwipeVelocity(@NonNull SwipeState st, @NonNull MotionEvent e) {
+        long dt = e.getEventTime() - st.lastEventTime;
+        if (dt > 0L) {
+            float instant = (e.getRawY() - st.lastY) * 1000f / dt;
+            st.velocityY = st.velocityY == 0f ? instant : st.velocityY * 0.35f + instant * 0.65f;
+        }
+        st.lastY = e.getRawY();
+        st.lastEventTime = e.getEventTime();
+    }
+
+    private static void cancelHostTouchTarget(@NonNull Activity activity, @NonNull MotionEvent source) {
+        MotionEvent cancel = MotionEvent.obtain(source);
+        try {
+            cancel.setAction(MotionEvent.ACTION_CANCEL);
+            activity.getWindow().superDispatchTouchEvent(cancel);
+        } finally {
+            cancel.recycle();
         }
     }
 
@@ -255,21 +422,6 @@ public class ModuleMain extends XposedModule {
         return false;
     }
 
-    private void triggerPanel(@NonNull Activity activity) {
-        if (activity.isFinishing() || activity.isDestroyed()) return;
-        // dispatchTouchEvent 正在遍历 View 树时不要同步 addView；放到下一轮消息可避免输入目标错乱。
-        activity.getWindow().getDecorView().post(() -> {
-            if (activity.isFinishing() || activity.isDestroyed()
-                    || !activity.hasWindowFocus() || isHostPanelShowing(activity)) return;
-            try {
-                Log.d(Constants.LOG_TAG, "Swipe-up detected, showing panel");
-                SwipePanelHost.show(activity);
-            } catch (Throwable t) {
-                Log.e(Constants.LOG_TAG, "Failed to show swipe panel", t);
-            }
-        });
-    }
-
     /**
      * 把背屏底部边缘区域从系统手势中排除，避免上滑被系统导航抢走
      * （系统导航响应该手势时副屏会闪一下黑，与我们的面板撞车）。仅设置一次。
@@ -292,17 +444,23 @@ public class ModuleMain extends XposedModule {
     private static final class SwipeState {
         float startX;
         float startY;
+        float lastY;
+        float velocityY;
         long downTime;
+        long lastEventTime;
         boolean armed;
-        boolean fired;
+        boolean draggingPanel;
         long lastTrigger;
 
         void reset() {
             startX = 0f;
             startY = 0f;
+            lastY = 0f;
+            velocityY = 0f;
             downTime = 0L;
+            lastEventTime = 0L;
             armed = false;
-            fired = false;
+            draggingPanel = false;
         }
     }
 
@@ -341,6 +499,7 @@ public class ModuleMain extends XposedModule {
                     if (PrefsBridge.shouldFixRearScreenApply(this)) {
                         Object bean = getFieldValue(chain.getThisObject(), Constants.THEME_APPLY_BEAN_FIELD);
                         if (bean != null) {
+                            promoteReappliedWallpaper(bean, classLoader);
                             fillSnapshotPaths(bean);
                             patchRightsPath(bean, classLoader);
                             patchMtzPath(bean);
@@ -349,6 +508,224 @@ public class ModuleMain extends XposedModule {
                     return chain.proceed();
                 }
         );
+    }
+
+    /**
+     * 设置页的顶部预览来自主题商店数据库（按 position 降序），并不直接采用
+     * theme_rear_widget 的 changed 标记。背屏中心完成切换后已经把当前 widget id
+     * 同步到 Secure Settings；设置页冷启动前再据此提升数据库中的对应项。
+     */
+    private void installThemeSettingsSelectionSyncHook(@NonNull ClassLoader classLoader) {
+        Class<?> activityClass = findClass(Constants.THEME_REAR_SETTING_ACTIVITY, classLoader);
+        if (activityClass == null) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Theme settings sync target missing: " + Constants.THEME_REAR_SETTING_ACTIVITY);
+            return;
+        }
+
+        hookMethodIfPresent(
+                activityClass,
+                "onCreate",
+                new Class[]{Bundle.class},
+                Constants.THEME_REAR_SETTING_ACTIVITY + "#onCreate",
+                chain -> {
+                    if (PrefsBridge.shouldFixRearScreenApply(this)
+                            && chain.getThisObject() instanceof Activity activity) {
+                        runThemeDatabaseSelectionSync(activity, classLoader);
+                    }
+                    return chain.proceed();
+                }
+        );
+
+        hookMethodIfPresent(
+                activityClass,
+                "onResume",
+                new Class[]{},
+                Constants.THEME_REAR_SETTING_ACTIVITY + "#onResume",
+                chain -> {
+                    if (PrefsBridge.shouldFixRearScreenApply(this)
+                            && chain.getThisObject() instanceof Activity activity) {
+                        runThemeDatabaseSelectionSync(activity, classLoader);
+                    }
+                    return chain.proceed();
+                }
+        );
+    }
+
+    private void runThemeDatabaseSelectionSync(
+            @NonNull Activity activity,
+            @NonNull ClassLoader classLoader
+    ) {
+        // Room 禁止主线程数据库访问。先在短任务中完成排序落库，再让页面创建或恢复，
+        // 确保 LiveData 第一次（或恢复后）渲染拿到当前背屏壁纸。
+        Thread syncThread = new Thread(
+                () -> syncThemeDatabaseToRearSelection(activity, classLoader),
+                "MiBackscreen-RearSelectionSync");
+        syncThread.setDaemon(true);
+        syncThread.start();
+        try {
+            syncThread.join(3000L);
+            if (syncThread.isAlive()) {
+                log(Log.WARN, Constants.LOG_TAG,
+                        "Theme settings selection sync timed out");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Theme settings selection sync interrupted", e);
+        }
+    }
+
+    private void syncThemeDatabaseToRearSelection(
+            @NonNull Activity activity,
+            @NonNull ClassLoader classLoader
+    ) {
+        try {
+            String raw = Settings.Secure.getString(
+                    activity.getContentResolver(), Constants.SECURE_THEME_REAR_WIDGET);
+            if (isEmpty(raw)) return;
+            JSONArray data = new JSONObject(raw).optJSONArray("data");
+            JSONObject selectedWidget = data != null ? data.optJSONObject(0) : null;
+            if (selectedWidget == null || !selectedWidget.has("id")) return;
+            int selectedId = selectedWidget.getInt("id");
+
+            Class<?> managerClass = findClass(Constants.THEME_REAR_DATA_MANAGER_CLASS, classLoader);
+            if (managerClass == null) return;
+            Field companionField = findStaticCompanionField(
+                    managerClass, Constants.THEME_REAR_DATA_MANAGER_COMPANION_FIELD);
+            if (companionField == null) return;
+            companionField.setAccessible(true);
+            Object companion = companionField.get(null);
+            Object manager = companion != null
+                    ? callMethod(companion, Constants.THEME_REAR_DATA_MANAGER_GET_INSTANCE_METHOD)
+                    : null;
+            if (manager == null) return;
+            Object listValue = callMethod(
+                    manager, Constants.THEME_REAR_DATA_MANAGER_GET_LIST_METHOD);
+            if (!(listValue instanceof List<?> items) || items.isEmpty()) return;
+
+            Object selectedItem = null;
+            int selectedPosition = Integer.MIN_VALUE;
+            int maxPosition = Integer.MIN_VALUE;
+            for (Object item : items) {
+                if (item == null) continue;
+                Object positionValue = callMethod(item, "getPosition");
+                if (!(positionValue instanceof Number)) continue;
+                int position = ((Number) positionValue).intValue();
+                maxPosition = Math.max(maxPosition, position);
+
+                String resId = (String) callMethod(item, "getResId");
+                String applyId = (String) callMethod(item, "getApplyId");
+                int widgetId = (String.valueOf(resId) + String.valueOf(applyId)).hashCode();
+                if (widgetId == selectedId) {
+                    selectedItem = item;
+                    selectedPosition = position;
+                }
+            }
+
+            if (selectedItem == null || selectedPosition >= maxPosition
+                    || maxPosition == Integer.MAX_VALUE) {
+                return;
+            }
+            int promotedPosition = maxPosition + 1;
+            callMethod(selectedItem, "setPosition", promotedPosition);
+            callMethod(manager, Constants.THEME_REAR_DATA_MANAGER_UPSERT_METHOD, selectedItem);
+            log(Log.INFO, Constants.LOG_TAG,
+                    "Synced Theme DB to rear selection: id=" + selectedId
+                            + ", position=" + selectedPosition + "->" + promotedPosition);
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "syncThemeDatabaseToRearSelection failed", e);
+        }
+    }
+
+    /**
+     * 主题商店重新应用已经存在于“我的背屏”中的壁纸时，只会更新 changed 标记，
+     * 不会把该项的 position 移到列表首位。背屏服务能识别 changed，但系统设置页直接
+     * 预览 position 最大的第一项，因此会一直显示之前的壁纸。
+     *
+     * 在宿主原流程写数据库、runtime.json 和 theme_rear_widget 之前提升当前项，保证
+     * 三份状态使用同一顺序。只处理已经存在且当前不在首位的 resId + applyId。
+     */
+    private void promoteReappliedWallpaper(Object bean, ClassLoader classLoader) {
+        try {
+            Class<?> managerClass = findClass(Constants.THEME_REAR_DATA_MANAGER_CLASS, classLoader);
+            if (managerClass == null) {
+                log(Log.WARN, Constants.LOG_TAG,
+                        "Theme hook target missing: " + Constants.THEME_REAR_DATA_MANAGER_CLASS);
+                return;
+            }
+
+            Field companionField = findStaticCompanionField(
+                    managerClass, Constants.THEME_REAR_DATA_MANAGER_COMPANION_FIELD);
+            if (companionField == null) {
+                throw new NoSuchFieldException(
+                        Constants.THEME_REAR_DATA_MANAGER_COMPANION_FIELD);
+            }
+            companionField.setAccessible(true);
+            Object companion = companionField.get(null);
+            if (companion == null) return;
+
+            Object manager = callMethod(
+                    companion, Constants.THEME_REAR_DATA_MANAGER_GET_INSTANCE_METHOD);
+            if (manager == null) return;
+
+            Object value = callMethod(
+                    manager, Constants.THEME_REAR_DATA_MANAGER_GET_LIST_METHOD);
+            if (!(value instanceof List<?> items) || items.isEmpty()) return;
+
+            String targetResId = (String) callMethod(bean, "getResId");
+            String targetApplyId = (String) callMethod(bean, "getApplyId");
+            int maxPosition = Integer.MIN_VALUE;
+            int currentPosition = Integer.MIN_VALUE;
+            boolean existingItem = false;
+
+            for (Object item : items) {
+                if (item == null) continue;
+                Object positionValue = callMethod(item, "getPosition");
+                if (!(positionValue instanceof Number)) continue;
+                int position = ((Number) positionValue).intValue();
+                maxPosition = Math.max(maxPosition, position);
+
+                String resId = (String) callMethod(item, "getResId");
+                String applyId = (String) callMethod(item, "getApplyId");
+                if (java.util.Objects.equals(targetResId, resId)
+                        && java.util.Objects.equals(targetApplyId, applyId)) {
+                    existingItem = true;
+                    currentPosition = position;
+                }
+            }
+
+            if (!existingItem || currentPosition >= maxPosition) return;
+            if (maxPosition == Integer.MAX_VALUE) {
+                log(Log.WARN, Constants.LOG_TAG,
+                        "Current rear wallpaper not promoted: position overflow");
+                return;
+            }
+
+            int promotedPosition = maxPosition + 1;
+            callMethod(bean, "setPosition", promotedPosition);
+            log(Log.INFO, Constants.LOG_TAG,
+                    "Promoted current rear wallpaper: resId=" + targetResId
+                            + ", position=" + currentPosition + "->" + promotedPosition);
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "promoteReappliedWallpaper failed", e);
+        }
+    }
+
+    @Nullable
+    private static Field findStaticCompanionField(Class<?> owner, String preferredName) {
+        try {
+            return owner.getDeclaredField(preferredName);
+        } catch (NoSuchFieldException ignored) {
+            String companionClassName = owner.getName() + "$Companion";
+            for (Field field : owner.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(field.getModifiers())
+                        && companionClassName.equals(field.getType().getName())) {
+                    return field;
+                }
+            }
+            return null;
+        }
     }
 
     private void fillSnapshotPaths(Object bean) {
@@ -506,13 +883,20 @@ public class ModuleMain extends XposedModule {
     }
 
     private static Object getFieldValue(Object target, String field) {
-        try {
-            Field f = target.getClass().getDeclaredField(field);
-            f.setAccessible(true);
-            return f.get(target);
-        } catch (Throwable e) {
-            return null;
+        if (target == null) return null;
+        Class<?> owner = target.getClass();
+        while (owner != null) {
+            try {
+                Field f = owner.getDeclaredField(field);
+                f.setAccessible(true);
+                return f.get(target);
+            } catch (NoSuchFieldException ignored) {
+                owner = owner.getSuperclass();
+            } catch (Throwable e) {
+                return null;
+            }
         }
+        return null;
     }
 
     private static Object callMethod(Object target, String method, Object... args) throws Throwable {

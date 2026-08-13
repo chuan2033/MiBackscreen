@@ -50,6 +50,12 @@ internal fun RearScreenApp() {
     var enableSwipePanel by remember {
         mutableStateOf(PrefsBridge.readEnableSwipePanelForUi(context))
     }
+    var launcherIconHidden by remember {
+        mutableStateOf(LauncherIconController.isHidden(context))
+    }
+    var moduleActivated by remember {
+        mutableStateOf(ModuleApp.getService() != null)
+    }
 
     // Xposed 服务是异步绑定的：首帧组合时可能尚未就绪，读到的是本地/默认值。
     // 服务绑定后通过回调重新读取远程偏好并刷新开关，取代之前每 500ms 一次的空转轮询。
@@ -70,6 +76,7 @@ internal fun RearScreenApp() {
                 removeWallpaperLimit = rwl
                 fixRearScreenApply = fix
                 enableSwipePanel = swipe
+                moduleActivated = ModuleApp.getService() != null
             }
         }
         ModuleApp.addServiceListener(listener)
@@ -113,6 +120,8 @@ internal fun RearScreenApp() {
             floatingNavBar = floatingNavBar,
             liquidGlass = liquidGlass,
             enableSwipePanel = enableSwipePanel,
+            launcherIconHidden = launcherIconHidden,
+            moduleActivated = moduleActivated,
             onDisableLongPressChange = { newValue ->
                 disableLongPress = newValue
                 PrefsBridge.writeDisableLongPressFromUi(context, newValue)
@@ -136,6 +145,11 @@ internal fun RearScreenApp() {
             onEnableSwipePanelChange = { newValue ->
                 enableSwipePanel = newValue
                 PrefsBridge.writeEnableSwipePanelFromUi(context, newValue)
+            },
+            onLauncherIconHiddenChange = { newValue ->
+                if (LauncherIconController.setHidden(context, newValue)) {
+                    launcherIconHidden = newValue
+                }
             },
             onForceStopPackage = { packageName ->
                 scope.launch {

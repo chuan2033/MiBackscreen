@@ -22,12 +22,14 @@
     <string name="home_fix_apply_title">Fix rear screen apply failure</string>
     <string name="home_fix_apply_summary">Requires theme crack to be used together</string>
     <string name="home_system_info_title">System Info</string>
+    <string name="home_module_not_activated">Module not activated. Please activate it in Xposed!</string>
     <string name="home_module_version">Module Version</string>
     <string name="home_device">Device</string>
     <string name="home_system_version">System Version</string>
     <string name="home_android_version">Android Version</string>
 
     <!-- Config Page -->
+    <string name="config_hide_launcher_icon">Hide home screen icon</string>
     <string name="config_nav_bar_title">Navigation Bar</string>
     <string name="config_floating_bar_title">Floating Bar</string>
     <string name="config_floating_bar_summary_on">Currently using floating bar</string>
@@ -39,16 +41,17 @@
     <string name="config_long_press_disabled">Long Press Disabled</string>
     <string name="config_wallpaper_limit">Wallpaper Limit</string>
     <string name="config_apply_fix">Apply Fix</string>
-    <string name="config_bar_style">Bar Style</string>
-    <string name="config_liquid_glass_status">Liquid Glass</string>
     <string name="config_status_on">On</string>
     <string name="config_status_off">Off</string>
     <string name="config_status_removed">Removed</string>
     <string name="config_status_default">Default</string>
-    <string name="config_status_floating">Floating</string>
-    <string name="config_status_standard">Standard</string>
 
     <!-- About Page -->
+    <string name="about_feedback_title">Feedback</string>
+    <string name="about_feedback_log">Log</string>
+    <string name="feedback_log_generating">Generating feedback log</string>
+    <string name="feedback_log_failed">Failed to generate feedback log</string>
+    <string name="feedback_log_share_title">Share feedback log</string>
     <string name="about_developer_title">Developer</string>
     <string name="about_project_url_title">Project URL</string>
     <string name="about_credits_title">Credits</string>

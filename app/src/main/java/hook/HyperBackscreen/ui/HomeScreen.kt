@@ -97,12 +97,15 @@ internal fun HomeScreen(
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
     enableSwipePanel: Boolean,
+    launcherIconHidden: Boolean,
+    moduleActivated: Boolean,
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
     onEnableSwipePanelChange: (Boolean) -> Unit,
+    onLauncherIconHiddenChange: (Boolean) -> Unit,
     onForceStopPackage: (String) -> Unit
 ) {
     var selected by remember { mutableIntStateOf(0) }
@@ -132,12 +135,15 @@ internal fun HomeScreen(
                 floatingNavBar = floatingNavBar,
                 liquidGlass = liquidGlass,
                 enableSwipePanel = enableSwipePanel,
+                launcherIconHidden = launcherIconHidden,
+                moduleActivated = moduleActivated,
                 onDisableLongPressChange = onDisableLongPressChange,
                 onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
                 onFixRearScreenApplyChange = onFixRearScreenApplyChange,
                 onFloatingNavBarChange = onFloatingNavBarChange,
                 onLiquidGlassChange = onLiquidGlassChange,
                 onEnableSwipePanelChange = onEnableSwipePanelChange,
+                onLauncherIconHiddenChange = onLauncherIconHiddenChange,
                 onLicenseClick = { showLicense = true },
                 onForceStopPackage = onForceStopPackage
             )
@@ -155,12 +161,15 @@ private fun MainContent(
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
     enableSwipePanel: Boolean,
+    launcherIconHidden: Boolean,
+    moduleActivated: Boolean,
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
     onEnableSwipePanelChange: (Boolean) -> Unit,
+    onLauncherIconHiddenChange: (Boolean) -> Unit,
     onLicenseClick: () -> Unit,
     onForceStopPackage: (String) -> Unit
 ) {
@@ -228,6 +237,7 @@ private fun MainContent(
                                 disableLongPress = disableLongPress,
                                 removeWallpaperLimit = removeWallpaperLimit,
                                 fixRearScreenApply = fixRearScreenApply,
+                                moduleActivated = moduleActivated,
                                 onDisableLongPressChange = onDisableLongPressChange,
                                 onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
                                 onFixRearScreenApplyChange = onFixRearScreenApplyChange
@@ -246,7 +256,9 @@ private fun MainContent(
                                 onFloatingNavBarChange = onFloatingNavBarChange,
                                 onLiquidGlassChange = onLiquidGlassChange,
                                 enableSwipePanel = enableSwipePanel,
-                                onEnableSwipePanelChange = onEnableSwipePanelChange
+                                onEnableSwipePanelChange = onEnableSwipePanelChange,
+                                launcherIconHidden = launcherIconHidden,
+                                onLauncherIconHiddenChange = onLauncherIconHiddenChange
                             )
                         }
                         2 -> item {

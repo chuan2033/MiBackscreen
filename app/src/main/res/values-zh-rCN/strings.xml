@@ -22,12 +22,14 @@
     <string name="home_fix_apply_title">修复背屏应用失败</string>
     <string name="home_fix_apply_summary">需搭配主题破解使用</string>
     <string name="home_system_info_title">当前系统信息</string>
+    <string name="home_module_not_activated">模块未激活，请在Xposed激活！</string>
     <string name="home_module_version">模块版本</string>
     <string name="home_device">机型</string>
     <string name="home_system_version">系统版本</string>
     <string name="home_android_version">安卓版本</string>
 
     <!-- Config Page -->
+    <string name="config_hide_launcher_icon">隐藏桌面图标</string>
     <string name="config_nav_bar_title">导航栏</string>
     <string name="config_floating_bar_title">悬浮底栏</string>
     <string name="config_floating_bar_summary_on">当前使用悬浮底栏</string>
@@ -39,16 +41,17 @@
     <string name="config_long_press_disabled">长按禁用</string>
     <string name="config_wallpaper_limit">壁纸限制</string>
     <string name="config_apply_fix">应用修复</string>
-    <string name="config_bar_style">底栏样式</string>
-    <string name="config_liquid_glass_status">液态玻璃</string>
     <string name="config_status_on">开启</string>
     <string name="config_status_off">关闭</string>
     <string name="config_status_removed">已去除</string>
     <string name="config_status_default">保持默认</string>
-    <string name="config_status_floating">悬浮底栏</string>
-    <string name="config_status_standard">普通底栏</string>
 
     <!-- About Page -->
+    <string name="about_feedback_title">反馈</string>
+    <string name="about_feedback_log">日志</string>
+    <string name="feedback_log_generating">正在生成反馈日志</string>
+    <string name="feedback_log_failed">反馈日志生成失败</string>
+    <string name="feedback_log_share_title">分享反馈日志</string>
     <string name="about_developer_title">开发者</string>
     <string name="about_project_url_title">项目地址</string>
     <string name="about_credits_title">引用</string>

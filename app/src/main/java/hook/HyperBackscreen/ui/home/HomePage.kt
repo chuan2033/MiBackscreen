@@ -1,7 +1,10 @@
 package hook.HyperBackscreen.ui.home
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.BuildConfig
@@ -12,6 +15,7 @@ import hook.HyperBackscreen.ui.util.currentDeviceName
 import hook.HyperBackscreen.ui.util.currentHyperOSVersion
 import hook.HyperBackscreen.ui.util.currentSystemVersion
 import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
@@ -20,10 +24,21 @@ internal fun HomePage(
     disableLongPress: Boolean,
     removeWallpaperLimit: Boolean,
     fixRearScreenApply: Boolean,
+    moduleActivated: Boolean,
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit
 ) {
+    if (!moduleActivated) {
+        CardBlock(pressFeedbackType = PressFeedbackType.None) {
+            Text(
+                text = stringResource(R.string.home_module_not_activated),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
+                color = Color(0xFFFF3B30)
+            )
+        }
+    }
+
     SmallTitle(text = stringResource(R.string.home_settings_title), insideMargin = PaddingValues(16.dp, 8.dp))
     CardBlock(pressFeedbackType = PressFeedbackType.None) {
         SwitchPreference(

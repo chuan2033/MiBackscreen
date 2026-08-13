@@ -26,6 +26,19 @@ public final class PreferenceBridgeProvider extends ContentProvider {
     @Override
     public Bundle call(@NonNull String method, @Nullable String arg, @Nullable Bundle extras) {
         Bundle result = new Bundle();
+        Context context = getContext();
+        if (Constants.PANEL_DIAGNOSTIC_METHOD_APPEND.equals(method)) {
+            String message = extras != null
+                    ? extras.getString(Constants.EXTRA_DIAGNOSTIC_MESSAGE)
+                    : null;
+            boolean accepted = context != null
+                    && message != null
+                    && !message.isBlank()
+                    && DiagnosticLogStore.appendLocal(context.getApplicationContext(), message);
+            result.putBoolean(Constants.EXTRA_PREFERENCE_ACCEPTED, accepted);
+            return result;
+        }
+
         if (!Constants.PANEL_PREFERENCE_METHOD_SET.equals(method)
                 || !PrefsBridge.isPanelWritableKey(arg)
                 || extras == null
@@ -34,7 +47,6 @@ public final class PreferenceBridgeProvider extends ContentProvider {
             return result;
         }
 
-        Context context = getContext();
         if (context == null) {
             result.putBoolean(Constants.EXTRA_PREFERENCE_ACCEPTED, false);
             return result;

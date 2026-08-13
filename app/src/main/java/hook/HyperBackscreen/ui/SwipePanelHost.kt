@@ -22,6 +22,7 @@ import android.widget.Space
 import android.widget.TextView
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.bridge.PrefsBridge
+import hook.HyperBackscreen.bridge.DiagnosticLogStore
 import hook.HyperBackscreen.common.Constants
 import java.lang.ref.WeakReference
 import kotlin.math.abs
@@ -38,8 +39,9 @@ import kotlin.math.min
 object SwipePanelHost {
     private const val TAG = Constants.LOG_TAG
     private const val KNOWN_BACKSCREEN_SAFE_LEFT_PX = 298
-    private const val SHOW_ANIMATION_MS = 220L
     private const val DISMISS_ANIMATION_MS = 180L
+    private const val SETTLE_MIN_MS = 100L
+    private const val SETTLE_MAX_MS = 320L
     private const val HEADER_TEXT_SP = 19f
     private const val ROW_TITLE_TEXT_SP = 16f
     private const val ROW_SUMMARY_TEXT_SP = 13f
@@ -48,15 +50,70 @@ object SwipePanelHost {
     private var panel: SwipeDismissCard? = null
     private var hostActivity = WeakReference<Activity>(null)
     private var dismissing = false
+    private var openingDrag = false
+    private var dragAttachPending = false
+    private var pendingDragTop = 0f
+    private var pendingSettleOpen: Boolean? = null
+    private var pendingVelocityY = 0f
+    private var dragGeneration = 0L
 
     @JvmStatic
-    fun show(activity: Activity) {
+    fun beginOpeningDrag(activity: Activity, fingerY: Float) {
         if (activity.isFinishing || activity.isDestroyed) return
-        if (isShowing() && hostActivity.get() === activity) return
+        if (openingDrag && hostActivity.get() === activity) {
+            updateOpeningDrag(fingerY)
+            return
+        }
 
         removePanel(container)
-
         val decor = activity.window?.decorView as? ViewGroup ?: return
+        val generation = ++dragGeneration
+        openingDrag = true
+        dragAttachPending = true
+        pendingDragTop = fingerY
+        pendingSettleOpen = null
+        pendingVelocityY = 0f
+        hostActivity = WeakReference(activity)
+
+        // dispatchTouchEvent 正在遍历宿主 View 树，下一帧再挂载；期间保存最新手指位置。
+        decor.post {
+            if (generation != dragGeneration || !dragAttachPending || hostActivity.get() !== activity) {
+                return@post
+            }
+            dragAttachPending = false
+            if (activity.isFinishing || activity.isDestroyed) {
+                clearReferences()
+                return@post
+            }
+            val built = attachPanel(activity, decor)
+            applyOpeningDragTop(built.card, built.root, pendingDragTop)
+            pendingSettleOpen?.let { settleOpeningDrag(it, pendingVelocityY) }
+        }
+    }
+
+    @JvmStatic
+    fun updateOpeningDrag(fingerY: Float) {
+        if (!openingDrag) return
+        pendingDragTop = fingerY
+        val card = panel ?: return
+        val root = container ?: return
+        card.animate().cancel()
+        applyOpeningDragTop(card, root, fingerY)
+    }
+
+    @JvmStatic
+    fun finishOpeningDrag(open: Boolean, velocityY: Float) {
+        if (!openingDrag) return
+        openingDrag = false
+        pendingSettleOpen = open
+        pendingVelocityY = velocityY
+        if (!dragAttachPending) settleOpeningDrag(open, velocityY)
+    }
+
+    @JvmStatic
+    fun isOpeningDrag(): Boolean = openingDrag
+
+    private fun attachPanel(activity: Activity, decor: ViewGroup): BuiltPanel {
         val built = buildPanel(activity)
         container = built.root
         panel = built.card
@@ -72,16 +129,51 @@ object SwipePanelHost {
         })
 
         decor.addView(built.root)
-        built.card.translationY = activity.resources.displayMetrics.heightPixels.toFloat()
-        built.root.post {
-            if (container !== built.root) return@post
-            built.root.requestFocus()
-            built.card.animate()
-                .translationY(0f)
-                .setDuration(SHOW_ANIMATION_MS)
-                .start()
+        built.root.requestFocus()
+        Log.d(TAG, "Panel drag started: safeLeft=${built.safeLeft}px")
+        return built
+    }
+
+    private fun applyOpeningDragTop(card: View, root: View, fingerY: Float) {
+        val height = root.height.takeIf { it > 0 }
+            ?: root.resources.displayMetrics.heightPixels
+        card.translationY = fingerY.coerceIn(0f, height.toFloat())
+    }
+
+    private fun settleOpeningDrag(open: Boolean, velocityY: Float) {
+        val root = container ?: return
+        val card = panel ?: return
+        pendingSettleOpen = null
+        val height = (root.height.takeIf { it > 0 }
+            ?: root.resources.displayMetrics.heightPixels).toFloat()
+        val target = if (open) 0f else height
+        val distance = abs(card.translationY - target)
+        val fraction = if (height > 0f) (distance / height).coerceIn(0f, 1f) else 1f
+        var duration = (SETTLE_MIN_MS + (SETTLE_MAX_MS - SETTLE_MIN_MS) * fraction).toLong()
+        val speed = abs(velocityY)
+        if (speed > height && distance > 0f) {
+            duration = min(duration, (distance / speed * 1000f).toLong().coerceAtLeast(SETTLE_MIN_MS))
         }
-        Log.d(TAG, "Panel shown: safeLeft=${built.safeLeft}px")
+
+        dismissing = !open
+        card.animate().cancel()
+        if (distance < 1f) {
+            card.translationY = target
+            if (!open) removePanel(root)
+            return
+        }
+        card.animate()
+            .translationY(target)
+            .setDuration(duration.coerceIn(SETTLE_MIN_MS, SETTLE_MAX_MS))
+            .withEndAction {
+                if (open) {
+                    dismissing = false
+                    Log.d(TAG, "Panel opened after drag")
+                } else {
+                    removePanel(root)
+                }
+            }
+            .start()
     }
 
     @JvmStatic
@@ -368,12 +460,14 @@ object SwipePanelHost {
             if (saved) {
                 summary.text = if (checked) summaryOn else summaryOff
                 Log.d(TAG, "Panel switch saved: $title=$checked")
+                DiagnosticLogStore.recordRemote(activity, "panel switch saved: $title=$checked")
             } else {
                 reverting = true
                 toggle.isChecked = !checked
                 reverting = false
                 summary.text = saveFailed
                 Log.w(TAG, "Panel switch write rejected: $title")
+                DiagnosticLogStore.recordRemote(activity, "panel switch rejected: $title")
             }
         }
 
@@ -402,10 +496,16 @@ object SwipePanelHost {
     }
 
     private fun clearReferences() {
+        dragGeneration++
         container = null
         panel = null
         hostActivity.clear()
         dismissing = false
+        openingDrag = false
+        dragAttachPending = false
+        pendingDragTop = 0f
+        pendingSettleOpen = null
+        pendingVelocityY = 0f
     }
 
     private fun dp(context: Context, value: Int): Float =
