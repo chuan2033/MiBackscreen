@@ -47,7 +47,6 @@
 | 功能标题字号         | `16sp`                                             |
 | 状态字号             | `13sp`                                             |
 
-不要把内容起点改回 296px，也不要只给内容区绘制背景。
 
 ### 配置写入
 
@@ -200,4 +199,3 @@ adb shell am start --display 1 -n com.xiaomi.subscreencenter/.SubScreenLauncher
 | [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) | Apache-2.0 | 液态玻璃效果上游               |
 | [KernelSU](https://github.com/tiann/KernelSU)                | GPL-3.0    | 悬浮底栏实现参考               |
 
-App 内“开源许可”页面只列外部项目，不重复列本项目自身。
