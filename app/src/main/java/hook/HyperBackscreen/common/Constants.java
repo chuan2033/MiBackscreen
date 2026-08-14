@@ -21,7 +21,10 @@ public final class Constants {
     // 注意：以下 R8 混淆名（o5、cmzf、qp5l 等）与目标应用版本绑定，主题商店一更新即可能失效。
     public static final String THEME_STORE_PACKAGE = "com.android.thememanager";
     public static final String THEME_REAR_VIEWMODEL_CLASS = "com.rearScreen.viewModel.RearScreenDetailViewModel";
+    // Theme Manager 10.9.2.0
     public static final String THEME_APPLY_CHECK_METHOD = "o5";
+    // Theme Manager 11.0.8.0 (HyperOS 4)
+    public static final String THEME_APPLY_CHECK_METHOD_OS4 = "yp31";
 
     // 背屏资源应用流程（修复应用失败）
     public static final String THEME_APPLY_RESULT_CLASS =
@@ -43,14 +46,18 @@ public final class Constants {
     // 主题权限文件目录：优先读混淆字段，失败则回落到固定路径
     public static final String THEME_RESOURCE_CONSTANTS_CLASS =
             "com.android.thememanager.basemodule.resource.constants.ThemeResourceConstants";
+    // Theme Manager 11.0.8.0 (HyperOS 4): ThemeApplicationConstants.lsos 的转发字段。
+    public static final String THEME_RIGHTS_DIR_FIELD_OS4 = "ol";
     public static final String THEME_RIGHTS_DIR_FIELD_PRIMARY = "cmzf";
     public static final String THEME_RIGHTS_DIR_FIELD_FALLBACK = "qp5l";
     public static final String THEME_RIGHTS_DIR_DEFAULT = "/data/system/theme/rights/";
 
     // Z1.t: old gesture class
     public static final String HOOK_CLASS = "Z1.t";
-    // Z1.v: new gesture class
+    // Z1.v: subscreencenter RELEASE-1.0.2605272226 gesture class
     public static final String HOOK_CLASS_LONG_PRESS_NEW = "Z1.v";
+    // k2.s: subscreencenter RELEASE-1.0.2607201627 gesture class (HyperOS 4)
+    public static final String HOOK_CLASS_LONG_PRESS_OS4 = "k2.s";
 
     public static final String HOOK_METHOD_GATE = "e";
     public static final String HOOK_METHOD_GATE_NEW = "g";
@@ -58,11 +65,15 @@ public final class Constants {
     public static final String HOOK_METHOD_RUN = "run";
 
     // 背屏长按切换只保存 user_select，不会更新系统设置页读取的 theme_rear_widget。
-    // 这些均为 subscreencenter 当前版本中的原始 R8 名称（不是 JADX 展示别名）。
+    // 这些均为 subscreencenter 的原始 R8 名称（不是 JADX 展示别名）。
     public static final String HOOK_CLASS_MAIN_PANEL = "com.xiaomi.subscreencenter.MainPanel";
     public static final String HOOK_METHOD_SAVE_USER_SELECTION = "I";
+    // RELEASE-1.0.2605272226
     public static final String HOOK_FIELD_WIDGET_LIST = "i";
     public static final String HOOK_FIELD_SELECTED_INDEX = "l";
+    // RELEASE-1.0.2607201627 (HyperOS 4)
+    public static final String HOOK_FIELD_WIDGET_LIST_OS4 = "j";
+    public static final String HOOK_FIELD_SELECTED_INDEX_OS4 = "m";
     public static final String HOOK_FIELD_WIDGET_BEAN = "c";
     public static final String HOOK_FIELD_WIDGET_ID = "a";
     public static final String SECURE_THEME_REAR_WIDGET = "theme_rear_widget";

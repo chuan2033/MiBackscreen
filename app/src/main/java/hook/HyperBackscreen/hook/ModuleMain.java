@@ -87,17 +87,30 @@ public class ModuleMain extends XposedModule {
     }
 
     private void installLongPressHooks(@NonNull ClassLoader classLoader) {
-        Class<?> newGestureClass = findClass(Constants.HOOK_CLASS_LONG_PRESS_NEW, classLoader);
-        if (newGestureClass != null) {
-            hookLongPressMethod(newGestureClass, Constants.HOOK_METHOD_GATE_NEW, new Class[]{MotionEvent.class}, false);
-            hookLongPressMethod(newGestureClass, Constants.HOOK_METHOD_LONG_PRESS_TOUCH_NEW, new Class[]{MotionEvent.class}, null);
-            hookLongPressMethod(newGestureClass, Constants.HOOK_METHOD_RUN, new Class[]{}, null);
+        Class<?> gestureClass = findFirstClass(
+                classLoader,
+                Constants.HOOK_CLASS_LONG_PRESS_OS4,
+                Constants.HOOK_CLASS_LONG_PRESS_NEW);
+        if (gestureClass != null) {
+            hookLongPressMethod(gestureClass, Constants.HOOK_METHOD_GATE_NEW, new Class[]{MotionEvent.class}, false);
+            hookLongPressMethod(gestureClass, Constants.HOOK_METHOD_LONG_PRESS_TOUCH_NEW, new Class[]{MotionEvent.class}, null);
+            hookLongPressMethod(gestureClass, Constants.HOOK_METHOD_RUN, new Class[]{}, null);
+            log(Log.INFO, Constants.LOG_TAG,
+                    "Long press hook target resolved: " + gestureClass.getName());
         }
 
         Class<?> legacyGestureClass = findClass(Constants.HOOK_CLASS, classLoader);
-        if (legacyGestureClass != null && legacyGestureClass != newGestureClass) {
+        if (legacyGestureClass != null && legacyGestureClass != gestureClass) {
             hookLongPressMethod(legacyGestureClass, Constants.HOOK_METHOD_GATE, new Class[]{MotionEvent.class}, false);
             hookLongPressMethod(legacyGestureClass, Constants.HOOK_METHOD_RUN, new Class[]{}, null);
+        }
+
+        if (gestureClass == null && legacyGestureClass == null) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Long press hook targets missing: "
+                            + Constants.HOOK_CLASS_LONG_PRESS_OS4 + ", "
+                            + Constants.HOOK_CLASS_LONG_PRESS_NEW + ", "
+                            + Constants.HOOK_CLASS);
         }
     }
 
@@ -211,8 +224,16 @@ public class ModuleMain extends XposedModule {
 
     private void syncSelectedWallpaperToSettings(@NonNull View panel) {
         try {
-            Object listValue = getFieldValue(panel, Constants.HOOK_FIELD_WIDGET_LIST);
-            Object indexValue = getFieldValue(panel, Constants.HOOK_FIELD_SELECTED_INDEX);
+            Object listValue = getFieldValueByType(
+                    panel,
+                    List.class,
+                    Constants.HOOK_FIELD_WIDGET_LIST_OS4,
+                    Constants.HOOK_FIELD_WIDGET_LIST);
+            Object indexValue = getFieldValueByType(
+                    panel,
+                    Number.class,
+                    Constants.HOOK_FIELD_SELECTED_INDEX_OS4,
+                    Constants.HOOK_FIELD_SELECTED_INDEX);
             if (!(listValue instanceof List<?> widgets) || !(indexValue instanceof Number)) {
                 return;
             }
@@ -470,11 +491,21 @@ public class ModuleMain extends XposedModule {
             log(Log.WARN, Constants.LOG_TAG, "Theme hook target missing: " + Constants.THEME_REAR_VIEWMODEL_CLASS);
             return;
         }
-        hookMethodIfPresent(
+        Method applyCheckMethod = findFirstDeclaredMethod(
                 viewModelClass,
-                Constants.THEME_APPLY_CHECK_METHOD,
                 new Class[]{List.class},
-                Constants.THEME_REAR_VIEWMODEL_CLASS + "#" + Constants.THEME_APPLY_CHECK_METHOD,
+                Constants.THEME_APPLY_CHECK_METHOD_OS4,
+                Constants.THEME_APPLY_CHECK_METHOD);
+        if (applyCheckMethod == null) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Hook targets missing: " + Constants.THEME_REAR_VIEWMODEL_CLASS
+                            + "#[" + Constants.THEME_APPLY_CHECK_METHOD_OS4
+                            + ", " + Constants.THEME_APPLY_CHECK_METHOD + "]");
+            return;
+        }
+        hookMethodIfPresent(
+                applyCheckMethod,
+                Constants.THEME_REAR_VIEWMODEL_CLASS + "#" + applyCheckMethod.getName(),
                 chain -> {
                     if (PrefsBridge.shouldRemoveWallpaperLimit(this)) {
                         return true;
@@ -823,13 +854,29 @@ public class ModuleMain extends XposedModule {
     }
 
     private String resolveRightsDir(ClassLoader classLoader) {
-        String dir = getStaticStringField(classLoader,
-                Constants.THEME_RESOURCE_CONSTANTS_CLASS, Constants.THEME_RIGHTS_DIR_FIELD_PRIMARY);
-        if (!isEmpty(dir)) return dir;
-        dir = getStaticStringField(classLoader,
-                Constants.THEME_RESOURCE_CONSTANTS_CLASS, Constants.THEME_RIGHTS_DIR_FIELD_FALLBACK);
-        if (!isEmpty(dir)) return dir;
+        String[] fieldNames = {
+                Constants.THEME_RIGHTS_DIR_FIELD_OS4,
+                Constants.THEME_RIGHTS_DIR_FIELD_PRIMARY,
+                Constants.THEME_RIGHTS_DIR_FIELD_FALLBACK
+        };
+        for (String fieldName : fieldNames) {
+            String dir = getStaticStringField(
+                    classLoader, Constants.THEME_RESOURCE_CONSTANTS_CLASS, fieldName);
+            if (isValidRightsDir(dir)) {
+                return dir.endsWith("/") ? dir : dir + "/";
+            }
+            if (!isEmpty(dir)) {
+                log(Log.WARN, Constants.LOG_TAG,
+                        "Ignored invalid theme rights dir from " + fieldName + ": " + dir);
+            }
+        }
         return Constants.THEME_RIGHTS_DIR_DEFAULT;
+    }
+
+    private static boolean isValidRightsDir(@Nullable String dir) {
+        if (isEmpty(dir) || !dir.startsWith("/")) return false;
+        String normalized = dir.endsWith("/") ? dir : dir + "/";
+        return normalized.contains("/theme/rights/");
     }
 
     private File findNewestRightsFile(String dirPath, String excludePath) {
@@ -894,6 +941,21 @@ public class ModuleMain extends XposedModule {
                 owner = owner.getSuperclass();
             } catch (Throwable e) {
                 return null;
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    private static Object getFieldValueByType(
+            @Nullable Object target,
+            @NonNull Class<?> expectedType,
+            @NonNull String... fieldNames
+    ) {
+        for (String fieldName : fieldNames) {
+            Object value = getFieldValue(target, fieldName);
+            if (expectedType.isInstance(value)) {
+                return value;
             }
         }
         return null;
@@ -1006,6 +1068,35 @@ public class ModuleMain extends XposedModule {
         } catch (ClassNotFoundException e) {
             return null;
         }
+    }
+
+    @Nullable
+    private static Class<?> findFirstClass(
+            @NonNull ClassLoader classLoader,
+            @NonNull String... classNames
+    ) {
+        for (String className : classNames) {
+            Class<?> targetClass = findClass(className, classLoader);
+            if (targetClass != null) {
+                return targetClass;
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    private static Method findFirstDeclaredMethod(
+            @NonNull Class<?> targetClass,
+            @NonNull Class<?>[] parameterTypes,
+            @NonNull String... methodNames
+    ) {
+        for (String methodName : methodNames) {
+            Method method = findDeclaredMethod(targetClass, methodName, parameterTypes);
+            if (method != null) {
+                return method;
+            }
+        }
+        return null;
     }
 
     @Nullable
