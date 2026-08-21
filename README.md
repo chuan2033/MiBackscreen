@@ -20,7 +20,7 @@
 | 修复背屏壁纸应用失败 | 关     | 主题商店 |
 | 背屏上滑快捷面板     | 开     | 背屏中心 |
 
-“修复背屏壁纸应用失败”同时负责壁纸状态同步：从主题商店应用壁纸后，设置页预览会更新；从背屏切换壁纸后，`theme_rear_widget` 与主题商店数据库会按当前背屏状态同步。
+“修复背屏壁纸应用失败”同时负责壁纸状态同步：从主题商店应用壁纸后，设置页预览会更新；用户在背屏编辑界面确认切换壁纸后，`theme_rear_widget` 与主题商店数据库会按当前背屏状态同步。背屏列表初始化、资源自动刷新和取消编辑不会触发同步；状态已经一致时也不会重复更新 `updateTime`。
 
 ## 快捷面板
 
@@ -68,6 +68,21 @@ SwipePanelHost
 - `remove_wallpaper_limit`
 
 远程服务暂时不可用时保留待写值，服务恢复后重试。写入请求失败时，面板开关回滚。
+
+## 反馈日志
+
+在模块 App 的“关于 → 反馈 → 日志”中可以生成 ZIP 反馈包并调起系统分享面板。遇到问题时，应在复现后立即生成，生成前不要重新应用壁纸或重启背屏中心、主题商店。
+
+反馈包使用 `feedback_schema=2`，包括：
+
+- 设备、系统、模块和两个作用域 App 的版本。
+- 模块开关状态与 Hook 安装状态。
+- `theme_rear_widget`、`user_pref.json`、`widget.json` 和 `runtime.json`。
+- 背屏资源文件清单、权限文件清单与当前 `app.log`。
+- 过滤后的系统 logcat、模块本地日志和 LSPosed 模块日志。
+- 主题商店的 `rearScreen.db`、`rearScreen.db-wal` 和 `rearScreen.db-shm`。
+
+数据库采集通过 `su -M` 进入全局挂载命名空间，否则 Android 应用数据隔离可能让 Root 进程仍看不到主题商店私有目录。logcat 只读取最近 20000 行，避免日志量过大导致导出超时。反馈包包含壁纸资源路径和系统日志，公开分享前请注意隐私。
 
 ## 构建
 
@@ -129,6 +144,7 @@ app/src/main/java/hook/HyperBackscreen/
    ├─ SwipePanelHost.kt
    ├─ MiuixStyleSwitch.kt
    ├─ about/
+   │  └─ FeedbackLogExporter.kt
    ├─ config/
    ├─ home/
    ├─ components/
@@ -144,6 +160,7 @@ app/src/main/java/hook/HyperBackscreen/
 - `SwipePanelHost`：创建和销毁注入到背屏 Activity 的原生面板。
 - `PrefsBridge`：模块 App、Hook 与远程偏好的统一读写入口。
 - `PreferenceBridgeProvider`：处理背屏进程发起的受限写入。
+- `FeedbackLogExporter`：生成包含宿主状态、日志和主题商店数据库的反馈 ZIP。
 - `RearScreenApp` / `HomeScreen`：模块 App 的 Compose UI。
 
 ## 调试
@@ -167,7 +184,9 @@ adb logcat -s MiBackscreen
 | `Panel opened after drag`                        | 面板展开完成                     |
 | `Panel switch saved: ...`                        | 面板配置写入成功                 |
 | `Promoted current rear wallpaper: ...`           | 重复应用的壁纸已提升到设置页首位 |
+| `Rear selection commit requested: ...`           | 已识别用户确认切换壁纸           |
 | `Synced rear selection to Settings: ...`         | 背屏选择已同步到 Secure Settings |
+| `Rear selection already synchronized: ...`       | 状态已经一致，未重复写入         |
 | `Synced Theme DB to rear selection: ...`         | 主题商店数据库已同步到当前背屏   |
 | `Hook target missing: ...`                       | 宿主版本与当前 Hook 目标不匹配   |
 
@@ -186,6 +205,7 @@ adb shell am start --display 1 -n com.xiaomi.subscreencenter/.SubScreenLauncher
 - 系统手势排除区占底部 30%，新增原厂手势时需要重新评估冲突。
 - `textureBlur` 不能放入同一个 `layerBackdrop` 采样子树，否则可能形成采样环并触发 native crash。
 - 毛玻璃和液态玻璃会增加 GPU 开销。
+- 反馈包的数据库采集依赖 Root 实现支持 `su -M`；KernelSU 和 Magisk 均提供该参数。
 
 ## 依赖与许可证
 

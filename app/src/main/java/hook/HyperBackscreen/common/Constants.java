@@ -67,13 +67,17 @@ public final class Constants {
     // 背屏长按切换只保存 user_select，不会更新系统设置页读取的 theme_rear_widget。
     // 这些均为 subscreencenter 的原始 R8 名称（不是 JADX 展示别名）。
     public static final String HOOK_CLASS_MAIN_PANEL = "com.xiaomi.subscreencenter.MainPanel";
+    // v(false) 表示用户确认退出编辑模式；v(true) 表示暂停/AOD 等场景取消编辑。
+    public static final String HOOK_METHOD_REQUEST_EXIT_EDIT = "v";
     public static final String HOOK_METHOD_SAVE_USER_SELECTION = "I";
     // RELEASE-1.0.2605272226
     public static final String HOOK_FIELD_WIDGET_LIST = "i";
     public static final String HOOK_FIELD_SELECTED_INDEX = "l";
+    public static final String HOOK_FIELD_PREVIEW_INDEX = "k";
     // RELEASE-1.0.2607201627 (HyperOS 4)
     public static final String HOOK_FIELD_WIDGET_LIST_OS4 = "j";
     public static final String HOOK_FIELD_SELECTED_INDEX_OS4 = "m";
+    public static final String HOOK_FIELD_PREVIEW_INDEX_OS4 = "l";
     public static final String HOOK_FIELD_WIDGET_BEAN = "c";
     public static final String HOOK_FIELD_WIDGET_ID = "a";
     public static final String SECURE_THEME_REAR_WIDGET = "theme_rear_widget";

@@ -36,10 +36,13 @@ import hook.HyperBackscreen.ui.SwipePanelHost;
 import io.github.libxposed.api.XposedModule;
 
 public class ModuleMain extends XposedModule {
+    private static final long REAR_SELECTION_PENDING_TIMEOUT_MS = 15_000L;
     private volatile boolean hooksInstalled = false;
     private volatile boolean themeStoreHooksInstalled = false;
     private final Map<Activity, SwipeState> swipeStates = new WeakHashMap<>();
     private final Set<Activity> exclusionApplied = Collections.newSetFromMap(new WeakHashMap<>());
+    private final Map<View, PendingRearSelection> pendingRearSelections =
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     @Override
     public void onModuleLoaded(@NonNull ModuleLoadedParam param) {
@@ -207,6 +210,39 @@ public class ModuleMain extends XposedModule {
 
         hookMethodIfPresent(
                 mainPanelClass,
+                Constants.HOOK_METHOD_REQUEST_EXIT_EDIT,
+                new Class[]{boolean.class},
+                Constants.HOOK_CLASS_MAIN_PANEL + "#"
+                        + Constants.HOOK_METHOD_REQUEST_EXIT_EDIT,
+                chain -> {
+                    View panel = chain.getThisObject() instanceof View
+                            ? (View) chain.getThisObject()
+                            : null;
+                    Object cancelValue = chain.getArgs().isEmpty()
+                            ? null
+                            : chain.getArgs().get(0);
+                    boolean cancel = Boolean.TRUE.equals(cancelValue);
+
+                    if (panel == null || cancel || !PrefsBridge.shouldFixRearScreenApply(this)) {
+                        if (panel != null) pendingRearSelections.remove(panel);
+                        return chain.proceed();
+                    }
+
+                    PendingRearSelection pending = capturePendingRearSelection(panel);
+                    if (pending == null) {
+                        pendingRearSelections.remove(panel);
+                    } else {
+                        pendingRearSelections.put(panel, pending);
+                        log(Log.DEBUG, Constants.LOG_TAG,
+                                "Rear selection commit requested: id=" + pending.wallpaperId
+                                        + ", index=" + pending.selectedIndex);
+                    }
+                    return chain.proceed();
+                }
+        );
+
+        hookMethodIfPresent(
+                mainPanelClass,
                 Constants.HOOK_METHOD_SAVE_USER_SELECTION,
                 new Class[]{},
                 Constants.HOOK_CLASS_MAIN_PANEL + "#"
@@ -215,37 +251,102 @@ public class ModuleMain extends XposedModule {
                     Object result = chain.proceed();
                     if (PrefsBridge.shouldFixRearScreenApply(this)
                             && chain.getThisObject() instanceof View panel) {
-                        syncSelectedWallpaperToSettings(panel);
+                        consumePendingRearSelection(panel);
+                    } else if (chain.getThisObject() instanceof View panel) {
+                        pendingRearSelections.remove(panel);
                     }
                     return result;
                 }
         );
     }
 
-    private void syncSelectedWallpaperToSettings(@NonNull View panel) {
+    @Nullable
+    private PendingRearSelection capturePendingRearSelection(@NonNull View panel) {
+        Integer committedId = resolveWallpaperId(panel, false);
+        Integer previewId = resolveWallpaperId(panel, true);
+        Integer previewIndex = resolveWallpaperIndex(panel, true);
+        if (committedId == null || previewId == null || previewIndex == null
+                || committedId.intValue() == previewId.intValue()) {
+            return null;
+        }
+        return new PendingRearSelection(
+                previewId,
+                previewIndex,
+                SystemClock.elapsedRealtime());
+    }
+
+    private void consumePendingRearSelection(@NonNull View panel) {
+        PendingRearSelection pending = pendingRearSelections.get(panel);
+        if (pending == null) return;
+
+        long age = SystemClock.elapsedRealtime() - pending.requestedAtElapsed;
+        if (age < 0L || age > REAR_SELECTION_PENDING_TIMEOUT_MS) {
+            pendingRearSelections.remove(panel);
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Ignored expired rear selection commit: id=" + pending.wallpaperId
+                            + ", ageMs=" + age);
+            return;
+        }
+
+        Integer committedId = resolveWallpaperId(panel, false);
+        if (committedId == null || committedId.intValue() != pending.wallpaperId) {
+            return;
+        }
+
+        pendingRearSelections.remove(panel);
+        syncSelectedWallpaperToSettings(panel, pending.wallpaperId, pending.selectedIndex);
+    }
+
+    @Nullable
+    private Integer resolveWallpaperId(@NonNull View panel, boolean preview) {
+        Object os4ListValue = getFieldValue(panel, Constants.HOOK_FIELD_WIDGET_LIST_OS4);
+        boolean os4Layout = os4ListValue instanceof List<?>;
+        Object listValue = os4Layout
+                ? os4ListValue
+                : getFieldValue(panel, Constants.HOOK_FIELD_WIDGET_LIST);
+        if (!(listValue instanceof List<?> widgets)) return null;
+
+        Integer index = resolveWallpaperIndex(panel, preview, os4Layout);
+        if (index == null || index < 0 || index >= widgets.size()) return null;
+        Object widget = widgets.get(index);
+        Object bean = getFieldValue(widget, Constants.HOOK_FIELD_WIDGET_BEAN);
+        Object idValue = getFieldValue(bean, Constants.HOOK_FIELD_WIDGET_ID);
+        return idValue instanceof Number ? ((Number) idValue).intValue() : null;
+    }
+
+    @Nullable
+    private Integer resolveWallpaperIndex(@NonNull View panel, boolean preview) {
+        boolean os4Layout = getFieldValue(panel, Constants.HOOK_FIELD_WIDGET_LIST_OS4)
+                instanceof List<?>;
+        return resolveWallpaperIndex(panel, preview, os4Layout);
+    }
+
+    @Nullable
+    private Integer resolveWallpaperIndex(
+            @NonNull View panel,
+            boolean preview,
+            boolean os4Layout
+    ) {
+        String fieldName;
+        if (preview) {
+            fieldName = os4Layout
+                    ? Constants.HOOK_FIELD_PREVIEW_INDEX_OS4
+                    : Constants.HOOK_FIELD_PREVIEW_INDEX;
+        } else {
+            fieldName = os4Layout
+                    ? Constants.HOOK_FIELD_SELECTED_INDEX_OS4
+                    : Constants.HOOK_FIELD_SELECTED_INDEX;
+        }
+        Object indexValue = getFieldValue(panel, fieldName);
+        return indexValue instanceof Number ? ((Number) indexValue).intValue() : null;
+    }
+
+    private void syncSelectedWallpaperToSettings(
+            @NonNull View panel,
+            int selectedId,
+            int selectedIndex
+    ) {
         try {
-            Object listValue = getFieldValueByType(
-                    panel,
-                    List.class,
-                    Constants.HOOK_FIELD_WIDGET_LIST_OS4,
-                    Constants.HOOK_FIELD_WIDGET_LIST);
-            Object indexValue = getFieldValueByType(
-                    panel,
-                    Number.class,
-                    Constants.HOOK_FIELD_SELECTED_INDEX_OS4,
-                    Constants.HOOK_FIELD_SELECTED_INDEX);
-            if (!(listValue instanceof List<?> widgets) || !(indexValue instanceof Number)) {
-                return;
-            }
-
-            int selectedIndex = ((Number) indexValue).intValue();
-            if (selectedIndex < 0 || selectedIndex >= widgets.size()) return;
-            Object selectedWidget = widgets.get(selectedIndex);
-            Object bean = getFieldValue(selectedWidget, Constants.HOOK_FIELD_WIDGET_BEAN);
-            Object idValue = getFieldValue(bean, Constants.HOOK_FIELD_WIDGET_ID);
-            if (!(idValue instanceof Number)) return;
-            int selectedId = ((Number) idValue).intValue();
-
             String raw = Settings.Secure.getString(
                     panel.getContext().getContentResolver(),
                     Constants.SECURE_THEME_REAR_WIDGET);
@@ -257,21 +358,29 @@ public class ModuleMain extends XposedModule {
 
             JSONObject selected = null;
             JSONArray remaining = new JSONArray();
-            boolean alreadySynchronized = false;
+            boolean needsWrite = false;
             for (int i = 0; i < data.length(); i++) {
                 JSONObject item = data.optJSONObject(i);
                 if (item == null) continue;
                 if (item.optInt("id") == selectedId) {
                     selected = item;
-                    alreadySynchronized = i == 0 && item.optBoolean("changed", false);
+                    if (i != 0 || !item.optBoolean("changed", false)) {
+                        needsWrite = true;
+                    }
                 } else {
+                    if (item.optBoolean("changed", false)) needsWrite = true;
                     item.put("changed", false);
                     remaining.put(item);
                 }
             }
             if (selected == null) return;
+            if (!needsWrite) {
+                log(Log.DEBUG, Constants.LOG_TAG,
+                        "Rear selection already synchronized: id=" + selectedId
+                                + ", index=" + selectedIndex);
+                return;
+            }
 
-            // 即使已在首位，也要修正其他项可能残留的 changed 标记。
             selected.put("changed", true);
             JSONArray reordered = new JSONArray();
             reordered.put(selected);
@@ -287,14 +396,25 @@ public class ModuleMain extends XposedModule {
                     root.toString())) {
                 log(Log.INFO, Constants.LOG_TAG,
                         "Synced rear selection to Settings: id=" + selectedId
-                                + ", index=" + selectedIndex
-                                + (alreadySynchronized ? " (markers refreshed)" : ""));
+                                + ", index=" + selectedIndex);
             } else {
                 log(Log.WARN, Constants.LOG_TAG,
                         "Failed to write rear selection to Settings: id=" + selectedId);
             }
         } catch (Throwable e) {
             log(Log.WARN, Constants.LOG_TAG, "syncSelectedWallpaperToSettings failed", e);
+        }
+    }
+
+    private static final class PendingRearSelection {
+        final int wallpaperId;
+        final int selectedIndex;
+        final long requestedAtElapsed;
+
+        PendingRearSelection(int wallpaperId, int selectedIndex, long requestedAtElapsed) {
+            this.wallpaperId = wallpaperId;
+            this.selectedIndex = selectedIndex;
+            this.requestedAtElapsed = requestedAtElapsed;
         }
     }
 
