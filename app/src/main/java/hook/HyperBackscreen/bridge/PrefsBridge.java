@@ -11,6 +11,8 @@ import androidx.annotation.Nullable;
 
 import hook.HyperBackscreen.app.ModuleApp;
 import hook.HyperBackscreen.common.Constants;
+import hook.HyperBackscreen.common.PackageListCodec;
+import hook.HyperBackscreen.common.RearScreenWakeMatcher;
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.service.XposedService;
 
@@ -24,6 +26,9 @@ public final class PrefsBridge {
     private static final boolean DEFAULT_FLOATING_NAV_BAR = false;
     private static final boolean DEFAULT_LIQUID_GLASS = false;
     public static final boolean DEFAULT_ENABLE_SWIPE_PANEL = true;
+    public static final boolean DEFAULT_DISABLE_REAR_SCREEN_COVER = false;
+    public static final boolean DEFAULT_DISABLE_DOUBLE_TAP_WAKE = false;
+    public static final String DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES = "";
 
     private PrefsBridge() {
     }
@@ -82,6 +87,25 @@ public final class PrefsBridge {
         }
     }
 
+    private static String readStringForUi(@NonNull Context context, @NonNull String key, @NonNull String def) {
+        SharedPreferences remote = remote();
+        if (remote != null) {
+            String value = remote.getString(key, def);
+            local(context).edit().putString(key, value).apply();
+            return value == null ? def : value;
+        }
+        String value = local(context).getString(key, def);
+        return value == null ? def : value;
+    }
+
+    private static void writeStringFromUi(@NonNull Context context, @NonNull String key, @NonNull String value) {
+        local(context).edit().putString(key, value).apply();
+        SharedPreferences remote = remote();
+        if (remote != null) {
+            remote.edit().putString(key, value).apply();
+        }
+    }
+
     /**
      * Hook 侧读取：只读 LSPosed 远程偏好——它才是可跨进程共享的真正数据源。
      * 旧实现优先读被 Hook 应用私有目录下的空文件，导致 UI 关闭长按后 Hook 端始终拿默认值。
@@ -91,6 +115,20 @@ public final class PrefsBridge {
             SharedPreferences remotePrefs = module.getRemotePreferences(Constants.PREF_GROUP);
             if (remotePrefs != null) {
                 return remotePrefs.getBoolean(key, def);
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "Failed to read " + key, e);
+        }
+        return def;
+    }
+
+    @NonNull
+    private static String readStringForHook(@NonNull XposedModule module, @NonNull String key, @NonNull String def) {
+        try {
+            SharedPreferences remotePrefs = module.getRemotePreferences(Constants.PREF_GROUP);
+            if (remotePrefs != null) {
+                String value = remotePrefs.getString(key, def);
+                return value == null ? def : value;
             }
         } catch (Throwable e) {
             Log.w(TAG, "Failed to read " + key, e);
@@ -130,6 +168,34 @@ public final class PrefsBridge {
         writeFromUi(context, Constants.KEY_ENABLE_SWIPE_PANEL, enabled);
     }
 
+    public static boolean readDisableRearScreenCoverForUi(@NonNull Context context) {
+        return readForUi(context, Constants.KEY_DISABLE_REAR_SCREEN_COVER, DEFAULT_DISABLE_REAR_SCREEN_COVER);
+    }
+
+    public static void writeDisableRearScreenCoverFromUi(@NonNull Context context, boolean enabled) {
+        writeFromUi(context, Constants.KEY_DISABLE_REAR_SCREEN_COVER, enabled);
+    }
+
+    public static boolean readDisableDoubleTapWakeForUi(@NonNull Context context) {
+        return readForUi(context, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, DEFAULT_DISABLE_DOUBLE_TAP_WAKE);
+    }
+
+    public static void writeDisableDoubleTapWakeFromUi(@NonNull Context context, boolean enabled) {
+        writeFromUi(context, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, enabled);
+    }
+
+    @NonNull
+    public static String readDoubleTapWakeDisabledPackagesForUi(@NonNull Context context) {
+        return readStringForUi(
+                context,
+                Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,
+                DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
+    }
+
+    public static void writeDoubleTapWakeDisabledPackagesFromUi(@NonNull Context context, @NonNull String packages) {
+        writeStringFromUi(context, Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES, packages);
+    }
+
     /** 纯 UI 外观项，Hook 端不消费，只存本地。 */
     public static boolean readFloatingNavBar(@NonNull Context context) {
         return local(context).getBoolean(Constants.KEY_FLOATING_NAV_BAR, DEFAULT_FLOATING_NAV_BAR);
@@ -161,6 +227,32 @@ public final class PrefsBridge {
 
     public static boolean shouldEnableSwipePanel(@NonNull XposedModule module) {
         return readForHook(module, Constants.KEY_ENABLE_SWIPE_PANEL, DEFAULT_ENABLE_SWIPE_PANEL);
+    }
+
+    public static boolean shouldDisableRearScreenCover(@NonNull XposedModule module) {
+        return readForHook(module, Constants.KEY_DISABLE_REAR_SCREEN_COVER, DEFAULT_DISABLE_REAR_SCREEN_COVER);
+    }
+
+    public static boolean shouldDisableDoubleTapWake(@NonNull XposedModule module) {
+        return readForHook(module, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, DEFAULT_DISABLE_DOUBLE_TAP_WAKE);
+    }
+
+    public static boolean shouldSkipDoubleTapWakeForPackage(@NonNull XposedModule module, @Nullable String packageName) {
+        if (packageName == null || !shouldDisableDoubleTapWake(module)) return false;
+        String raw = readStringForHook(
+                module,
+                Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,
+                DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
+        return PackageListCodec.parse(raw).contains(packageName);
+    }
+
+    public static boolean shouldSkipDoubleTapWakeForPackages(@NonNull XposedModule module, @Nullable String... packageNames) {
+        if (!shouldDisableDoubleTapWake(module)) return false;
+        String raw = readStringForHook(
+                module,
+                Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,
+                DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
+        return RearScreenWakeMatcher.matchesAnyPackage(raw, packageNames);
     }
 
     /**
@@ -263,6 +355,13 @@ public final class PrefsBridge {
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT, DEFAULT_REMOVE_WALLPAPER_LIMIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_SWIPE_PANEL, DEFAULT_ENABLE_SWIPE_PANEL);
+            syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_REAR_SCREEN_COVER, DEFAULT_DISABLE_REAR_SCREEN_COVER);
+            syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, DEFAULT_DISABLE_DOUBLE_TAP_WAKE);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,
+                    DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
         } catch (Throwable e) {
             Log.w(TAG, "Failed to sync prefs on service available", e);
         }
@@ -281,4 +380,19 @@ public final class PrefsBridge {
             localPrefs.edit().putBoolean(key, def).apply();
         }
     }
+
+    private static void syncStringKey(@NonNull SharedPreferences localPrefs,
+                                      @NonNull SharedPreferences remotePrefs,
+                                      @NonNull String key,
+                                      @NonNull String def) {
+        if (remotePrefs.contains(key)) {
+            localPrefs.edit().putString(key, remotePrefs.getString(key, def)).apply();
+        } else if (localPrefs.contains(key)) {
+            remotePrefs.edit().putString(key, localPrefs.getString(key, def)).apply();
+        } else {
+            remotePrefs.edit().putString(key, def).apply();
+            localPrefs.edit().putString(key, def).apply();
+        }
+    }
+
 }

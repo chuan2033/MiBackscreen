@@ -2,6 +2,7 @@ package hook.HyperBackscreen.common;
 
 public final class Constants {
     public static final String MODULE_PACKAGE = "hook.HyperBackscreen";
+    public static final String SYSTEM_PACKAGE = "system";
     public static final String TARGET_PACKAGE = "com.xiaomi.subscreencenter";
     public static final String PREF_GROUP = "module_config";
     public static final String KEY_DISABLE_LONG_PRESS_EDIT = "disable_long_press_edit";
@@ -10,6 +11,9 @@ public final class Constants {
     public static final String KEY_FLOATING_NAV_BAR = "floating_nav_bar";
     public static final String KEY_LIQUID_GLASS = "liquid_glass";
     public static final String KEY_ENABLE_SWIPE_PANEL = "enable_swipe_panel";
+    public static final String KEY_DISABLE_REAR_SCREEN_COVER = "disable_rear_screen_cover";
+    public static final String KEY_DISABLE_DOUBLE_TAP_WAKE = "disable_double_tap_wake";
+    public static final String KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES = "double_tap_wake_disabled_packages";
     public static final String PANEL_PREFERENCE_AUTHORITY = MODULE_PACKAGE + ".PanelPreferences";
     public static final String PANEL_PREFERENCE_METHOD_SET = "set_panel_preference";
     public static final String PANEL_DIAGNOSTIC_METHOD_APPEND = "append_diagnostic";
@@ -20,6 +24,20 @@ public final class Constants {
     // Theme store hook targets
     // 注意：以下 R8 混淆名（o5、cmzf、qp5l 等）与目标应用版本绑定，主题商店一更新即可能失效。
     public static final String THEME_STORE_PACKAGE = "com.android.thememanager";
+    public static final String SYSTEM_DUAL_SCREEN_COVER_MANAGER_CLASS =
+            "com.android.server.power.DualScreenCoverManager";
+    public static final String SYSTEM_POWER_MANAGER_SERVICE_IMPL_CLASS =
+            "com.android.server.power.PowerManagerServiceImpl";
+    public static final String SYSTEM_SHOW_COVER_VIEW_METHOD = "showCoverView";
+    public static final String SYSTEM_IS_SCREEN_SKIPPED_WAKEUP_METHOD = "isScreenSkippedWakeup";
+    public static final String SYSTEM_POWER_MANAGER_SERVICE_IMPL_FIELD = "mPowerManagerServiceImpl";
+    public static final String SYSTEM_ACTIVITY_TASK_MANAGER_FIELD = "mActivityTaskManager";
+    public static final String SYSTEM_FOREGROUND_APP_PACKAGE_FIELD = "mForegroundAppPackageName";
+    public static final String SYSTEM_RUNNING_TASK_TOP_ACTIVITY_FIELD = "topActivity";
+    public static final String SYSTEM_RUNNING_TASK_BASE_ACTIVITY_FIELD = "baseActivity";
+    public static final String SYSTEM_RUNNING_TASK_ORIG_ACTIVITY_FIELD = "origActivity";
+    public static final String SYSTEM_RUNNING_TASK_REAL_ACTIVITY_FIELD = "realActivity";
+    public static final String WAKE_REASON_DOUBLE_TAP = "android.policy:KEY";
     public static final String THEME_REAR_VIEWMODEL_CLASS = "com.rearScreen.viewModel.RearScreenDetailViewModel";
     // Theme Manager 10.9.2.0
     public static final String THEME_APPLY_CHECK_METHOD = "o5";
@@ -42,6 +60,15 @@ public final class Constants {
     public static final String THEME_REAR_DATA_MANAGER_UPSERT_METHOD = "jp0y";
     public static final String THEME_REAR_SETTING_ACTIVITY =
             "com.rearScreen.RearScreenSettingActivity";
+    public static final String THEME_ENTRY_CONFIG_COMPANION_CLASS =
+            "com.rearScreen.subscreen.EntryConfig$Companion";
+    public static final String THEME_USER_GUIDE_CONTROLLER_CLASS =
+            "com.rearScreen.subscreen.UserGuideController";
+    public static final String THEME_REAR_SETTING_ADAPTER_CLASS =
+            "com.rearScreen.adapter.RearScreenSettingAdapter";
+    public static final String THEME_REAR_SETTING_ADAPTER_DATA_FIELD = "f57409a";
+    public static final String THEME_BASE_CONTROLLER_TITLE_FIELD = "f58418q";
+    public static final String THEME_USER_GUIDE_INTENT_FIELD = "f58443t8r";
 
     // 主题权限文件目录：优先读混淆字段，失败则回落到固定路径
     public static final String THEME_RESOURCE_CONSTANTS_CLASS =

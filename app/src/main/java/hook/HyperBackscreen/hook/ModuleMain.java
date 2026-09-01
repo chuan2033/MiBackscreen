@@ -1,6 +1,10 @@
 package hook.HyperBackscreen.hook;
 
 import android.app.Activity;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.drawable.Drawable;
 import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.SystemClock;
@@ -11,6 +15,8 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
+import android.widget.ImageView;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -19,8 +25,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.lang.reflect.Field;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,15 +41,19 @@ import org.json.JSONObject;
 import hook.HyperBackscreen.bridge.PrefsBridge;
 import hook.HyperBackscreen.bridge.DiagnosticLogStore;
 import hook.HyperBackscreen.common.Constants;
+import hook.HyperBackscreen.common.RearScreenWakeMatcher;
 import hook.HyperBackscreen.ui.SwipePanelHost;
 import io.github.libxposed.api.XposedModule;
 
 public class ModuleMain extends XposedModule {
     private static final long REAR_SELECTION_PENDING_TIMEOUT_MS = 15_000L;
+    private volatile boolean systemHooksInstalled = false;
     private volatile boolean hooksInstalled = false;
     private volatile boolean themeStoreHooksInstalled = false;
     private final Map<Activity, SwipeState> swipeStates = new WeakHashMap<>();
     private final Set<Activity> exclusionApplied = Collections.newSetFromMap(new WeakHashMap<>());
+    private final Set<Object> themeSettingsShortcutControllers =
+            Collections.newSetFromMap(new WeakHashMap<>());
     private final Map<View, PendingRearSelection> pendingRearSelections =
             Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -49,11 +62,28 @@ public class ModuleMain extends XposedModule {
         // 供被 Hook 进程（背屏）内的 PrefsBridge 取远程偏好使用
         PrefsBridge.attachModule(this);
         log(Log.INFO, Constants.LOG_TAG, "onModuleLoaded: " + param.getProcessName());
+        if (param.isSystemServer()) {
+            ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
+            if (contextClassLoader != null) {
+                installSystemHooksOnce(contextClassLoader);
+            }
+            installSystemHooksOnce(ClassLoader.getSystemClassLoader());
+        }
+    }
+
+    @Override
+    public void onSystemServerStarting(@NonNull SystemServerStartingParam param) {
+        installSystemHooksOnce(param.getClassLoader());
     }
 
     @Override
     public void onPackageReady(@NonNull PackageReadyParam param) {
         String packageName = param.getPackageName();
+
+        if (Constants.SYSTEM_PACKAGE.equals(packageName)) {
+            installSystemHooksOnce(param.getClassLoader());
+            return;
+        }
 
         if (Constants.TARGET_PACKAGE.equals(packageName)) {
             if (hooksInstalled) return;
@@ -80,6 +110,7 @@ public class ModuleMain extends XposedModule {
                     installWallpaperLimitHook(param.getClassLoader());
                     installRearScreenApplyFixHook(param.getClassLoader());
                     installThemeSettingsSelectionSyncHook(param.getClassLoader());
+                    installThemeSettingsShortcutHook(param.getClassLoader());
                     themeStoreHooksInstalled = true;
                     log(Log.INFO, Constants.LOG_TAG, "Theme store hooks installed");
                 } catch (Throwable throwable) {
@@ -87,6 +118,107 @@ public class ModuleMain extends XposedModule {
                 }
             }
         }
+
+    }
+
+    private void installSystemHooksOnce(@NonNull ClassLoader classLoader) {
+        if (systemHooksInstalled) return;
+        synchronized (this) {
+            if (systemHooksInstalled) return;
+            try {
+                if (installSystemHooks(classLoader)) {
+                    systemHooksInstalled = true;
+                    log(Log.INFO, Constants.LOG_TAG, "System hooks installed");
+                }
+            } catch (Throwable throwable) {
+                log(Log.ERROR, Constants.LOG_TAG, "Failed to install system hooks", throwable);
+            }
+        }
+    }
+
+    private boolean installSystemHooks(@NonNull ClassLoader classLoader) {
+        Class<?> coverManagerClass = findClass(Constants.SYSTEM_DUAL_SCREEN_COVER_MANAGER_CLASS, classLoader);
+        if (coverManagerClass == null) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "System hook target missing: " + Constants.SYSTEM_DUAL_SCREEN_COVER_MANAGER_CLASS);
+            return false;
+        }
+        Class<?> powerManagerServiceImplClass = findClass(
+                Constants.SYSTEM_POWER_MANAGER_SERVICE_IMPL_CLASS,
+                classLoader);
+
+        boolean coverHookInstalled = hookMethodIfPresent(
+                coverManagerClass,
+                Constants.SYSTEM_SHOW_COVER_VIEW_METHOD,
+                new Class[]{int.class},
+                Constants.SYSTEM_DUAL_SCREEN_COVER_MANAGER_CLASS + "#"
+                        + Constants.SYSTEM_SHOW_COVER_VIEW_METHOD,
+                chain -> {
+                    Object displayIdValue = chain.getArgs().get(0);
+                    if (displayIdValue instanceof Integer
+                            && ((Integer) displayIdValue) == 1
+                            && PrefsBridge.shouldDisableRearScreenCover(this)) {
+                        log(Log.DEBUG, Constants.LOG_TAG, "Rear screen cover skipped");
+                        return null;
+                    }
+                    return chain.proceed();
+                }
+        );
+
+        boolean powerWakeHookInstalled = hookMethodIfPresent(
+                powerManagerServiceImplClass == null
+                        ? null
+                        : findDeclaredMethod(
+                                powerManagerServiceImplClass,
+                                Constants.SYSTEM_IS_SCREEN_SKIPPED_WAKEUP_METHOD,
+                                int.class,
+                                String.class,
+                                int.class),
+                Constants.SYSTEM_POWER_MANAGER_SERVICE_IMPL_CLASS + "#"
+                        + Constants.SYSTEM_IS_SCREEN_SKIPPED_WAKEUP_METHOD,
+                chain -> {
+                    Object groupIdValue = chain.getArgs().get(0);
+                    Object detailsValue = chain.getArgs().get(1);
+                    if (groupIdValue instanceof Integer
+                            && RearScreenWakeMatcher.isRearDoubleTapWake(
+                                    (Integer) groupIdValue,
+                                    detailsValue)) {
+                        String[] packageNames = resolveForegroundPackages(chain.getThisObject());
+                        if (PrefsBridge.shouldSkipDoubleTapWakeForPackages(this, packageNames)) {
+                            log(Log.DEBUG, Constants.LOG_TAG,
+                                    "Rear screen double tap wake skipped for "
+                                            + joinPackageNames(packageNames));
+                            return true;
+                        }
+                    }
+                    return chain.proceed();
+                }
+        );
+
+        boolean coverWakeHookInstalled = hookMethodIfPresent(
+                coverManagerClass,
+                Constants.SYSTEM_IS_SCREEN_SKIPPED_WAKEUP_METHOD,
+                new Class[]{int.class, String.class, int.class},
+                Constants.SYSTEM_DUAL_SCREEN_COVER_MANAGER_CLASS + "#"
+                        + Constants.SYSTEM_IS_SCREEN_SKIPPED_WAKEUP_METHOD,
+                chain -> {
+                    Object groupIdValue = chain.getArgs().get(0);
+                    Object detailsValue = chain.getArgs().get(1);
+                    if (groupIdValue instanceof Integer
+                            && RearScreenWakeMatcher.isRearDoubleTapWake(
+                                    (Integer) groupIdValue,
+                                    detailsValue)) {
+                        String packageName = resolveForegroundPackage(chain.getThisObject());
+                        if (PrefsBridge.shouldSkipDoubleTapWakeForPackage(this, packageName)) {
+                            log(Log.DEBUG, Constants.LOG_TAG,
+                                    "Rear screen double tap wake skipped for " + packageName);
+                            return true;
+                        }
+                    }
+                    return chain.proceed();
+                }
+        );
+        return coverHookInstalled && (powerWakeHookInstalled || coverWakeHookInstalled);
     }
 
     private void installLongPressHooks(@NonNull ClassLoader classLoader) {
@@ -582,6 +714,15 @@ public class ModuleMain extends XposedModule {
         }
     }
 
+    private static Intent moduleSettingsIntent() {
+        Intent intent = new Intent(Intent.ACTION_MAIN);
+        intent.setComponent(new ComponentName(
+                Constants.MODULE_PACKAGE,
+                Constants.MODULE_PACKAGE + ".ui.MainActivity"));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        return intent;
+    }
+
     private static final class SwipeState {
         float startX;
         float startY;
@@ -659,6 +800,193 @@ public class ModuleMain extends XposedModule {
                     return chain.proceed();
                 }
         );
+    }
+
+    private void installThemeSettingsShortcutHook(@NonNull ClassLoader classLoader) {
+        Class<?> entryConfigCompanionClass = findClass(
+                Constants.THEME_ENTRY_CONFIG_COMPANION_CLASS, classLoader);
+        if (entryConfigCompanionClass == null) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Theme settings entry config target missing: "
+                            + Constants.THEME_ENTRY_CONFIG_COMPANION_CLASS);
+            return;
+        }
+
+        hookMethodIfPresent(
+                entryConfigCompanionClass,
+                "k",
+                new Class[]{Context.class},
+                Constants.THEME_ENTRY_CONFIG_COMPANION_CLASS + "#k",
+                chain -> {
+                    Object result = chain.proceed();
+                    Object context = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                    if (context instanceof Context) {
+                        return injectThemeSettingsShortcutList(
+                                result, (Context) context, classLoader);
+                    }
+                    return result;
+                }
+        );
+
+        Class<?> adapterClass = findClass(Constants.THEME_REAR_SETTING_ADAPTER_CLASS, classLoader);
+        Class<?> viewHolderClass = findClass(
+                "androidx.recyclerview.widget.RecyclerView$ViewHolder", classLoader);
+        if (adapterClass == null || viewHolderClass == null) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Theme settings adapter target missing");
+            return;
+        }
+        hookMethodIfPresent(
+                findDeclaredMethod(adapterClass, "onBindViewHolder",
+                        new Class[]{viewHolderClass, int.class}),
+                Constants.THEME_REAR_SETTING_ADAPTER_CLASS + "#onBindViewHolder",
+                chain -> {
+                    Object result = chain.proceed();
+                    List<?> data = getThemeSettingsAdapterData(chain.getThisObject());
+                    Object positionValue = chain.getArgs().size() > 1
+                            ? chain.getArgs().get(1)
+                            : null;
+                    int position = positionValue instanceof Number
+                            ? ((Number) positionValue).intValue()
+                            : -1;
+                    if (data != null && position >= 0 && position < data.size()
+                            && themeSettingsShortcutControllers.contains(data.get(position))) {
+                        Object holder = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                        bindThemeSettingsShortcutRow(holder);
+                    }
+                    return result;
+                }
+        );
+    }
+
+    private Object injectThemeSettingsShortcutList(
+            @Nullable Object result,
+            @NonNull Context context,
+            @NonNull ClassLoader classLoader
+    ) {
+        if (!(result instanceof List<?> rawList)) return result;
+        for (Object item : rawList) {
+            if (themeSettingsShortcutControllers.contains(item)) return result;
+        }
+
+        List<String> keys = new ArrayList<>();
+        for (Object item : rawList) {
+            Object key = callNoArgMethodQuietly(item, "g");
+            if (key instanceof String) keys.add((String) key);
+        }
+        int insertionIndex = SettingsEntryPlacement.insertionIndexAfterAnchor(keys);
+        if (insertionIndex < 0) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Theme settings shortcut anchor missing in rear screen page");
+            return result;
+        }
+
+        Object shortcut = createThemeSettingsShortcutController(context, classLoader);
+        if (shortcut == null) return result;
+
+        ArrayList<Object> copy = new ArrayList<>(rawList);
+        copy.add(Math.min(insertionIndex, copy.size()), shortcut);
+        themeSettingsShortcutControllers.add(shortcut);
+        log(Log.INFO, Constants.LOG_TAG,
+                "MiBackscreen theme settings entry inserted after "
+                        + keys.get(insertionIndex - 1));
+        return copy;
+    }
+
+    @Nullable
+    private Object createThemeSettingsShortcutController(
+            @NonNull Context context,
+            @NonNull ClassLoader classLoader
+    ) {
+        try {
+            Class<?> controllerClass = findClass(
+                    Constants.THEME_USER_GUIDE_CONTROLLER_CLASS, classLoader);
+            if (controllerClass == null) return null;
+
+            Constructor<?> constructor = controllerClass.getDeclaredConstructor(Context.class);
+            constructor.setAccessible(true);
+            Object controller = constructor.newInstance(context);
+            setFieldValue(controller, Constants.THEME_BASE_CONTROLLER_TITLE_FIELD, "MiBackscreen");
+            setFieldValue(controller, Constants.THEME_USER_GUIDE_INTENT_FIELD, moduleSettingsIntent());
+            return controller;
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "createThemeSettingsShortcutController failed", e);
+            return null;
+        }
+    }
+
+    @Nullable
+    private List<?> getThemeSettingsAdapterData(@Nullable Object adapter) {
+        Object data = getFieldValue(adapter, Constants.THEME_REAR_SETTING_ADAPTER_DATA_FIELD);
+        if (isThemeSettingsControllerList(data)) return (List<?>) data;
+
+        if (adapter == null) return null;
+        Class<?> owner = adapter.getClass();
+        while (owner != null) {
+            for (Field field : owner.getDeclaredFields()) {
+                try {
+                    field.setAccessible(true);
+                    Object value = field.get(adapter);
+                    if (isThemeSettingsControllerList(value)) {
+                        return (List<?>) value;
+                    }
+                } catch (Throwable ignored) {
+                    // Try the next field.
+                }
+            }
+            owner = owner.getSuperclass();
+        }
+        return null;
+    }
+
+    private boolean isThemeSettingsControllerList(@Nullable Object value) {
+        if (!(value instanceof List<?> list) || list.isEmpty()) return false;
+        boolean hasKnownRearScreenEntry = false;
+        for (Object item : list) {
+            if (themeSettingsShortcutControllers.contains(item)) return true;
+            Object key = callNoArgMethodQuietly(item, "g");
+            if ("user_guide".equals(key) || "serve_assistant".equals(key)) {
+                hasKnownRearScreenEntry = true;
+            }
+        }
+        return hasKnownRearScreenEntry;
+    }
+
+    private void bindThemeSettingsShortcutRow(@Nullable Object holder) {
+        Object itemViewValue = getFieldValue(holder, "itemView");
+        if (!(itemViewValue instanceof View row)) return;
+        Context context = row.getContext();
+        int titleId = context.getResources().getIdentifier(
+                "title", "id", Constants.THEME_STORE_PACKAGE);
+        int iconId = context.getResources().getIdentifier(
+                "icon", "id", Constants.THEME_STORE_PACKAGE);
+        if (titleId != 0) {
+            View titleView = row.findViewById(titleId);
+            if (titleView instanceof TextView) {
+                ((TextView) titleView).setText("MiBackscreen");
+            }
+        }
+        if (iconId != 0) {
+            View iconView = row.findViewById(iconId);
+            if (iconView instanceof ImageView) {
+                try {
+                    Drawable icon = context.getPackageManager()
+                            .getApplicationIcon(Constants.MODULE_PACKAGE);
+                    ((ImageView) iconView).setImageDrawable(icon);
+                } catch (Throwable ignored) {
+                    // Title and click behavior are still useful if icon lookup fails.
+                }
+            }
+        }
+        row.setOnClickListener(v -> {
+            try {
+                v.getContext().startActivity(moduleSettingsIntent());
+            } catch (Throwable e) {
+                log(Log.WARN, Constants.LOG_TAG,
+                        "MiBackscreen theme settings entry launch failed", e);
+            }
+        });
     }
 
     /**
@@ -1027,6 +1355,76 @@ public class ModuleMain extends XposedModule {
         file.setExecutable(false, false);
     }
 
+    @Nullable
+    private static String resolveForegroundPackage(@Nullable Object coverManager) {
+        Object powerManagerServiceImpl = getFieldValue(
+                coverManager,
+                Constants.SYSTEM_POWER_MANAGER_SERVICE_IMPL_FIELD);
+        Object packageName = getFieldValue(
+                powerManagerServiceImpl,
+                Constants.SYSTEM_FOREGROUND_APP_PACKAGE_FIELD);
+        return packageName instanceof String ? (String) packageName : null;
+    }
+
+    @NonNull
+    private static String[] resolveForegroundPackages(@Nullable Object powerManagerServiceImpl) {
+        LinkedHashSet<String> packages = new LinkedHashSet<>();
+        addPackageName(packages, getFieldValue(
+                powerManagerServiceImpl,
+                Constants.SYSTEM_FOREGROUND_APP_PACKAGE_FIELD));
+        Object activityTaskManager = getFieldValue(
+                powerManagerServiceImpl,
+                Constants.SYSTEM_ACTIVITY_TASK_MANAGER_FIELD);
+        Object tasks = callMethodQuietly(activityTaskManager, "getTasks", 3, false, false, 0);
+        if (tasks instanceof List<?> list) {
+            for (Object task : list) {
+                addComponentPackageName(packages, getFieldValue(
+                        task,
+                        Constants.SYSTEM_RUNNING_TASK_TOP_ACTIVITY_FIELD));
+                addComponentPackageName(packages, getFieldValue(
+                        task,
+                        Constants.SYSTEM_RUNNING_TASK_BASE_ACTIVITY_FIELD));
+                addComponentPackageName(packages, getFieldValue(
+                        task,
+                        Constants.SYSTEM_RUNNING_TASK_ORIG_ACTIVITY_FIELD));
+                addComponentPackageName(packages, getFieldValue(
+                        task,
+                        Constants.SYSTEM_RUNNING_TASK_REAL_ACTIVITY_FIELD));
+            }
+        }
+        return packages.toArray(new String[0]);
+    }
+
+    private static void addComponentPackageName(
+            @NonNull LinkedHashSet<String> packages,
+            @Nullable Object component
+    ) {
+        if (component instanceof ComponentName) {
+            addPackageName(packages, ((ComponentName) component).getPackageName());
+        }
+    }
+
+    private static void addPackageName(
+            @NonNull LinkedHashSet<String> packages,
+            @Nullable Object packageName
+    ) {
+        if (packageName instanceof String value && !value.isEmpty()) {
+            packages.add(value);
+        }
+    }
+
+    @NonNull
+    private static String joinPackageNames(@Nullable String[] packageNames) {
+        if (packageNames == null || packageNames.length == 0) return "[]";
+        StringBuilder builder = new StringBuilder();
+        for (String packageName : packageNames) {
+            if (packageName == null || packageName.isEmpty()) continue;
+            if (builder.length() > 0) builder.append(',');
+            builder.append(packageName);
+        }
+        return builder.length() == 0 ? "[]" : builder.toString();
+    }
+
     private void safeCopy(File src, File dst) {
         File parent = dst.getParentFile();
         if (parent != null && !parent.exists()) {
@@ -1064,6 +1462,24 @@ public class ModuleMain extends XposedModule {
             }
         }
         return null;
+    }
+
+    private static boolean setFieldValue(Object target, String field, Object value) {
+        if (target == null) return false;
+        Class<?> owner = target.getClass();
+        while (owner != null) {
+            try {
+                Field f = owner.getDeclaredField(field);
+                f.setAccessible(true);
+                f.set(target, value);
+                return true;
+            } catch (NoSuchFieldException ignored) {
+                owner = owner.getSuperclass();
+            } catch (Throwable e) {
+                return false;
+            }
+        }
+        return false;
     }
 
     @Nullable
@@ -1104,6 +1520,26 @@ public class ModuleMain extends XposedModule {
         if (m == null) throw new NoSuchMethodException(method);
         m.setAccessible(true);
         return m.invoke(target, args);
+    }
+
+    @Nullable
+    private static Object callNoArgMethodQuietly(@Nullable Object target, @NonNull String method) {
+        if (target == null) return null;
+        try {
+            return callMethod(target, method);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    @Nullable
+    private static Object callMethodQuietly(@Nullable Object target, @NonNull String method, Object... args) {
+        if (target == null) return null;
+        try {
+            return callMethod(target, method, args);
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     private static Method findMethod(Class<?> clazz, String name, Class<?>[] paramTypes) {
@@ -1152,32 +1588,34 @@ public class ModuleMain extends XposedModule {
         );
     }
 
-    private void hookMethodIfPresent(
+    private boolean hookMethodIfPresent(
             @NonNull Class<?> targetClass,
             @NonNull String methodName,
             @NonNull Class<?>[] parameterTypes,
             @NonNull String label,
             @NonNull HookCallback callback
     ) {
-        hookMethodIfPresent(findDeclaredMethod(targetClass, methodName, parameterTypes), label, callback);
+        return hookMethodIfPresent(findDeclaredMethod(targetClass, methodName, parameterTypes), label, callback);
     }
 
-    private void hookMethodIfPresent(
+    private boolean hookMethodIfPresent(
             @Nullable Method method,
             @NonNull String label,
             @NonNull HookCallback callback
     ) {
         if (method == null) {
             log(Log.WARN, Constants.LOG_TAG, "Hook target missing: " + label);
-            return;
+            return false;
         }
         try {
             hook(method)
                     .setExceptionMode(ExceptionMode.PROTECTIVE)
                     .intercept(callback::onHook);
             log(Log.DEBUG, Constants.LOG_TAG, "Hook installed: " + label);
+            return true;
         } catch (Throwable throwable) {
             log(Log.ERROR, Constants.LOG_TAG, "Hook install failed: " + label, throwable);
+            return false;
         }
     }
 

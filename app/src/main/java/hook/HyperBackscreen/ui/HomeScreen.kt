@@ -1,5 +1,6 @@
 package hook.HyperBackscreen.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -19,10 +20,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -43,11 +46,13 @@ import hook.HyperBackscreen.ui.about.LicensePage
 import hook.HyperBackscreen.ui.components.BlurredBar
 import hook.HyperBackscreen.ui.components.FloatingBottomBar
 import hook.HyperBackscreen.ui.components.FloatingBottomBarItem
+import hook.HyperBackscreen.ui.config.AppPickerPage
 import hook.HyperBackscreen.ui.config.ConfigPage
 import hook.HyperBackscreen.ui.home.HomePage
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
@@ -62,6 +67,7 @@ import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Refresh
@@ -73,11 +79,24 @@ import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.window.WindowDialog
 
-private val navItems = listOf(
-    R.string.nav_home to MiuixIcons.Home,
-    R.string.nav_config to MiuixIcons.Settings,
-    R.string.nav_about to MiuixIcons.Info
+private data class NavigationTabItem(
+    val tab: HomeNavigationPolicy.Tab,
+    val labelRes: Int,
+    val icon: ImageVector
 )
+
+private val navItems = HomeNavigationPolicy.mainTabs().map { tab ->
+    when (tab) {
+        HomeNavigationPolicy.Tab.HOME -> NavigationTabItem(tab, R.string.nav_home, MiuixIcons.Home)
+        HomeNavigationPolicy.Tab.ABOUT -> NavigationTabItem(tab, R.string.nav_about, MiuixIcons.Info)
+    }
+}
+
+private enum class DetailPage {
+    Settings,
+    License,
+    AppPicker
+}
 
 private data class RestartScopeItem(
     val labelRes: Int,
@@ -97,6 +116,9 @@ internal fun HomeScreen(
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
     enableSwipePanel: Boolean,
+    disableRearScreenCover: Boolean,
+    disableDoubleTapWake: Boolean,
+    doubleTapWakeDisabledPackages: String,
     launcherIconHidden: Boolean,
     moduleActivated: Boolean,
     onDisableLongPressChange: (Boolean) -> Unit,
@@ -105,29 +127,53 @@ internal fun HomeScreen(
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
     onEnableSwipePanelChange: (Boolean) -> Unit,
+    onDisableRearScreenCoverChange: (Boolean) -> Unit,
+    onDisableDoubleTapWakeChange: (Boolean) -> Unit,
+    onDoubleTapWakeDisabledPackagesChange: (String) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
     onForceStopPackage: (String) -> Unit
 ) {
-    var selected by remember { mutableIntStateOf(0) }
-    var showLicense by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf(HomeNavigationPolicy.Tab.HOME) }
+    var detailPage by remember { mutableStateOf<DetailPage?>(null) }
+    val homeListState = rememberLazyListState()
+    val aboutListState = rememberLazyListState()
 
     AnimatedContent(
-        targetState = showLicense,
+        targetState = detailPage,
         modifier = Modifier.fillMaxSize(),
         transitionSpec = {
-            if (targetState) {
+            if (targetState != null) {
                 slideInHorizontally { it } togetherWith slideOutHorizontally { -it / 3 }
             } else {
                 slideInHorizontally { -it / 3 } togetherWith slideOutHorizontally { it }
             }
         },
-        label = "LicensePageTransition"
-    ) { isLicense ->
-        if (isLicense) {
-            LicensePage(onBack = { showLicense = false })
-        } else {
-            MainContent(
+        label = "DetailPageTransition"
+    ) { page ->
+        when (page) {
+            DetailPage.Settings -> SettingsPage(
+                floatingNavBar = floatingNavBar,
+                liquidGlass = liquidGlass,
+                enableSwipePanel = enableSwipePanel,
+                launcherIconHidden = launcherIconHidden,
+                onFloatingNavBarChange = onFloatingNavBarChange,
+                onLiquidGlassChange = onLiquidGlassChange,
+                onEnableSwipePanelChange = onEnableSwipePanelChange,
+                onLauncherIconHiddenChange = onLauncherIconHiddenChange,
+                onBack = { detailPage = null }
+            )
+            DetailPage.License -> LicensePage(onBack = { detailPage = null })
+            DetailPage.AppPicker -> AppPickerPage(
+                selectedPackages = doubleTapWakeDisabledPackages,
+                onSelectedPackagesChange = onDoubleTapWakeDisabledPackagesChange,
+                onBack = { detailPage = null }
+            )
+            null -> MainContent(
                 selected = selected,
+                listState = when (selected) {
+                    HomeNavigationPolicy.Tab.HOME -> homeListState
+                    HomeNavigationPolicy.Tab.ABOUT -> aboutListState
+                },
                 onSelectedChange = { selected = it },
                 disableLongPress = disableLongPress,
                 removeWallpaperLimit = removeWallpaperLimit,
@@ -135,6 +181,9 @@ internal fun HomeScreen(
                 floatingNavBar = floatingNavBar,
                 liquidGlass = liquidGlass,
                 enableSwipePanel = enableSwipePanel,
+                disableRearScreenCover = disableRearScreenCover,
+                disableDoubleTapWake = disableDoubleTapWake,
+                doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
                 launcherIconHidden = launcherIconHidden,
                 moduleActivated = moduleActivated,
                 onDisableLongPressChange = onDisableLongPressChange,
@@ -143,8 +192,12 @@ internal fun HomeScreen(
                 onFloatingNavBarChange = onFloatingNavBarChange,
                 onLiquidGlassChange = onLiquidGlassChange,
                 onEnableSwipePanelChange = onEnableSwipePanelChange,
+                onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
+                onDisableDoubleTapWakeChange = onDisableDoubleTapWakeChange,
                 onLauncherIconHiddenChange = onLauncherIconHiddenChange,
-                onLicenseClick = { showLicense = true },
+                onSettingsClick = { detailPage = DetailPage.Settings },
+                onAddDisabledAppsClick = { detailPage = DetailPage.AppPicker },
+                onLicenseClick = { detailPage = DetailPage.License },
                 onForceStopPackage = onForceStopPackage
             )
         }
@@ -152,15 +205,95 @@ internal fun HomeScreen(
 }
 
 @Composable
+private fun SettingsPage(
+    floatingNavBar: Boolean,
+    liquidGlass: Boolean,
+    enableSwipePanel: Boolean,
+    launcherIconHidden: Boolean,
+    onFloatingNavBarChange: (Boolean) -> Unit,
+    onLiquidGlassChange: (Boolean) -> Unit,
+    onEnableSwipePanelChange: (Boolean) -> Unit,
+    onLauncherIconHiddenChange: (Boolean) -> Unit,
+    onBack: () -> Unit
+) {
+    val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
+    val surfaceColor = MiuixTheme.colorScheme.surface
+    val backdrop = rememberLayerBackdrop {
+        drawRect(surfaceColor)
+        drawContent()
+    }
+
+    BackHandler(onBack = onBack)
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = MiuixTheme.colorScheme.surface,
+        topBar = {
+            BlurredBar(backdrop) {
+                TopAppBar(
+                    title = stringResource(R.string.settings_title),
+                    largeTitle = stringResource(R.string.settings_title),
+                    color = Color.Transparent,
+                    scrollBehavior = scrollBehavior,
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = MiuixIcons.Back,
+                                contentDescription = stringResource(R.string.common_back),
+                                tint = MiuixTheme.colorScheme.onBackground
+                            )
+                        }
+                    }
+                )
+            }
+        }
+    ) { paddingValues ->
+        Box(modifier = Modifier.layerBackdrop(backdrop)) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .scrollEndHaptic()
+                    .overScrollVertical()
+                    .nestedScroll(scrollBehavior.nestedScrollConnection)
+                    .padding(horizontal = 12.dp),
+                contentPadding = PaddingValues(
+                    top = paddingValues.calculateTopPadding()
+                )
+            ) {
+                item {
+                    ConfigPage(
+                        floatingNavBar = floatingNavBar,
+                        liquidGlass = liquidGlass,
+                        enableSwipePanel = enableSwipePanel,
+                        launcherIconHidden = launcherIconHidden,
+                        onFloatingNavBarChange = onFloatingNavBarChange,
+                        onLiquidGlassChange = onLiquidGlassChange,
+                        onEnableSwipePanelChange = onEnableSwipePanelChange,
+                        onLauncherIconHiddenChange = onLauncherIconHiddenChange
+                    )
+                }
+                item {
+                    Spacer(Modifier.height(24.dp).navigationBarsPadding())
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun MainContent(
-    selected: Int,
-    onSelectedChange: (Int) -> Unit,
+    selected: HomeNavigationPolicy.Tab,
+    listState: LazyListState,
+    onSelectedChange: (HomeNavigationPolicy.Tab) -> Unit,
     disableLongPress: Boolean,
     removeWallpaperLimit: Boolean,
     fixRearScreenApply: Boolean,
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
     enableSwipePanel: Boolean,
+    disableRearScreenCover: Boolean,
+    disableDoubleTapWake: Boolean,
+    doubleTapWakeDisabledPackages: String,
     launcherIconHidden: Boolean,
     moduleActivated: Boolean,
     onDisableLongPressChange: (Boolean) -> Unit,
@@ -169,7 +302,11 @@ private fun MainContent(
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
     onEnableSwipePanelChange: (Boolean) -> Unit,
+    onDisableRearScreenCoverChange: (Boolean) -> Unit,
+    onDisableDoubleTapWakeChange: (Boolean) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
+    onSettingsClick: () -> Unit,
+    onAddDisabledAppsClick: () -> Unit,
     onLicenseClick: () -> Unit,
     onForceStopPackage: (String) -> Unit
 ) {
@@ -196,20 +333,34 @@ private fun MainContent(
         topBar = {
             BlurredBar(backdrop) {
                 TopAppBar(
-                    title = stringResource(navItems[selected].first),
+                    title = stringResource(navItems.first { it.tab == selected }.labelRes),
                     color = Color.Transparent,
                     scrollBehavior = scrollBehavior,
                     actions = {
+                        val topAction = HomeNavigationPolicy.topActionFor(selected)
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .clickable { showRestartDialog = true },
+                                .clickable {
+                                    when (topAction) {
+                                        HomeNavigationPolicy.TopAction.RESTART -> showRestartDialog = true
+                                        HomeNavigationPolicy.TopAction.SETTINGS -> onSettingsClick()
+                                    }
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = MiuixIcons.Refresh,
-                                contentDescription = stringResource(R.string.restart_scope),
+                                imageVector = when (topAction) {
+                                    HomeNavigationPolicy.TopAction.RESTART -> MiuixIcons.Refresh
+                                    HomeNavigationPolicy.TopAction.SETTINGS -> MiuixIcons.Settings
+                                },
+                                contentDescription = stringResource(
+                                    when (topAction) {
+                                        HomeNavigationPolicy.TopAction.RESTART -> R.string.restart_scope
+                                        HomeNavigationPolicy.TopAction.SETTINGS -> R.string.settings_title
+                                    }
+                                ),
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -221,6 +372,7 @@ private fun MainContent(
         Box(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.layerBackdrop(backdrop)) {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .fillMaxHeight()
                         .scrollEndHaptic()
@@ -232,41 +384,33 @@ private fun MainContent(
                     )
                 ) {
                     when (selected) {
-                        0 -> item {
+                        HomeNavigationPolicy.Tab.HOME -> item {
                             HomePage(
                                 disableLongPress = disableLongPress,
                                 removeWallpaperLimit = removeWallpaperLimit,
                                 fixRearScreenApply = fixRearScreenApply,
+                                disableRearScreenCover = disableRearScreenCover,
+                                disableDoubleTapWake = disableDoubleTapWake,
+                                doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
                                 moduleActivated = moduleActivated,
                                 onDisableLongPressChange = onDisableLongPressChange,
                                 onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
-                                onFixRearScreenApplyChange = onFixRearScreenApplyChange
-                            )
-                        }
-                        1 -> item {
-                            ConfigPage(
-                                disableLongPress = disableLongPress,
-                                removeWallpaperLimit = removeWallpaperLimit,
-                                fixRearScreenApply = fixRearScreenApply,
-                                floatingNavBar = floatingNavBar,
-                                liquidGlass = liquidGlass,
-                                onDisableLongPressChange = onDisableLongPressChange,
-                                onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
                                 onFixRearScreenApplyChange = onFixRearScreenApplyChange,
-                                onFloatingNavBarChange = onFloatingNavBarChange,
-                                onLiquidGlassChange = onLiquidGlassChange,
-                                enableSwipePanel = enableSwipePanel,
-                                onEnableSwipePanelChange = onEnableSwipePanelChange,
-                                launcherIconHidden = launcherIconHidden,
-                                onLauncherIconHiddenChange = onLauncherIconHiddenChange
+                                onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
+                                onDisableDoubleTapWakeChange = onDisableDoubleTapWakeChange,
+                                onAddDisabledAppsClick = onAddDisabledAppsClick
                             )
                         }
-                        2 -> item {
+                        HomeNavigationPolicy.Tab.ABOUT -> item {
                             AboutPage(onLicenseClick = onLicenseClick)
                         }
                     }
                     item {
-                        Spacer(Modifier.height(24.dp).navigationBarsPadding())
+                        Spacer(
+                            Modifier
+                                .height(HomeNavigationPolicy.mainContentBottomSpacerDp().dp)
+                                .navigationBarsPadding()
+                        )
                     }
                 }
             }
@@ -284,12 +428,12 @@ private fun MainContent(
                     color = MiuixTheme.colorScheme.surface.copy(alpha = 0.48f),
                     showDivider = true
                 ) {
-                    navItems.forEachIndexed { index, (labelRes, icon) ->
+                    navItems.forEach { item ->
                         NavigationBarItem(
-                            selected = selected == index,
-                            onClick = { onSelectedChange(index) },
-                            icon = icon,
-                            label = stringResource(labelRes)
+                            selected = selected == item.tab,
+                            onClick = { onSelectedChange(item.tab) },
+                            icon = item.icon,
+                            label = stringResource(item.labelRes)
                         )
                     }
                 }
@@ -303,24 +447,26 @@ private fun MainContent(
                         .padding(bottom = 16.dp)
                 ) {
                     FloatingBottomBar(
-                        selectedIndex = { selected },
-                        onSelected = { onSelectedChange(it) },
+                        selectedIndex = { navItems.indexOfFirst { it.tab == selected } },
+                        onSelected = { index -> onSelectedChange(navItems[index].tab) },
                         backdrop = backdrop,
                         tabsCount = navItems.size,
                         isBlurEnabled = liquidGlass
                     ) {
-                        navItems.forEachIndexed { index, (labelRes, icon) ->
+                        navItems.forEach { item ->
                             FloatingBottomBarItem(
-                                onClick = { onSelectedChange(index) },
-                                modifier = Modifier.defaultMinSize(minWidth = 76.dp)
+                                onClick = { onSelectedChange(item.tab) },
+                                modifier = Modifier.defaultMinSize(
+                                    minWidth = HomeNavigationPolicy.floatingBottomBarItemMinWidthDp().dp
+                                )
                             ) {
                                 Icon(
-                                    imageVector = icon,
-                                    contentDescription = stringResource(labelRes),
+                                    imageVector = item.icon,
+                                    contentDescription = stringResource(item.labelRes),
                                     modifier = Modifier.size(24.dp)
                                 )
                                 Text(
-                                    text = stringResource(labelRes),
+                                    text = stringResource(item.labelRes),
                                     fontSize = 10.sp
                                 )
                             }

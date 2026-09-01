@@ -8,8 +8,8 @@
 
     <!-- Navigation -->
     <string name="nav_home">主页</string>
-    <string name="nav_config">配置</string>
     <string name="nav_about">关于</string>
+    <string name="settings_title">设置</string>
 
     <!-- Home Page -->
     <string name="home_settings_title">功能设置</string>
@@ -29,6 +29,7 @@
     <string name="home_android_version">安卓版本</string>
 
     <!-- Config Page -->
+    <string name="config_module_settings_title">模块设置</string>
     <string name="config_hide_launcher_icon">隐藏桌面图标</string>
     <string name="config_nav_bar_title">导航栏</string>
     <string name="config_floating_bar_title">悬浮底栏</string>
@@ -45,6 +46,24 @@
     <string name="config_status_off">关闭</string>
     <string name="config_status_removed">已去除</string>
     <string name="config_status_default">保持默认</string>
+    <string name="config_rear_guard_title">背屏保护</string>
+    <string name="config_disable_rear_cover_title">禁用背屏保护提示</string>
+    <string name="config_disable_rear_cover_summary_on">已拦截背屏保护提示</string>
+    <string name="config_disable_rear_cover_summary_off">当前保持原厂提示行为</string>
+    <string name="config_disable_double_tap_wake_title">按包名禁用背屏双击唤醒</string>
+    <string name="config_disable_double_tap_wake_summary_on">名单内应用在正屏前台时会禁用背屏双击唤醒</string>
+    <string name="config_disable_double_tap_wake_summary_off">当前保持原厂双击唤醒行为</string>
+    <string name="config_disabled_packages_title">应用包名</string>
+    <string name="config_disabled_packages_hint">把包名粘贴到这里，每行一个</string>
+    <string name="config_add_apps_title">新添加应用</string>
+    <string name="config_disabled_apps_empty">未选择应用</string>
+    <string name="config_disabled_apps_count">已选择 %1$d 个应用</string>
+    <string name="app_picker_title">新添加应用</string>
+    <string name="app_picker_search_hint">搜索应用</string>
+    <string name="app_picker_loading">正在读取应用...</string>
+    <string name="app_picker_empty">没有匹配的应用</string>
+    <string name="config_rear_cover">保护提示</string>
+    <string name="config_double_tap_wake">双击唤醒</string>
 
     <!-- About Page -->
     <string name="about_feedback_title">反馈</string>

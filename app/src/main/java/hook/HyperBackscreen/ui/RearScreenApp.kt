@@ -50,6 +50,15 @@ internal fun RearScreenApp() {
     var enableSwipePanel by remember {
         mutableStateOf(PrefsBridge.readEnableSwipePanelForUi(context))
     }
+    var disableRearScreenCover by remember {
+        mutableStateOf(PrefsBridge.readDisableRearScreenCoverForUi(context))
+    }
+    var disableDoubleTapWake by remember {
+        mutableStateOf(PrefsBridge.readDisableDoubleTapWakeForUi(context))
+    }
+    var doubleTapWakeDisabledPackages by remember {
+        mutableStateOf(PrefsBridge.readDoubleTapWakeDisabledPackagesForUi(context))
+    }
     var launcherIconHidden by remember {
         mutableStateOf(LauncherIconController.isHidden(context))
     }
@@ -72,10 +81,20 @@ internal fun RearScreenApp() {
                 val swipe = withContext(Dispatchers.IO) {
                     PrefsBridge.readEnableSwipePanelForUi(context)
                 }
+                val (cover, doubleTap, packages) = withContext(Dispatchers.IO) {
+                    Triple(
+                        PrefsBridge.readDisableRearScreenCoverForUi(context),
+                        PrefsBridge.readDisableDoubleTapWakeForUi(context),
+                        PrefsBridge.readDoubleTapWakeDisabledPackagesForUi(context)
+                    )
+                }
                 disableLongPress = dlp
                 removeWallpaperLimit = rwl
                 fixRearScreenApply = fix
                 enableSwipePanel = swipe
+                disableRearScreenCover = cover
+                disableDoubleTapWake = doubleTap
+                doubleTapWakeDisabledPackages = packages
                 moduleActivated = ModuleApp.getService() != null
             }
         }
@@ -120,6 +139,9 @@ internal fun RearScreenApp() {
             floatingNavBar = floatingNavBar,
             liquidGlass = liquidGlass,
             enableSwipePanel = enableSwipePanel,
+            disableRearScreenCover = disableRearScreenCover,
+            disableDoubleTapWake = disableDoubleTapWake,
+            doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
             launcherIconHidden = launcherIconHidden,
             moduleActivated = moduleActivated,
             onDisableLongPressChange = { newValue ->
@@ -145,6 +167,18 @@ internal fun RearScreenApp() {
             onEnableSwipePanelChange = { newValue ->
                 enableSwipePanel = newValue
                 PrefsBridge.writeEnableSwipePanelFromUi(context, newValue)
+            },
+            onDisableRearScreenCoverChange = { newValue ->
+                disableRearScreenCover = newValue
+                PrefsBridge.writeDisableRearScreenCoverFromUi(context, newValue)
+            },
+            onDisableDoubleTapWakeChange = { newValue ->
+                disableDoubleTapWake = newValue
+                PrefsBridge.writeDisableDoubleTapWakeFromUi(context, newValue)
+            },
+            onDoubleTapWakeDisabledPackagesChange = { newValue ->
+                doubleTapWakeDisabledPackages = newValue
+                PrefsBridge.writeDoubleTapWakeDisabledPackagesFromUi(context, newValue)
             },
             onLauncherIconHiddenChange = { newValue ->
                 if (LauncherIconController.setHidden(context, newValue)) {

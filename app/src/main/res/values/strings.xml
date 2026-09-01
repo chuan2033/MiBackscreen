@@ -8,8 +8,8 @@
 
     <!-- Navigation -->
     <string name="nav_home">Home</string>
-    <string name="nav_config">Config</string>
     <string name="nav_about">About</string>
+    <string name="settings_title">Settings</string>
 
     <!-- Home Page -->
     <string name="home_settings_title">Settings</string>
@@ -29,6 +29,7 @@
     <string name="home_android_version">Android Version</string>
 
     <!-- Config Page -->
+    <string name="config_module_settings_title">Module Settings</string>
     <string name="config_hide_launcher_icon">Hide home screen icon</string>
     <string name="config_nav_bar_title">Navigation Bar</string>
     <string name="config_floating_bar_title">Floating Bar</string>
@@ -45,6 +46,24 @@
     <string name="config_status_off">Off</string>
     <string name="config_status_removed">Removed</string>
     <string name="config_status_default">Default</string>
+    <string name="config_rear_guard_title">Rear Screen Guard</string>
+    <string name="config_disable_rear_cover_title">Disable rear screen cover prompt</string>
+    <string name="config_disable_rear_cover_summary_on">Cover prompt is blocked on the rear screen</string>
+    <string name="config_disable_rear_cover_summary_off">Factory cover prompt behavior is active</string>
+    <string name="config_disable_double_tap_wake_title">Disable double-tap wake by package</string>
+    <string name="config_disable_double_tap_wake_summary_on">Listed foreground apps block rear screen double-tap wake</string>
+    <string name="config_disable_double_tap_wake_summary_off">Rear screen double-tap wake follows factory behavior</string>
+    <string name="config_disabled_packages_title">Package names</string>
+    <string name="config_disabled_packages_hint">Paste package names here, one per line</string>
+    <string name="config_add_apps_title">Add Apps</string>
+    <string name="config_disabled_apps_empty">No apps selected</string>
+    <string name="config_disabled_apps_count">%1$d apps selected</string>
+    <string name="app_picker_title">Add Apps</string>
+    <string name="app_picker_search_hint">Search apps</string>
+    <string name="app_picker_loading">Loading apps...</string>
+    <string name="app_picker_empty">No matching apps</string>
+    <string name="config_rear_cover">Rear Cover</string>
+    <string name="config_double_tap_wake">Double Tap Wake</string>
 
     <!-- About Page -->
     <string name="about_feedback_title">Feedback</string>
