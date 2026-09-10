@@ -9,6 +9,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.platform.LocalContext
+import hook.HyperBackscreen.ui.util.ThemeMode
+import hook.HyperBackscreen.ui.util.ThemePrefs
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -181,7 +184,7 @@ internal fun FloatingBottomBar(
     isBlurEnabled: Boolean = true,
     content: @Composable RowScope.() -> Unit
 ) {
-    val isInDark = isSystemInDarkTheme()
+    val isInDark = ThemePrefs.getThemeMode(LocalContext.current).resolve(isSystemInDarkTheme())
     val pillShape = CircleShape
     val accentColor = MiuixTheme.colorScheme.primary
     val surfaceContainer = MiuixTheme.colorScheme.surfaceContainer

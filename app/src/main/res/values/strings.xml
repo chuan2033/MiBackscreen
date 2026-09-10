@@ -5,6 +5,8 @@
     <string name="common_select_all">Select All</string>
     <string name="common_confirm">Confirm</string>
     <string name="common_version">Version %1$s</string>
+    <string name="compat_rear_display_hidden_title">Rear display compatibility warning</string>
+    <string name="compat_rear_display_hidden_message">A hidden rear-display or screen-sharing protection module may be active. It can cause rear-screen screenshot failures or black custom wallpapers. Disable the related Magisk/KernelSU module and reboot.</string>
 
     <!-- Navigation -->
     <string name="nav_home">Home</string>
@@ -30,6 +32,14 @@
 
     <!-- Config Page -->
     <string name="config_module_settings_title">Module Settings</string>
+    <string name="config_appearance_title">Appearance</string>
+    <string name="config_theme_mode_title">Color mode</string>
+    <string name="config_theme_mode_system">Follow system</string>
+    <string name="config_theme_mode_light">Light</string>
+    <string name="config_theme_mode_dark">Dark</string>
+    <string name="config_module_entry_title">Module entry</string>
+    <string name="config_module_entry_disabled">Disabled</string>
+    <string name="config_module_entry_theme_settings">Rear screen settings</string>
     <string name="config_hide_launcher_icon">Hide home screen icon</string>
     <string name="config_nav_bar_title">Navigation Bar</string>
     <string name="config_floating_bar_title">Floating Bar</string>
@@ -78,6 +88,11 @@
     <string name="about_miuix_lib">miuix-kotlin-multiplatform (Apache-2.0)</string>
     <string name="about_open_source_licenses">Open Source Licenses</string>
     <string name="about_view_licenses">View dependencies and license information</string>
+    <string name="about_donate_title">Donate</string>
+    <string name="about_donate_qr_entry">If MiBackscreen helps you, support is welcome</string>
+    <string name="about_donate_afdian_entry">Support the project on Afdian</string>
+    <string name="about_donate_qr_description">Donation QR code</string>
+    <string name="about_donate_scan_hint">Scan to support the developer</string>
 
     <!-- License Page -->
     <string name="license_title">Open Source Licenses</string>

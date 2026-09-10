@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="icon.png" alt="MiBackscreen logo" width="200" />
-</p>
-
 <h1 align="center">MiBackscreen</h1>
 
 <p align="center">
@@ -9,11 +5,9 @@
  为背屏补全壁纸管理、背屏保护与快捷面板等功能。
 </p>
 
-
 <p align="center">
   <a href="./README_EN.md">English</a> · <a href="https://github.com/chuan2033/MiBackscreen">项目主页</a>
 </p>
-
 
 <p align="center">
   <a href="https://github.com/chuan2033/MiBackscreen/releases"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/chuan2033/MiBackscreen?display_name=release"></a>
@@ -23,12 +17,12 @@
  <a href="https://github.com/LSPosed/LSPosed"><img src="https://img.shields.io/badge/Framework-LSPosed%20%2F%20Xposed-5C6BC0" alt="Framework"></a>
 </p>
 
-
 ## 功能概览
 
 - 解除背屏壁纸 15 张上限，并修复主题商店壁纸应用失败与状态同步。
 - 拦截背屏保护提示，支持按应用禁用背屏双击唤醒。
 - 在背屏中心注入上滑快捷面板。
+- 模块 App 提供外观（颜色模式 / 悬浮底栏 / 液态玻璃）与模块设置（入口 / 隐藏图标）。
 
 ## 主要功能
 
@@ -37,7 +31,7 @@
 - 禁用背屏长按切换壁纸。
 - 背屏上滑快捷面板。
 
-### 系统
+### 系统进程 
 
 - 禁用背屏保护提示（"请按电源键熄灭正屏后使用背屏"）。
 - 按应用禁用背屏双击唤醒，按当前正屏前台应用包名拦截。
@@ -64,6 +58,7 @@
 - LSPosed / 兼容 Xposed 环境，Modern Xposed API 102。
 - 目标背屏 `976 × 596px`（HyperOS 4）。
 - 反馈包的数据库采集依赖 Root 实现的 `su -M`；KernelSU 与 Magisk 均提供该参数。
+- 若检测到 `vendor.display.builtin_presentation=0`，模块 App 会提示隐藏背屏/防屏幕共享类模块可能导致背屏截图失败或自定义壁纸黑屏。
 - `k2.s`、`Z1.t`、`Z1.v`、`yp31`、`o5`、`ol` 等为宿主 R8 名称，系统应用升级后需要重新核对。
 - 系统进程 Hook 依赖 `DualScreenCoverManager`、`PowerManagerServiceImpl` 以及当前前台任务字段，系统升级后需要重新确认。
 - 妙享背屏页快捷入口依赖主题商店 `com.rearScreen.RearScreenSettingActivity`、`EntryConfig` 和 `user_guide` / `serve_assistant` 这些 controller key。

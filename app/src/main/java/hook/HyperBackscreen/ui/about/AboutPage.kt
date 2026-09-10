@@ -36,12 +36,14 @@ import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import top.yukonga.miuix.kmp.window.WindowDialog
 
 @Composable
 internal fun AboutPage(onLicenseClick: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var generatingFeedback by remember { mutableStateOf(false) }
+    var showDonate by remember { mutableStateOf(false) }
 
     AboutHeader()
 
@@ -95,6 +97,44 @@ internal fun AboutPage(onLicenseClick: () -> Unit = {}) {
             summary = stringResource(R.string.about_view_licenses),
             onClick = onLicenseClick
         )
+    }
+
+    SmallTitle(text = stringResource(R.string.about_donate_title), insideMargin = PaddingValues(16.dp, 8.dp))
+    CardBlock(pressFeedbackType = PressFeedbackType.None) {
+        AboutArrowPreference(
+            title = stringResource(R.string.about_donate_qr_entry),
+            summary = null,
+            onClick = { showDonate = true }
+        )
+        AboutArrowPreference(
+            title = stringResource(R.string.about_donate_afdian_entry),
+            summary = null,
+            url = "https://afdian.com/a/MiBackscreen"
+        )
+    }
+
+    WindowDialog(
+        show = showDonate,
+        title = stringResource(R.string.about_donate_title),
+        onDismissRequest = { showDonate = false }
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.qr_donate),
+                contentDescription = stringResource(R.string.about_donate_qr_description),
+                modifier = Modifier.size(220.dp),
+                contentScale = ContentScale.Fit
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = stringResource(R.string.about_donate_scan_hint),
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                style = MiuixTheme.textStyles.body2
+            )
+        }
     }
 }
 

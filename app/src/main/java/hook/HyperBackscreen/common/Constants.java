@@ -14,6 +14,7 @@ public final class Constants {
     public static final String KEY_DISABLE_REAR_SCREEN_COVER = "disable_rear_screen_cover";
     public static final String KEY_DISABLE_DOUBLE_TAP_WAKE = "disable_double_tap_wake";
     public static final String KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES = "double_tap_wake_disabled_packages";
+    public static final String KEY_THEME_SETTINGS_SHORTCUT = "theme_settings_shortcut";
     public static final String PANEL_PREFERENCE_AUTHORITY = MODULE_PACKAGE + ".PanelPreferences";
     public static final String PANEL_PREFERENCE_METHOD_SET = "set_panel_preference";
     public static final String PANEL_DIAGNOSTIC_METHOD_APPEND = "append_diagnostic";

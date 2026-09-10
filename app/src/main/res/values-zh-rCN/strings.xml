@@ -5,6 +5,8 @@
     <string name="common_select_all">全选</string>
     <string name="common_confirm">确定</string>
     <string name="common_version">版本 %1$s</string>
+    <string name="compat_rear_display_hidden_title">检测到系统背屏显示属性异常</string>
+    <string name="compat_rear_display_hidden_message">检测到隐藏背屏/防屏幕共享模块可能正在生效，可能导致背屏截图失败、自定义壁纸黑屏。请在 Magisk/KernelSU 中禁用相关模块并重启。</string>
 
     <!-- Navigation -->
     <string name="nav_home">主页</string>
@@ -30,6 +32,14 @@
 
     <!-- Config Page -->
     <string name="config_module_settings_title">模块设置</string>
+    <string name="config_appearance_title">外观</string>
+    <string name="config_theme_mode_title">颜色模式</string>
+    <string name="config_theme_mode_system">跟随系统</string>
+    <string name="config_theme_mode_light">浅色</string>
+    <string name="config_theme_mode_dark">深色</string>
+    <string name="config_module_entry_title">模块入口</string>
+    <string name="config_module_entry_disabled">禁用</string>
+    <string name="config_module_entry_theme_settings">妙享背屏</string>
     <string name="config_hide_launcher_icon">隐藏桌面图标</string>
     <string name="config_nav_bar_title">导航栏</string>
     <string name="config_floating_bar_title">悬浮底栏</string>
@@ -78,6 +88,11 @@
     <string name="about_miuix_lib">miuix-kotlin-multiplatform (Apache-2.0)</string>
     <string name="about_open_source_licenses">开源许可</string>
     <string name="about_view_licenses">查看依赖与许可证信息</string>
+    <string name="about_donate_title">捐赠</string>
+    <string name="about_donate_qr_entry">如果你觉得项目有用，欢迎给予支持</string>
+    <string name="about_donate_afdian_entry">用爱发电，支持项目</string>
+    <string name="about_donate_qr_description">捐赠二维码</string>
+    <string name="about_donate_scan_hint">扫码支持开发者</string>
 
     <!-- License Page -->
     <string name="license_title">开源许可</string>

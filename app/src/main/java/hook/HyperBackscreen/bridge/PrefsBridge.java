@@ -19,6 +19,7 @@ import io.github.libxposed.service.XposedService;
 public final class PrefsBridge {
     private static final String TAG = Constants.LOG_TAG + ":PrefsBridge";
     private static final String PENDING_PANEL_PREFIX = "__pending_panel__";
+    private static final String PENDING_UI_PREFIX = "__pending_ui__";
 
     public static final boolean DEFAULT_DISABLE_LONG_PRESS_EDIT = true;
     public static final boolean DEFAULT_REMOVE_WALLPAPER_LIMIT = true;
@@ -29,6 +30,7 @@ public final class PrefsBridge {
     public static final boolean DEFAULT_DISABLE_REAR_SCREEN_COVER = false;
     public static final boolean DEFAULT_DISABLE_DOUBLE_TAP_WAKE = false;
     public static final String DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES = "";
+    public static final boolean DEFAULT_THEME_SETTINGS_SHORTCUT = true;
 
     private PrefsBridge() {
     }
@@ -80,10 +82,19 @@ public final class PrefsBridge {
 
     /** UI 侧写入：本地与远程双写，Hook 端下次读取即生效，无需重启。 */
     private static void writeFromUi(@NonNull Context context, @NonNull String key, boolean value) {
-        local(context).edit().putBoolean(key, value).apply();
+        SharedPreferences localPrefs = local(context);
         SharedPreferences remote = remote();
         if (remote != null) {
             remote.edit().putBoolean(key, value).apply();
+            localPrefs.edit()
+                    .putBoolean(key, value)
+                    .remove(PENDING_UI_PREFIX + key)
+                    .apply();
+        } else {
+            localPrefs.edit()
+                    .putBoolean(key, value)
+                    .putBoolean(PENDING_UI_PREFIX + key, value)
+                    .apply();
         }
     }
 
@@ -99,10 +110,19 @@ public final class PrefsBridge {
     }
 
     private static void writeStringFromUi(@NonNull Context context, @NonNull String key, @NonNull String value) {
-        local(context).edit().putString(key, value).apply();
+        SharedPreferences localPrefs = local(context);
         SharedPreferences remote = remote();
         if (remote != null) {
             remote.edit().putString(key, value).apply();
+            localPrefs.edit()
+                    .putString(key, value)
+                    .remove(PENDING_UI_PREFIX + key)
+                    .apply();
+        } else {
+            localPrefs.edit()
+                    .putString(key, value)
+                    .putString(PENDING_UI_PREFIX + key, value)
+                    .apply();
         }
     }
 
@@ -196,6 +216,14 @@ public final class PrefsBridge {
         writeStringFromUi(context, Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES, packages);
     }
 
+    public static boolean readThemeSettingsShortcutForUi(@NonNull Context context) {
+        return readForUi(context, Constants.KEY_THEME_SETTINGS_SHORTCUT, DEFAULT_THEME_SETTINGS_SHORTCUT);
+    }
+
+    public static void writeThemeSettingsShortcutFromUi(@NonNull Context context, boolean enabled) {
+        writeFromUi(context, Constants.KEY_THEME_SETTINGS_SHORTCUT, enabled);
+    }
+
     /** 纯 UI 外观项，Hook 端不消费，只存本地。 */
     public static boolean readFloatingNavBar(@NonNull Context context) {
         return local(context).getBoolean(Constants.KEY_FLOATING_NAV_BAR, DEFAULT_FLOATING_NAV_BAR);
@@ -227,6 +255,10 @@ public final class PrefsBridge {
 
     public static boolean shouldEnableSwipePanel(@NonNull XposedModule module) {
         return readForHook(module, Constants.KEY_ENABLE_SWIPE_PANEL, DEFAULT_ENABLE_SWIPE_PANEL);
+    }
+
+    public static boolean shouldShowThemeSettingsShortcut(@NonNull XposedModule module) {
+        return readForHook(module, Constants.KEY_THEME_SETTINGS_SHORTCUT, DEFAULT_THEME_SETTINGS_SHORTCUT);
     }
 
     public static boolean shouldDisableRearScreenCover(@NonNull XposedModule module) {
@@ -351,12 +383,21 @@ public final class PrefsBridge {
             SharedPreferences remotePrefs = service.getRemotePreferences(Constants.PREF_GROUP);
             flushPanelPreference(context, Constants.KEY_DISABLE_LONG_PRESS_EDIT);
             flushPanelPreference(context, Constants.KEY_REMOVE_WALLPAPER_LIMIT);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_LONG_PRESS_EDIT);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_FIX_REAR_SCREEN_APPLY);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_SWIPE_PANEL);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_REAR_SCREEN_COVER);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_THEME_SETTINGS_SHORTCUT);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT, DEFAULT_REMOVE_WALLPAPER_LIMIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_SWIPE_PANEL, DEFAULT_ENABLE_SWIPE_PANEL);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_REAR_SCREEN_COVER, DEFAULT_DISABLE_REAR_SCREEN_COVER);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, DEFAULT_DISABLE_DOUBLE_TAP_WAKE);
+            syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_THEME_SETTINGS_SHORTCUT, DEFAULT_THEME_SETTINGS_SHORTCUT);
             syncStringKey(
                     localPrefs,
                     remotePrefs,
@@ -367,10 +408,34 @@ public final class PrefsBridge {
         }
     }
 
+    private static void flushUiBooleanPreference(@NonNull SharedPreferences localPrefs,
+                                                 @NonNull SharedPreferences remotePrefs,
+                                                 @NonNull String key) {
+        String pendingKey = PENDING_UI_PREFIX + key;
+        if (!localPrefs.contains(pendingKey)) return;
+        boolean value = localPrefs.getBoolean(pendingKey, localPrefs.getBoolean(key, false));
+        if (remotePrefs.edit().putBoolean(key, value).commit()) {
+            localPrefs.edit().putBoolean(key, value).remove(pendingKey).commit();
+        }
+    }
+
+    private static void flushUiStringPreference(@NonNull SharedPreferences localPrefs,
+                                                @NonNull SharedPreferences remotePrefs,
+                                                @NonNull String key) {
+        String pendingKey = PENDING_UI_PREFIX + key;
+        if (!localPrefs.contains(pendingKey)) return;
+        String value = localPrefs.getString(pendingKey, localPrefs.getString(key, ""));
+        if (value == null) value = "";
+        if (remotePrefs.edit().putString(key, value).commit()) {
+            localPrefs.edit().putString(key, value).remove(pendingKey).commit();
+        }
+    }
+
     private static void syncBooleanKey(@NonNull SharedPreferences localPrefs,
                                        @NonNull SharedPreferences remotePrefs,
                                        @NonNull String key,
                                        boolean def) {
+        if (localPrefs.contains(PENDING_UI_PREFIX + key)) return;
         if (remotePrefs.contains(key)) {
             localPrefs.edit().putBoolean(key, remotePrefs.getBoolean(key, def)).apply();
         } else if (localPrefs.contains(key)) {
@@ -385,6 +450,7 @@ public final class PrefsBridge {
                                       @NonNull SharedPreferences remotePrefs,
                                       @NonNull String key,
                                       @NonNull String def) {
+        if (localPrefs.contains(PENDING_UI_PREFIX + key)) return;
         if (remotePrefs.contains(key)) {
             localPrefs.edit().putString(key, remotePrefs.getString(key, def)).apply();
         } else if (localPrefs.contains(key)) {

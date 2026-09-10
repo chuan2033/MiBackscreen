@@ -24,11 +24,14 @@ import androidx.annotation.Nullable;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.lang.reflect.Field;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +50,10 @@ import io.github.libxposed.api.XposedModule;
 
 public class ModuleMain extends XposedModule {
     private static final long REAR_SELECTION_PENDING_TIMEOUT_MS = 15_000L;
+    private static final long THEME_DATABASE_SYNC_DEDUP_WINDOW_MS = 2_000L;
+    private static final long MAX_EDIT_CONFIG_BYTES = 512 * 1024L;
+    private static final String THEME_MAGIC_DIR = "/data/system/theme_magic";
+    private static final String THEME_MAGIC_USERS_DIR = THEME_MAGIC_DIR + "/users/";
     private volatile boolean systemHooksInstalled = false;
     private volatile boolean hooksInstalled = false;
     private volatile boolean themeStoreHooksInstalled = false;
@@ -56,6 +63,9 @@ public class ModuleMain extends XposedModule {
             Collections.newSetFromMap(new WeakHashMap<>());
     private final Map<View, PendingRearSelection> pendingRearSelections =
             Collections.synchronizedMap(new WeakHashMap<>());
+    @Nullable
+    private volatile Integer lastThemeDatabaseSyncedWidgetId;
+    private volatile long lastThemeDatabaseSyncedAtElapsed;
 
     @Override
     public void onModuleLoaded(@NonNull ModuleLoadedParam param) {
@@ -422,6 +432,10 @@ public class ModuleMain extends XposedModule {
 
         Integer committedId = resolveWallpaperId(panel, false);
         if (committedId == null || committedId.intValue() != pending.wallpaperId) {
+            pendingRearSelections.remove(panel);
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Ignored mismatched rear selection commit: pendingId=" + pending.wallpaperId
+                            + ", committedId=" + committedId);
             return;
         }
 
@@ -788,16 +802,26 @@ public class ModuleMain extends XposedModule {
                 new Class[]{Object.class},
                 Constants.THEME_APPLY_RESULT_CLASS + "#" + Constants.THEME_APPLY_RESULT_METHOD,
                 chain -> {
-                    if (PrefsBridge.shouldFixRearScreenApply(this)) {
-                        Object bean = getFieldValue(chain.getThisObject(), Constants.THEME_APPLY_BEAN_FIELD);
-                        if (bean != null) {
+                    boolean fixApply = PrefsBridge.shouldFixRearScreenApply(this);
+                    boolean removeLimit = PrefsBridge.shouldRemoveWallpaperLimit(this);
+                    Object bean = fixApply || removeLimit
+                            ? getFieldValue(chain.getThisObject(), Constants.THEME_APPLY_BEAN_FIELD)
+                            : null;
+                    ThemeMagicRepairTarget repairTarget = ThemeMagicRepairTarget.from(bean);
+                    if (bean != null) {
+                        if (fixApply) {
                             promoteReappliedWallpaper(bean, classLoader);
                             fillSnapshotPaths(bean);
                             patchRightsPath(bean, classLoader);
                             patchMtzPath(bean);
                         }
+                        patchThemeMagicAssetAccess(bean);
                     }
-                    return chain.proceed();
+                    Object result = chain.proceed();
+                    if (repairTarget != null) {
+                        scheduleThemeMagicAssetRepair(repairTarget);
+                    }
+                    return result;
                 }
         );
     }
@@ -819,6 +843,9 @@ public class ModuleMain extends XposedModule {
                 Constants.THEME_ENTRY_CONFIG_COMPANION_CLASS + "#k",
                 chain -> {
                     Object result = chain.proceed();
+                    if (!PrefsBridge.shouldShowThemeSettingsShortcut(this)) {
+                        return result;
+                    }
                     Object context = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
                     if (context instanceof Context) {
                         return injectThemeSettingsShortcutList(
@@ -1035,18 +1062,32 @@ public class ModuleMain extends XposedModule {
             @NonNull Activity activity,
             @NonNull ClassLoader classLoader
     ) {
+        Integer selectedId = readSelectedRearWidgetId(activity);
+        long now = SystemClock.elapsedRealtime();
+        if (selectedId == null
+                || (selectedId.equals(lastThemeDatabaseSyncedWidgetId)
+                && now - lastThemeDatabaseSyncedAtElapsed < THEME_DATABASE_SYNC_DEDUP_WINDOW_MS)) {
+            return;
+        }
+
         // Room 禁止主线程数据库访问。先在短任务中完成排序落库，再让页面创建或恢复，
-        // 确保 LiveData 第一次（或恢复后）渲染拿到当前背屏壁纸。
+        // 尽量让 LiveData 第一次（或恢复后）渲染拿到当前背屏壁纸；慢路径转入后台，
+        // 避免主题商店页面被模块同步阻塞数秒。
         Thread syncThread = new Thread(
-                () -> syncThemeDatabaseToRearSelection(activity, classLoader),
+                () -> {
+                    if (syncThemeDatabaseToRearSelection(activity, classLoader, selectedId)) {
+                        lastThemeDatabaseSyncedWidgetId = selectedId;
+                        lastThemeDatabaseSyncedAtElapsed = SystemClock.elapsedRealtime();
+                    }
+                },
                 "MiBackscreen-RearSelectionSync");
         syncThread.setDaemon(true);
         syncThread.start();
         try {
-            syncThread.join(3000L);
+            syncThread.join(500L);
             if (syncThread.isAlive()) {
                 log(Log.WARN, Constants.LOG_TAG,
-                        "Theme settings selection sync timed out");
+                        "Theme settings selection sync continuing in background");
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -1055,33 +1096,43 @@ public class ModuleMain extends XposedModule {
         }
     }
 
-    private void syncThemeDatabaseToRearSelection(
-            @NonNull Activity activity,
-            @NonNull ClassLoader classLoader
-    ) {
+    @Nullable
+    private Integer readSelectedRearWidgetId(@NonNull Activity activity) {
         try {
             String raw = Settings.Secure.getString(
                     activity.getContentResolver(), Constants.SECURE_THEME_REAR_WIDGET);
-            if (isEmpty(raw)) return;
+            if (isEmpty(raw)) return null;
             JSONArray data = new JSONObject(raw).optJSONArray("data");
             JSONObject selectedWidget = data != null ? data.optJSONObject(0) : null;
-            if (selectedWidget == null || !selectedWidget.has("id")) return;
-            int selectedId = selectedWidget.getInt("id");
+            return selectedWidget != null && selectedWidget.has("id")
+                    ? selectedWidget.getInt("id")
+                    : null;
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "readSelectedRearWidgetId failed", e);
+            return null;
+        }
+    }
 
+    private boolean syncThemeDatabaseToRearSelection(
+            @NonNull Activity activity,
+            @NonNull ClassLoader classLoader,
+            int selectedId
+    ) {
+        try {
             Class<?> managerClass = findClass(Constants.THEME_REAR_DATA_MANAGER_CLASS, classLoader);
-            if (managerClass == null) return;
+            if (managerClass == null) return false;
             Field companionField = findStaticCompanionField(
                     managerClass, Constants.THEME_REAR_DATA_MANAGER_COMPANION_FIELD);
-            if (companionField == null) return;
+            if (companionField == null) return false;
             companionField.setAccessible(true);
             Object companion = companionField.get(null);
             Object manager = companion != null
                     ? callMethod(companion, Constants.THEME_REAR_DATA_MANAGER_GET_INSTANCE_METHOD)
                     : null;
-            if (manager == null) return;
+            if (manager == null) return false;
             Object listValue = callMethod(
                     manager, Constants.THEME_REAR_DATA_MANAGER_GET_LIST_METHOD);
-            if (!(listValue instanceof List<?> items) || items.isEmpty()) return;
+            if (!(listValue instanceof List<?> items) || items.isEmpty()) return false;
 
             Object selectedItem = null;
             int selectedPosition = Integer.MIN_VALUE;
@@ -1102,18 +1153,19 @@ public class ModuleMain extends XposedModule {
                 }
             }
 
-            if (selectedItem == null || selectedPosition >= maxPosition
-                    || maxPosition == Integer.MAX_VALUE) {
-                return;
-            }
+            if (selectedItem == null) return false;
+            if (selectedPosition >= maxPosition) return true;
+            if (maxPosition == Integer.MAX_VALUE) return false;
             int promotedPosition = maxPosition + 1;
             callMethod(selectedItem, "setPosition", promotedPosition);
             callMethod(manager, Constants.THEME_REAR_DATA_MANAGER_UPSERT_METHOD, selectedItem);
             log(Log.INFO, Constants.LOG_TAG,
                     "Synced Theme DB to rear selection: id=" + selectedId
                             + ", position=" + selectedPosition + "->" + promotedPosition);
+            return true;
         } catch (Throwable e) {
             log(Log.WARN, Constants.LOG_TAG, "syncThemeDatabaseToRearSelection failed", e);
+            return false;
         }
     }
 
@@ -1301,6 +1353,246 @@ public class ModuleMain extends XposedModule {
         }
     }
 
+    private void patchThemeMagicAssetAccess(Object bean) {
+        try {
+            LinkedHashSet<File> files = new LinkedHashSet<>();
+            String editConfigPath = asString(callNoArgMethodQuietly(bean, "getMamlEditConfigPath"));
+            addThemeMagicFile(files, editConfigPath);
+            addThemeMagicFile(files, asString(callNoArgMethodQuietly(bean, "getSnapshotPreviewPath")));
+            addThemeMagicFile(files, asString(callNoArgMethodQuietly(bean, "getMetaPath")));
+            addThemeMagicFile(files, asString(callNoArgMethodQuietly(bean, "getMetaSnapshotPath")));
+
+            if (!isEmpty(editConfigPath)) {
+                collectThemeMagicFilesFromEditConfig(new File(editConfigPath), files);
+            }
+
+            int existingFiles = 0;
+            int missingFiles = 0;
+            for (File file : files) {
+                if (file.exists()) {
+                    existingFiles++;
+                } else {
+                    missingFiles++;
+                }
+                grantThemeMagicAssetAccess(file);
+            }
+            if (!files.isEmpty()) {
+                log(Log.INFO, Constants.LOG_TAG,
+                        "Patched rear screen theme_magic assets: total=" + files.size()
+                                + ", existing=" + existingFiles
+                                + ", missing=" + missingFiles);
+            }
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "patchThemeMagicAssetAccess failed", e);
+        }
+    }
+
+    private void scheduleThemeMagicAssetRepair(@NonNull ThemeMagicRepairTarget target) {
+        Thread repairThread = new Thread(
+                () -> {
+                    long[] delays = {0L, 300L, 1000L, 2500L};
+                    for (long delay : delays) {
+                        if (delay > 0L) {
+                            try {
+                                Thread.sleep(delay);
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                return;
+                            }
+                        }
+                        repairThemeMagicAssets(target);
+                    }
+                },
+                "MiBackscreen-ThemeMagicAssetRepair");
+        repairThread.setDaemon(true);
+        repairThread.start();
+    }
+
+    private void repairThemeMagicAssets(@NonNull ThemeMagicRepairTarget target) {
+        if (isEmpty(target.editConfigPath)) {
+            return;
+        }
+        File editConfig = new File(target.editConfigPath);
+        if (!editConfig.exists() || !editConfig.isFile()) {
+            return;
+        }
+        long length = editConfig.length();
+        if (length < 0 || length > MAX_EDIT_CONFIG_BYTES) {
+            return;
+        }
+        try {
+            String raw = Files.readString(editConfig.toPath(), StandardCharsets.UTF_8).trim();
+            if (raw.isEmpty()) {
+                return;
+            }
+            Object root = raw.startsWith("[") ? new JSONArray(raw) : new JSONObject(raw);
+            RepairStats stats = new RepairStats();
+            boolean changed = rewriteThemeMagicFileReferences(root, target, stats);
+            if (changed) {
+                byte[] bytes = root.toString().getBytes(StandardCharsets.UTF_8);
+                try (FileOutputStream out = new FileOutputStream(editConfig, false)) {
+                    out.write(bytes);
+                    out.getFD().sync();
+                }
+                grantThemeMagicAssetAccess(editConfig);
+                log(Log.INFO, Constants.LOG_TAG,
+                        "Rewrote rear screen theme_magic asset references: copied="
+                                + stats.copied + ", missing=" + stats.missing);
+            }
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "repairThemeMagicAssets failed", e);
+        }
+    }
+
+    private boolean rewriteThemeMagicFileReferences(
+            @Nullable Object node,
+            @NonNull ThemeMagicRepairTarget target,
+            @NonNull RepairStats stats
+    ) throws Throwable {
+        boolean changed = false;
+        if (node instanceof JSONObject object) {
+            Iterator<String> keys = object.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                Object value = object.opt(key);
+                if (value instanceof String) {
+                    String rewritten = rewriteThemeMagicFileReference((String) value, target, stats);
+                    if (!((String) value).equals(rewritten)) {
+                        object.put(key, rewritten);
+                        changed = true;
+                    }
+                } else if (rewriteThemeMagicFileReferences(value, target, stats)) {
+                    changed = true;
+                }
+            }
+        } else if (node instanceof JSONArray array) {
+            for (int i = 0; i < array.length(); i++) {
+                Object value = array.opt(i);
+                if (value instanceof String) {
+                    String rewritten = rewriteThemeMagicFileReference((String) value, target, stats);
+                    if (!((String) value).equals(rewritten)) {
+                        array.put(i, rewritten);
+                        changed = true;
+                    }
+                } else if (rewriteThemeMagicFileReferences(value, target, stats)) {
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    }
+
+    @NonNull
+    private String rewriteThemeMagicFileReference(
+            @NonNull String path,
+            @NonNull ThemeMagicRepairTarget target,
+            @NonNull RepairStats stats
+    ) {
+        if (!isThemeMagicUserPath(path)) {
+            return path;
+        }
+        File source = new File(path);
+        if (!source.exists() || !source.isFile()) {
+            stats.missing++;
+            return path;
+        }
+        File destination = resolveRuntimeAssetPath(source, target);
+        if (!destination.exists() || destination.length() != source.length()) {
+            if (!safeCopy(source, destination)) {
+                return path;
+            }
+        }
+        grantReadAccess(destination);
+        stats.copied++;
+        return destination.getAbsolutePath();
+    }
+
+    @NonNull
+    private File resolveRuntimeAssetPath(
+            @NonNull File source,
+            @NonNull ThemeMagicRepairTarget target
+    ) {
+        String resId = sanitizeFilePart(target.resId, "unknown");
+        String applyId = sanitizeFilePart(target.applyId, "current");
+        String name = sanitizeFilePart(source.getName(), "asset");
+        return new File(
+                "/data/system/theme/rearScreen",
+                "mibackscreen_" + resId + "_" + applyId + "_" + name);
+    }
+
+    private void collectThemeMagicFilesFromEditConfig(@NonNull File editConfig, @NonNull Set<File> files) {
+        if (!editConfig.exists() || !editConfig.isFile()) {
+            return;
+        }
+        long length = editConfig.length();
+        if (length < 0 || length > MAX_EDIT_CONFIG_BYTES) {
+            return;
+        }
+        try {
+            String raw = Files.readString(editConfig.toPath(), StandardCharsets.UTF_8).trim();
+            if (raw.isEmpty()) {
+                return;
+            }
+            Object root = raw.startsWith("[") ? new JSONArray(raw) : new JSONObject(raw);
+            collectThemeMagicFilesFromJson(root, files);
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Failed to parse rear screen editConfig: " + editConfig.getAbsolutePath(), e);
+        }
+    }
+
+    private void collectThemeMagicFilesFromJson(@Nullable Object node, @NonNull Set<File> files) {
+        if (node instanceof JSONObject object) {
+            Iterator<String> keys = object.keys();
+            while (keys.hasNext()) {
+                Object value = object.opt(keys.next());
+                if (value instanceof String) {
+                    addThemeMagicFile(files, (String) value);
+                } else {
+                    collectThemeMagicFilesFromJson(value, files);
+                }
+            }
+        } else if (node instanceof JSONArray array) {
+            for (int i = 0; i < array.length(); i++) {
+                Object value = array.opt(i);
+                if (value instanceof String) {
+                    addThemeMagicFile(files, (String) value);
+                } else {
+                    collectThemeMagicFilesFromJson(value, files);
+                }
+            }
+        }
+    }
+
+    private void addThemeMagicFile(@NonNull Set<File> files, @Nullable String path) {
+        if (isEmpty(path) || !isThemeMagicUserPath(path)) {
+            return;
+        }
+        files.add(new File(path));
+    }
+
+    private void grantThemeMagicAssetAccess(@NonNull File file) {
+        grantThemeMagicDirectoryAccess(file.getParentFile());
+        if (!file.exists()) {
+            return;
+        }
+        if (file.isDirectory()) {
+            grantThemeMagicDirectoryAccess(file);
+        } else {
+            grantReadAccess(file);
+        }
+    }
+
+    private void grantThemeMagicDirectoryAccess(@Nullable File dir) {
+        File current = dir;
+        while (current != null && isThemeMagicPath(current.getAbsolutePath())) {
+            current.setReadable(true, false);
+            current.setWritable(true, true);
+            current.setExecutable(true, false);
+            current = current.getParentFile();
+        }
+    }
+
     private String resolveRightsDir(ClassLoader classLoader) {
         String[] fieldNames = {
                 Constants.THEME_RIGHTS_DIR_FIELD_OS4,
@@ -1353,6 +1645,65 @@ public class ModuleMain extends XposedModule {
         file.setReadable(true, false);
         file.setWritable(true, true);
         file.setExecutable(false, false);
+    }
+
+    private static final class ThemeMagicRepairTarget {
+        @Nullable
+        final String resId;
+        @Nullable
+        final String applyId;
+        @Nullable
+        final String editConfigPath;
+
+        private ThemeMagicRepairTarget(
+                @Nullable String resId,
+                @Nullable String applyId,
+                @Nullable String editConfigPath
+        ) {
+            this.resId = resId;
+            this.applyId = applyId;
+            this.editConfigPath = editConfigPath;
+        }
+
+        @Nullable
+        static ThemeMagicRepairTarget from(@Nullable Object bean) {
+            if (bean == null) return null;
+            String editConfigPath = asString(callNoArgMethodQuietly(bean, "getMamlEditConfigPath"));
+            if (isEmpty(editConfigPath) || !isThemeMagicUserPath(editConfigPath)) {
+                return null;
+            }
+            return new ThemeMagicRepairTarget(
+                    asString(callNoArgMethodQuietly(bean, "getResId")),
+                    asString(callNoArgMethodQuietly(bean, "getApplyId")),
+                    editConfigPath);
+        }
+    }
+
+    private static final class RepairStats {
+        int copied;
+        int missing;
+    }
+
+    @Nullable
+    private static String asString(@Nullable Object value) {
+        return value instanceof String ? (String) value : null;
+    }
+
+    @NonNull
+    private static String sanitizeFilePart(@Nullable String value, @NonNull String fallback) {
+        if (isEmpty(value)) {
+            return fallback;
+        }
+        String sanitized = value.replaceAll("[^A-Za-z0-9._-]", "_");
+        return sanitized.isEmpty() ? fallback : sanitized;
+    }
+
+    private static boolean isThemeMagicUserPath(@NonNull String path) {
+        return path.startsWith(THEME_MAGIC_USERS_DIR);
+    }
+
+    private static boolean isThemeMagicPath(@NonNull String path) {
+        return path.equals(THEME_MAGIC_DIR) || path.startsWith(THEME_MAGIC_DIR + "/");
     }
 
     @Nullable
@@ -1425,7 +1776,7 @@ public class ModuleMain extends XposedModule {
         return builder.length() == 0 ? "[]" : builder.toString();
     }
 
-    private void safeCopy(File src, File dst) {
+    private boolean safeCopy(File src, File dst) {
         File parent = dst.getParentFile();
         if (parent != null && !parent.exists()) {
             parent.mkdirs();
@@ -1438,8 +1789,10 @@ public class ModuleMain extends XposedModule {
                 out.write(buf, 0, n);
             }
             out.getFD().sync();
+            return true;
         } catch (Throwable e) {
             log(Log.WARN, Constants.LOG_TAG, "safeCopy failed", e);
+            return false;
         }
     }
 

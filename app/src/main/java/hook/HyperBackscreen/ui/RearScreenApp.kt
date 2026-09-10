@@ -6,6 +6,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -15,17 +21,28 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowInsetsControllerCompat
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.app.ModuleApp
 import hook.HyperBackscreen.bridge.PrefsBridge
+import hook.HyperBackscreen.ui.util.RearDisplayCompatibility
+import hook.HyperBackscreen.ui.util.ThemeMode
+import hook.HyperBackscreen.ui.util.ThemePrefs
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme
+import top.yukonga.miuix.kmp.window.WindowDialog
+
+private val FORCE_STOP_PACKAGE_PATTERN = Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+")
 
 @Composable
 internal fun RearScreenApp() {
@@ -53,6 +70,12 @@ internal fun RearScreenApp() {
     var disableRearScreenCover by remember {
         mutableStateOf(PrefsBridge.readDisableRearScreenCoverForUi(context))
     }
+    var themeMode by remember {
+        mutableStateOf(ThemePrefs.getThemeMode(context))
+    }
+    var themeSettingsShortcut by remember {
+        mutableStateOf(PrefsBridge.readThemeSettingsShortcutForUi(context))
+    }
     var disableDoubleTapWake by remember {
         mutableStateOf(PrefsBridge.readDisableDoubleTapWakeForUi(context))
     }
@@ -64,6 +87,14 @@ internal fun RearScreenApp() {
     }
     var moduleActivated by remember {
         mutableStateOf(ModuleApp.getService() != null)
+    }
+    var showRearDisplayWarning by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val hidden = withContext(Dispatchers.IO) {
+            RearDisplayCompatibility.isBuiltinPresentationDisabled()
+        }
+        if (hidden) showRearDisplayWarning = true
     }
 
     // Xposed 服务是异步绑定的：首帧组合时可能尚未就绪，读到的是本地/默认值。
@@ -78,8 +109,9 @@ internal fun RearScreenApp() {
                         PrefsBridge.readFixRearScreenApplyForUi(context)
                     )
                 }
-                val swipe = withContext(Dispatchers.IO) {
-                    PrefsBridge.readEnableSwipePanelForUi(context)
+                val (swipe, shortcut) = withContext(Dispatchers.IO) {
+                    PrefsBridge.readEnableSwipePanelForUi(context) to
+                        PrefsBridge.readThemeSettingsShortcutForUi(context)
                 }
                 val (cover, doubleTap, packages) = withContext(Dispatchers.IO) {
                     Triple(
@@ -92,6 +124,7 @@ internal fun RearScreenApp() {
                 removeWallpaperLimit = rwl
                 fixRearScreenApply = fix
                 enableSwipePanel = swipe
+                themeSettingsShortcut = shortcut
                 disableRearScreenCover = cover
                 disableDoubleTapWake = doubleTap
                 doubleTapWakeDisabledPackages = packages
@@ -103,7 +136,7 @@ internal fun RearScreenApp() {
         onDispose { ModuleApp.removeServiceListener(listener) }
     }
 
-    val isDark = isSystemInDarkTheme()
+    val isDark = themeMode.resolve(isSystemInDarkTheme())
 
     DisposableEffect(isDark) {
         val activity = context as? ComponentActivity
@@ -194,12 +227,53 @@ internal fun RearScreenApp() {
                         Toast.LENGTH_SHORT
                     ).show()
                 }
+            },
+            themeMode = themeMode,
+            onThemeModeChange = { newMode ->
+                ThemePrefs.setThemeMode(context, newMode)
+                themeMode = newMode
+            },
+            themeSettingsShortcut = themeSettingsShortcut,
+            onThemeSettingsShortcutChange = { enabled ->
+                themeSettingsShortcut = enabled
+                PrefsBridge.writeThemeSettingsShortcutFromUi(context, enabled)
             }
         )
+
+        WindowDialog(
+            show = showRearDisplayWarning,
+            title = context.getString(R.string.compat_rear_display_hidden_title),
+            onDismissRequest = { showRearDisplayWarning = false }
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = context.getString(R.string.compat_rear_display_hidden_message),
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    style = MiuixTheme.textStyles.body2
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Button(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        onClick = { showRearDisplayWarning = false },
+                        colors = ButtonDefaults.buttonColorsPrimary(),
+                        content = { Text(context.getString(R.string.common_confirm)) }
+                    )
+                }
+            }
+        }
     }
 }
 
 private fun forceStopPackage(packageName: String): Boolean {
+    if (!FORCE_STOP_PACKAGE_PATTERN.matches(packageName)) return false
     return try {
         val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "am force-stop $packageName"))
         if (!process.waitFor(5, TimeUnit.SECONDS)) {

@@ -5,6 +5,9 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,6 +43,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import hook.HyperBackscreen.R
+import hook.HyperBackscreen.ui.util.ThemeMode
 import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.ui.about.AboutPage
 import hook.HyperBackscreen.ui.about.LicensePage
@@ -131,7 +135,11 @@ internal fun HomeScreen(
     onDisableDoubleTapWakeChange: (Boolean) -> Unit,
     onDoubleTapWakeDisabledPackagesChange: (String) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
-    onForceStopPackage: (String) -> Unit
+    onForceStopPackage: (String) -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
+    themeSettingsShortcut: Boolean,
+    onThemeSettingsShortcutChange: (Boolean) -> Unit
 ) {
     var selected by remember { mutableStateOf(HomeNavigationPolicy.Tab.HOME) }
     var detailPage by remember { mutableStateOf<DetailPage?>(null) }
@@ -142,10 +150,13 @@ internal fun HomeScreen(
         targetState = detailPage,
         modifier = Modifier.fillMaxSize(),
         transitionSpec = {
+            val fadeSpec = tween<Float>(300, easing = FastOutSlowInEasing)
             if (targetState != null) {
-                slideInHorizontally { it } togetherWith slideOutHorizontally { -it / 3 }
+                (slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { it } + fadeIn(fadeSpec)) togetherWith
+                    slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it / 3 }
             } else {
-                slideInHorizontally { -it / 3 } togetherWith slideOutHorizontally { it }
+                (slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it / 3 } + fadeIn(fadeSpec)) togetherWith
+                    slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { it }
             }
         },
         label = "DetailPageTransition"
@@ -160,6 +171,10 @@ internal fun HomeScreen(
                 onLiquidGlassChange = onLiquidGlassChange,
                 onEnableSwipePanelChange = onEnableSwipePanelChange,
                 onLauncherIconHiddenChange = onLauncherIconHiddenChange,
+                themeMode = themeMode,
+                onThemeModeChange = onThemeModeChange,
+                themeSettingsShortcut = themeSettingsShortcut,
+                onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
                 onBack = { detailPage = null }
             )
             DetailPage.License -> LicensePage(onBack = { detailPage = null })
@@ -198,7 +213,11 @@ internal fun HomeScreen(
                 onSettingsClick = { detailPage = DetailPage.Settings },
                 onAddDisabledAppsClick = { detailPage = DetailPage.AppPicker },
                 onLicenseClick = { detailPage = DetailPage.License },
-                onForceStopPackage = onForceStopPackage
+                onForceStopPackage = onForceStopPackage,
+                themeMode = themeMode,
+                onThemeModeChange = onThemeModeChange,
+                themeSettingsShortcut = themeSettingsShortcut,
+                onThemeSettingsShortcutChange = onThemeSettingsShortcutChange
             )
         }
     }
@@ -214,6 +233,10 @@ private fun SettingsPage(
     onLiquidGlassChange: (Boolean) -> Unit,
     onEnableSwipePanelChange: (Boolean) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
+    themeSettingsShortcut: Boolean,
+    onThemeSettingsShortcutChange: (Boolean) -> Unit,
     onBack: () -> Unit
 ) {
     val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
@@ -269,7 +292,11 @@ private fun SettingsPage(
                         onFloatingNavBarChange = onFloatingNavBarChange,
                         onLiquidGlassChange = onLiquidGlassChange,
                         onEnableSwipePanelChange = onEnableSwipePanelChange,
-                        onLauncherIconHiddenChange = onLauncherIconHiddenChange
+                        onLauncherIconHiddenChange = onLauncherIconHiddenChange,
+                        themeMode = themeMode,
+                        onThemeModeChange = onThemeModeChange,
+                        themeSettingsShortcut = themeSettingsShortcut,
+                        onThemeSettingsShortcutChange = onThemeSettingsShortcutChange
                     )
                 }
                 item {
@@ -308,7 +335,11 @@ private fun MainContent(
     onSettingsClick: () -> Unit,
     onAddDisabledAppsClick: () -> Unit,
     onLicenseClick: () -> Unit,
-    onForceStopPackage: (String) -> Unit
+    onForceStopPackage: (String) -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
+    themeSettingsShortcut: Boolean,
+    onThemeSettingsShortcutChange: (Boolean) -> Unit
 ) {
     val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
     val surfaceColor = MiuixTheme.colorScheme.surface
