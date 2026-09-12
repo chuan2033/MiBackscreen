@@ -100,6 +100,7 @@ public class ModuleMain extends XposedModule {
             synchronized (this) {
                 if (hooksInstalled) return;
                 try {
+                    SwipePanelHost.setLoadedModuleApkPath(getModuleApplicationInfo().sourceDir);
                     installLongPressHooks(param.getClassLoader());
                     installSwipePanelHook(param.getClassLoader());
                     installRearScreenSelectionSyncHook(param.getClassLoader());

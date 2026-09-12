@@ -37,6 +37,9 @@
     <string name="config_theme_mode_system">Follow system</string>
     <string name="config_theme_mode_light">Light</string>
     <string name="config_theme_mode_dark">Dark</string>
+    <string name="config_theme_mode_monet_system">Monet (follow system)</string>
+    <string name="config_theme_mode_monet_light">Monet (light)</string>
+    <string name="config_theme_mode_monet_dark">Monet (dark)</string>
     <string name="config_module_entry_title">Module entry</string>
     <string name="config_module_entry_disabled">Disabled</string>
     <string name="config_module_entry_theme_settings">Rear screen settings</string>
@@ -102,6 +105,7 @@
     <string name="config_swipe_panel_summary_on">Swipe up from bottom edge to open quick panel</string>
     <string name="config_swipe_panel_summary_off">Swipe-up panel disabled</string>
     <string name="panel_title">Rear Screen Quick Panel</string>
+    <string name="panel_restart_required">Please restart the rear screen scope</string>
     <string name="panel_disable_long_press_title">Disable long-press wallpaper switching</string>
     <string name="panel_disable_long_press_on">Factory long-press switching is disabled</string>
     <string name="panel_disable_long_press_off">Factory long-press behavior is enabled</string>

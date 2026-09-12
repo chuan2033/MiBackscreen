@@ -5,13 +5,29 @@ import android.content.Context
 enum class ThemeMode(val index: Int) {
     SYSTEM(0),
     LIGHT(1),
-    DARK(2);
+    DARK(2),
+    MONET_SYSTEM(3),
+    MONET_LIGHT(4),
+    MONET_DARK(5);
+
+    val usesDynamicColors: Boolean
+        get() = when (this) {
+            MONET_SYSTEM,
+            MONET_LIGHT,
+            MONET_DARK -> true
+            SYSTEM,
+            LIGHT,
+            DARK -> false
+        }
 
     /** 将用户选择解析为最终是否使用深色主题。 */
     fun resolve(systemDark: Boolean): Boolean = when (this) {
-        SYSTEM -> systemDark
-        LIGHT -> false
-        DARK -> true
+        SYSTEM,
+        MONET_SYSTEM -> systemDark
+        LIGHT,
+        MONET_LIGHT -> false
+        DARK,
+        MONET_DARK -> true
     }
 
     companion object {

@@ -7,12 +7,13 @@ import androidx.compose.ui.graphics.RectangleShape
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurDefaults
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
-import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.blur.ProgressiveBlur
+import top.yukonga.miuix.kmp.blur.progressiveTextureBlur
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * 顶栏的毛玻璃容器。必须挂在 layerBackdrop 内容子树之外，
- * 否则 textureBlur 与 backdrop 采样成环会导致 native crash。
+ * 顶栏的渐进式毛玻璃容器。必须挂在 layerBackdrop 内容子树之外，
+ * 否则 backdrop 采样成环会导致 native crash。
  */
 @Composable
 internal fun BlurredBar(
@@ -21,13 +22,14 @@ internal fun BlurredBar(
     content: @Composable () -> Unit
 ) {
     Box(
-        modifier = modifier.textureBlur(
+        modifier = modifier.progressiveTextureBlur(
             backdrop = backdrop,
             shape = RectangleShape,
-            blurRadius = 25f,
+            gradient = ProgressiveBlur.Top.copy(curve = 6f),
+            blurRadius = 18f,
             colors = BlurDefaults.blurColors(
                 blendColors = listOf(
-                    BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(0.8f))
+                    BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(0.42f))
                 )
             )
         )

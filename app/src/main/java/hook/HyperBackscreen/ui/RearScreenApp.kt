@@ -40,6 +40,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme
+import top.yukonga.miuix.kmp.theme.platformDynamicColors
 import top.yukonga.miuix.kmp.window.WindowDialog
 
 private val FORCE_STOP_PACKAGE_PATTERN = Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+")
@@ -162,9 +163,15 @@ internal fun RearScreenApp() {
         }
     }
 
-    MiuixTheme(
-        colors = if (isDark) darkColorScheme() else lightColorScheme()
-    ) {
+    val appColors = if (themeMode.usesDynamicColors) {
+        platformDynamicColors(isDark)
+    } else if (isDark) {
+        darkColorScheme()
+    } else {
+        lightColorScheme()
+    }
+
+    MiuixTheme(colors = appColors) {
         HomeScreen(
             disableLongPress = disableLongPress,
             removeWallpaperLimit = removeWallpaperLimit,

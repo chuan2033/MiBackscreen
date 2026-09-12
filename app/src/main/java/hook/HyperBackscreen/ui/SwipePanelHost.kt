@@ -2,6 +2,7 @@ package hook.HyperBackscreen.ui
 
 import android.app.Activity
 import android.content.Context
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
@@ -20,6 +21,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Space
 import android.widget.TextView
+import hook.HyperBackscreen.BuildConfig
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.bridge.PrefsBridge
 import hook.HyperBackscreen.bridge.DiagnosticLogStore
@@ -45,6 +47,15 @@ object SwipePanelHost {
     private const val HEADER_TEXT_SP = 19f
     private const val ROW_TITLE_TEXT_SP = 16f
     private const val ROW_SUMMARY_TEXT_SP = 13f
+
+    @Volatile
+    private var loadedModule = ModuleUpdateState(null, BuildConfig.VERSION_CODE.toLong())
+
+    @JvmStatic
+    fun setLoadedModuleApkPath(apkPath: String?) {
+        // Capture the framework's loaded APK before any panel is opened, not the latest installed APK.
+        loadedModule = ModuleUpdateState(apkPath, BuildConfig.VERSION_CODE.toLong())
+    }
 
     private var container: FrameLayout? = null
     private var panel: SwipeDismissCard? = null
@@ -207,7 +218,8 @@ object SwipePanelHost {
 
     private fun buildPanel(activity: Activity): BuiltPanel {
         val dark = isDark(activity)
-        val strings = PanelStrings(activity)
+        val restartRequired = needsScopeRestart(activity)
+        val strings = PanelStrings(activity, allowModuleResources = !restartRequired)
         val safeLeft = resolveSafeLeft(activity)
 
         val root = FrameLayout(activity).apply {
@@ -243,6 +255,32 @@ object SwipePanelHost {
 
         card.addView(handleBar(activity, dark))
         card.addView(headerRow(activity, dark, strings.title, safeLeft))
+
+        if (restartRequired) {
+            card.addView(
+                TextView(activity).apply {
+                    text = strings.restartRequired
+                    textSize = ROW_TITLE_TEXT_SP
+                    gravity = Gravity.CENTER
+                    setTextColor(if (dark) Color.WHITE else Color.BLACK)
+                    setPadding(
+                        safeLeft + dp(activity, 12).toInt(),
+                        dp(activity, 16).toInt(),
+                        dp(activity, 18).toInt(),
+                        dp(activity, 16).toInt(),
+                    )
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        0,
+                        1f,
+                    )
+                },
+            )
+            root.addView(card)
+            root.requestFocus()
+            Log.i(TAG, "Panel requires rear screen scope restart after module replacement")
+            return BuiltPanel(root, card, safeLeft)
+        }
 
         val content = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
@@ -519,12 +557,24 @@ object SwipePanelHost {
         (activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
             Configuration.UI_MODE_NIGHT_YES
 
-    private class PanelStrings(activity: Activity) {
-        private val moduleContext = try {
+    private fun needsScopeRestart(activity: Activity): Boolean = try {
+        val installed = activity.packageManager.getPackageInfo(
+            Constants.MODULE_PACKAGE,
+            PackageManager.PackageInfoFlags.of(0),
+        )
+        loadedModule.requiresRestart(installed.applicationInfo?.sourceDir, installed.longVersionCode)
+    } catch (e: Exception) {
+        Log.w(TAG, "Unable to check whether the panel module was replaced", e)
+        false
+    }
+
+    private class PanelStrings(activity: Activity, allowModuleResources: Boolean) {
+        private val chinese = activity.resources.configuration.locales[0]?.language == "zh"
+        private val moduleContext = if (allowModuleResources) try {
             activity.createPackageContext(Constants.MODULE_PACKAGE, Context.CONTEXT_IGNORE_SECURITY)
         } catch (_: Throwable) {
             null
-        }
+        } else null
 
         private fun get(id: Int, fallback: String): String = try {
             moduleContext?.getString(id) ?: fallback
@@ -532,7 +582,12 @@ object SwipePanelHost {
             fallback
         }
 
-        val title = get(R.string.panel_title, "背屏快捷面板")
+        val title = get(R.string.panel_title, if (chinese) "背屏快捷面板" else "Rear Screen Quick Panel")
+        // An outdated process must be able to show this without reading the new APK's resource IDs.
+        val restartRequired = get(
+            R.string.panel_restart_required,
+            if (chinese) "请重启背屏作用域" else "Please restart the rear screen scope",
+        )
         val disableTitle = get(R.string.panel_disable_long_press_title, "禁用背屏长按切换壁纸")
         val disableOn = get(R.string.panel_disable_long_press_on, "当前已禁用原厂长按切换壁纸")
         val disableOff = get(R.string.panel_disable_long_press_off, "当前恢复原厂长按行为")

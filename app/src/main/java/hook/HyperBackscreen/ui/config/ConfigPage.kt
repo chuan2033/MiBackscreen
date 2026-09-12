@@ -33,7 +33,10 @@ internal fun ConfigPage(
             items = listOf(
                 stringResource(R.string.config_theme_mode_system),
                 stringResource(R.string.config_theme_mode_light),
-                stringResource(R.string.config_theme_mode_dark)
+                stringResource(R.string.config_theme_mode_dark),
+                stringResource(R.string.config_theme_mode_monet_system),
+                stringResource(R.string.config_theme_mode_monet_light),
+                stringResource(R.string.config_theme_mode_monet_dark)
             ),
             selectedIndex = themeMode.index,
             title = stringResource(R.string.config_theme_mode_title),
