@@ -245,12 +245,17 @@ internal fun FloatingBottomBar(
             },
             onDragStarted = { wasDragged = false },
             onDragStopped = {
+                val targetIndex = targetValue.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
                 if (wasDragged) {
-                    val targetIndex = targetValue.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
                     onSelected(targetIndex)
                     animationScope.launch {
                         offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f))
                     }
+                }
+                // 松手后必须吸附回某个 tab：否则选中同一个 tab 时 selectedValue 不变，
+                // LaunchedEffect 不触发，指示器就会停在两个 tab 中间。
+                animationScope.launch {
+                    holder.instance?.animateToValue(targetIndex.toFloat())
                 }
             },
             onDrag = { _, dragAmount ->
