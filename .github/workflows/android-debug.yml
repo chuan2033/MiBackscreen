@@ -6,22 +6,28 @@ on:
       - main
       - master
   pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          # 该 action 默认 packages 为 `tools platform-tools`，但 Google 已从 SDK 仓库
+          # 移除旧的 tools 包，sdkmanager 会以 exit 1 失败。这里只装 platform-tools；
+          # platforms/build-tools 由 Gradle 按 compileSdk 自动拉取。
+          packages: "platform-tools"
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
