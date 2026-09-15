@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="pickup_title">Pickup codes</string>
+    <plurals name="pickup_count">
+        <item quantity="one">Recognized %1$d pickup code</item>
+        <item quantity="other">Recognized %1$d pickup codes</item>
+    </plurals>
+    <string name="pickup_empty">No pickup codes available</string>
+    <string name="pickup_select_all">Select all</string>
+    <string name="pickup_deselect_all">Deselect all</string>
     <!-- Common -->
     <string name="common_back">Back</string>
     <string name="common_select_all">Select All</string>
@@ -44,39 +52,28 @@
     <string name="config_module_entry_disabled">Disabled</string>
     <string name="config_module_entry_theme_settings">Rear screen settings</string>
     <string name="config_hide_launcher_icon">Hide home screen icon</string>
-    <string name="config_nav_bar_title">Navigation Bar</string>
     <string name="config_floating_bar_title">Floating Bar</string>
     <string name="config_floating_bar_summary_on">Currently using floating bar</string>
     <string name="config_floating_bar_summary_off">Currently using standard bar</string>
     <string name="config_liquid_glass_title">Liquid Glass</string>
     <string name="config_liquid_glass_summary_on">Liquid glass effect enabled</string>
     <string name="config_liquid_glass_summary_off">Liquid glass effect disabled</string>
-    <string name="config_current_config_title">Current Config</string>
-    <string name="config_long_press_disabled">Long Press Disabled</string>
-    <string name="config_wallpaper_limit">Wallpaper Limit</string>
-    <string name="config_apply_fix">Apply Fix</string>
-    <string name="config_status_on">On</string>
-    <string name="config_status_off">Off</string>
-    <string name="config_status_removed">Removed</string>
-    <string name="config_status_default">Default</string>
-    <string name="config_rear_guard_title">Rear Screen Guard</string>
     <string name="config_disable_rear_cover_title">Disable rear screen cover prompt</string>
     <string name="config_disable_rear_cover_summary_on">Cover prompt is blocked on the rear screen</string>
     <string name="config_disable_rear_cover_summary_off">Factory cover prompt behavior is active</string>
     <string name="config_disable_double_tap_wake_title">Disable double-tap wake by package</string>
     <string name="config_disable_double_tap_wake_summary_on">Listed foreground apps block rear screen double-tap wake</string>
     <string name="config_disable_double_tap_wake_summary_off">Rear screen double-tap wake follows factory behavior</string>
-    <string name="config_disabled_packages_title">Package names</string>
-    <string name="config_disabled_packages_hint">Paste package names here, one per line</string>
     <string name="config_add_apps_title">Add Apps</string>
     <string name="config_disabled_apps_empty">No apps selected</string>
-    <string name="config_disabled_apps_count">%1$d apps selected</string>
+    <plurals name="config_disabled_apps_count">
+        <item quantity="one">%1$d app selected</item>
+        <item quantity="other">%1$d apps selected</item>
+    </plurals>
     <string name="app_picker_title">Add Apps</string>
     <string name="app_picker_search_hint">Search apps</string>
     <string name="app_picker_loading">Loading apps...</string>
     <string name="app_picker_empty">No matching apps</string>
-    <string name="config_rear_cover">Rear Cover</string>
-    <string name="config_double_tap_wake">Double Tap Wake</string>
 
     <!-- About Page -->
     <string name="about_feedback_title">Feedback</string>
@@ -115,8 +112,10 @@
     <string name="panel_save_failed">Save failed; change this setting in the main app</string>
 
     <!-- Restart Scope Dialog -->
-    <string name="restart_title">Quick Restart App</string>
+    <string name="restart_title">Restart Scope</string>
     <string name="restart_scope">Restart Scope</string>
+    <string name="restart_system">System</string>
+    <string name="restart_voice_assist">XiaoAi</string>
     <string name="restart_backscreen">Rear Screen</string>
     <string name="restart_theme_manager">Theme Store</string>
     <string name="restart_success">Restart command sent</string>

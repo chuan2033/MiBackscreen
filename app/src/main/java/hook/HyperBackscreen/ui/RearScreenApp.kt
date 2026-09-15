@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowInsetsControllerCompat
@@ -43,12 +44,14 @@ import top.yukonga.miuix.kmp.theme.lightColorScheme
 import top.yukonga.miuix.kmp.theme.platformDynamicColors
 import top.yukonga.miuix.kmp.window.WindowDialog
 
-private val FORCE_STOP_PACKAGE_PATTERN = Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+")
+private val FORCE_STOP_PACKAGE_PATTERN = Regex("(?:system|[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+)")
 
 @Composable
 internal fun RearScreenApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val restartSuccess = stringResource(R.string.restart_success)
+    val restartFailed = stringResource(R.string.restart_failed)
 
     var disableLongPress by remember {
         mutableStateOf(PrefsBridge.readDisableLongPressForUi(context))
@@ -230,7 +233,7 @@ internal fun RearScreenApp() {
                     val ok = withContext(Dispatchers.IO) { forceStopPackage(packageName) }
                     Toast.makeText(
                         context,
-                        context.getString(if (ok) R.string.restart_success else R.string.restart_failed),
+                        if (ok) restartSuccess else restartFailed,
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -249,7 +252,7 @@ internal fun RearScreenApp() {
 
         WindowDialog(
             show = showRearDisplayWarning,
-            title = context.getString(R.string.compat_rear_display_hidden_title),
+            title = stringResource(R.string.compat_rear_display_hidden_title),
             onDismissRequest = { showRearDisplayWarning = false }
         ) {
             Column(
@@ -257,7 +260,7 @@ internal fun RearScreenApp() {
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = context.getString(R.string.compat_rear_display_hidden_message),
+                    text = stringResource(R.string.compat_rear_display_hidden_message),
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     style = MiuixTheme.textStyles.body2
                 )
@@ -271,7 +274,7 @@ internal fun RearScreenApp() {
                             .height(48.dp),
                         onClick = { showRearDisplayWarning = false },
                         colors = ButtonDefaults.buttonColorsPrimary(),
-                        content = { Text(context.getString(R.string.common_confirm)) }
+                        content = { Text(stringResource(R.string.common_confirm)) }
                     )
                 }
             }

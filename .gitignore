@@ -15,6 +15,7 @@ captures/
 **/build/
 **/.cxx/
 .tmp-modules_config.db
+.tmp-miuix-src/
 
 # 内部文档
 AGENTS.md

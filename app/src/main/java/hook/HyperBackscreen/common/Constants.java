@@ -4,6 +4,8 @@ public final class Constants {
     public static final String MODULE_PACKAGE = "hook.HyperBackscreen";
     public static final String SYSTEM_PACKAGE = "system";
     public static final String TARGET_PACKAGE = "com.xiaomi.subscreencenter";
+    public static final String VOICE_ASSIST_PACKAGE = "com.miui.voiceassist";
+    public static final String ACTION_REFRESH_PICKUP_ISLAND = MODULE_PACKAGE + ".REFRESH_PICKUP_ISLAND";
     public static final String PREF_GROUP = "module_config";
     public static final String KEY_DISABLE_LONG_PRESS_EDIT = "disable_long_press_edit";
     public static final String KEY_REMOVE_WALLPAPER_LIMIT = "remove_wallpaper_limit";
@@ -15,6 +17,8 @@ public final class Constants {
     public static final String KEY_DISABLE_DOUBLE_TAP_WAKE = "disable_double_tap_wake";
     public static final String KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES = "double_tap_wake_disabled_packages";
     public static final String KEY_THEME_SETTINGS_SHORTCUT = "theme_settings_shortcut";
+    // 取件码页选择：记录"哪些取件码显示在记忆岛卡片上"，按驿站或无站点码组区分。
+    public static final String KEY_PICKUP_ISLAND_SELECTION = "pickup_island_selection";
     public static final String PANEL_PREFERENCE_AUTHORITY = MODULE_PACKAGE + ".PanelPreferences";
     public static final String PANEL_PREFERENCE_METHOD_SET = "set_panel_preference";
     public static final String PANEL_DIAGNOSTIC_METHOD_APPEND = "append_diagnostic";

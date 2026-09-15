@@ -37,7 +37,7 @@ android {
         applicationId "hook.HyperBackscreen"
         minSdk 36
         targetSdk 36
-        versionCode 8
+        versionCode 9
         versionName "1.1.4"
     }
 

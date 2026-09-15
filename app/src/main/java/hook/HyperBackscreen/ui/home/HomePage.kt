@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.BuildConfig
 import hook.HyperBackscreen.R
@@ -101,7 +102,11 @@ internal fun HomePage(
             summary = if (disabledPackageCount == 0) {
                 stringResource(R.string.config_disabled_apps_empty)
             } else {
-                stringResource(R.string.config_disabled_apps_count, disabledPackageCount)
+                pluralStringResource(
+                    R.plurals.config_disabled_apps_count,
+                    disabledPackageCount,
+                    disabledPackageCount
+                )
             },
             onClick = onAddDisabledAppsClick
         )

@@ -39,5 +39,11 @@ jobs:
             -keypass android \
             -dname "CN=Android Debug,O=Android,C=US"
 
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --console=plain
+
+      - name: Run lint
+        run: ./gradlew :app:lintDebug --no-daemon --console=plain
+
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon --console=plain

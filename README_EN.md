@@ -13,6 +13,7 @@ Current local version: `1.1.4 (8)`.
 - Remove the 15-wallpaper limit on the rear screen, and fix theme-store wallpaper application failures with state synchronization.
 - Block the rear-screen protection prompt, and support per-app disabling of double-tap-to-wake.
 - Inject an upward-swipe quick panel into the rear-screen center.
+- Recognize multiple delivery pickup codes in XiaoAi memory-island cards, group them by station, and choose which codes remain visible on the island card.
 - The module app provides appearance settings (color mode / floating bottom bar / liquid glass) and module settings (entry point / hide icon).
 
 ## Features
@@ -51,6 +52,7 @@ Current local version: `1.1.4 (8)`.
 | `system`                      | Rear-screen protection prompt, double-tap-to-wake interception |
 | `com.xiaomi.subscreencenter`  | Long-press interception, quick panel     |
 | `com.android.thememanager`    | Wallpaper limit, wallpaper fix, settings entry |
+| `com.miui.voiceassist`        | Pickup-code recognition, island-card click and refresh |
 
 Minimum Android version is API 36.
 
@@ -75,7 +77,7 @@ Minimum Android version is API 36.
 
 1. Download the latest APK from [Releases](https://github.com/chuan2033/MiBackscreen/releases) and install it.
 2. Enable `MiBackscreen` in LSPosed.
-3. Check the scopes: `system`, `com.xiaomi.subscreencenter`, `com.android.thememanager`.
+3. Check the scopes: `system`, `com.xiaomi.subscreencenter`, `com.android.thememanager`, `com.miui.voiceassist`.
 4. Reboot the phone; when only debugging the rear-screen center or theme store, you can also restart the corresponding scope process separately.
 5. Open the module app and confirm the module is activated.
 
@@ -86,6 +88,12 @@ Force-stopping a scope process from within the app requires root.
 - Rear-screen swipe-up gesture: start with one finger below 70% of the screen height, swipe up more than `32dp` to open the panel; swipe down or tap the close button to exit, and a back-key event reaching `SubScreenLauncher` also closes it.
 - When disabling double-tap-to-wake per app, the system-recorded foreground package name and the candidate Activity package name from the running tasks are both read, covering the scenario where a game briefly jumps to an SDK/login page after launch and the foreground package name changes.
 - Generate the feedback log immediately after reproducing the issue; do not re-apply wallpapers or restart the rear-screen center / theme store beforehand.
+
+### Pickup codes
+
+- After XiaoAi remembers a delivery notification containing multiple pickup codes, tap the pickup island card to open the pickup-code page.
+- Codes are grouped by station; each station can independently choose which codes appear on the island card.
+- A new recognition batch does not intentionally reuse the previous batch's page data, and confirming pickup closes the current page.
 
 ## Quick panel
 

@@ -108,6 +108,8 @@ private data class RestartScopeItem(
 )
 
 private val restartScopeItems = listOf(
+    RestartScopeItem(R.string.restart_system, Constants.SYSTEM_PACKAGE),
+    RestartScopeItem(R.string.restart_voice_assist, Constants.VOICE_ASSIST_PACKAGE),
     RestartScopeItem(R.string.restart_backscreen, Constants.TARGET_PACKAGE),
     RestartScopeItem(R.string.restart_theme_manager, Constants.THEME_STORE_PACKAGE)
 )

@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="pickup_title">取件码</string>
+    <plurals name="pickup_count">
+        <item quantity="other">本次共识别到 %1$d 个取件码</item>
+    </plurals>
+    <string name="pickup_empty">暂无可显示的取件码</string>
+    <string name="pickup_select_all">全选</string>
+    <string name="pickup_deselect_all">取消全选</string>
     <!-- Common -->
     <string name="common_back">返回</string>
     <string name="common_select_all">全选</string>
@@ -44,39 +51,27 @@
     <string name="config_module_entry_disabled">禁用</string>
     <string name="config_module_entry_theme_settings">妙享背屏</string>
     <string name="config_hide_launcher_icon">隐藏桌面图标</string>
-    <string name="config_nav_bar_title">导航栏</string>
     <string name="config_floating_bar_title">悬浮底栏</string>
     <string name="config_floating_bar_summary_on">当前使用悬浮底栏</string>
     <string name="config_floating_bar_summary_off">当前使用普通底栏</string>
     <string name="config_liquid_glass_title">液态玻璃</string>
     <string name="config_liquid_glass_summary_on">已启用液态玻璃效果</string>
     <string name="config_liquid_glass_summary_off">关闭液态玻璃效果</string>
-    <string name="config_current_config_title">当前配置</string>
-    <string name="config_long_press_disabled">长按禁用</string>
-    <string name="config_wallpaper_limit">壁纸限制</string>
-    <string name="config_apply_fix">应用修复</string>
-    <string name="config_status_on">开启</string>
-    <string name="config_status_off">关闭</string>
-    <string name="config_status_removed">已去除</string>
-    <string name="config_status_default">保持默认</string>
-    <string name="config_rear_guard_title">背屏保护</string>
     <string name="config_disable_rear_cover_title">禁用背屏保护提示</string>
     <string name="config_disable_rear_cover_summary_on">已拦截背屏保护提示</string>
     <string name="config_disable_rear_cover_summary_off">当前保持原厂提示行为</string>
     <string name="config_disable_double_tap_wake_title">按包名禁用背屏双击唤醒</string>
     <string name="config_disable_double_tap_wake_summary_on">名单内应用在正屏前台时会禁用背屏双击唤醒</string>
     <string name="config_disable_double_tap_wake_summary_off">当前保持原厂双击唤醒行为</string>
-    <string name="config_disabled_packages_title">应用包名</string>
-    <string name="config_disabled_packages_hint">把包名粘贴到这里，每行一个</string>
     <string name="config_add_apps_title">新添加应用</string>
     <string name="config_disabled_apps_empty">未选择应用</string>
-    <string name="config_disabled_apps_count">已选择 %1$d 个应用</string>
+    <plurals name="config_disabled_apps_count">
+        <item quantity="other">已选择 %1$d 个应用</item>
+    </plurals>
     <string name="app_picker_title">新添加应用</string>
     <string name="app_picker_search_hint">搜索应用</string>
     <string name="app_picker_loading">正在读取应用...</string>
     <string name="app_picker_empty">没有匹配的应用</string>
-    <string name="config_rear_cover">保护提示</string>
-    <string name="config_double_tap_wake">双击唤醒</string>
 
     <!-- About Page -->
     <string name="about_feedback_title">反馈</string>
@@ -115,8 +110,10 @@
     <string name="panel_save_failed">保存失败，请在主应用中修改</string>
 
     <!-- Restart Scope Dialog -->
-    <string name="restart_title">快速重启应用</string>
+    <string name="restart_title">重启作用域</string>
     <string name="restart_scope">重启作用域</string>
+    <string name="restart_system">系统</string>
+    <string name="restart_voice_assist">小爱</string>
     <string name="restart_backscreen">背屏</string>
     <string name="restart_theme_manager">主题商店</string>
     <string name="restart_success">重启指令已发送</string>

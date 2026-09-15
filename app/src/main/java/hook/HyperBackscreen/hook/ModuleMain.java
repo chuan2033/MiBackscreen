@@ -1,6 +1,7 @@
 package hook.HyperBackscreen.hook;
 
 import android.app.Activity;
+import android.annotation.SuppressLint;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -24,8 +25,10 @@ import androidx.annotation.Nullable;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.BufferedReader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.lang.reflect.Field;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
@@ -57,6 +60,7 @@ public class ModuleMain extends XposedModule {
     private volatile boolean systemHooksInstalled = false;
     private volatile boolean hooksInstalled = false;
     private volatile boolean themeStoreHooksInstalled = false;
+    private volatile boolean pickupHooksInstalled = false;
     private final Map<Activity, SwipeState> swipeStates = new WeakHashMap<>();
     private final Set<Activity> exclusionApplied = Collections.newSetFromMap(new WeakHashMap<>());
     private final Set<Object> themeSettingsShortcutControllers =
@@ -89,6 +93,15 @@ public class ModuleMain extends XposedModule {
     @Override
     public void onPackageReady(@NonNull PackageReadyParam param) {
         String packageName = param.getPackageName();
+
+        if (Constants.VOICE_ASSIST_PACKAGE.equals(packageName)) {
+            synchronized (this) {
+                if (!pickupHooksInstalled) {
+                    pickupHooksInstalled = PickupCodeHook.install(this, param.getClassLoader());
+                }
+            }
+            return;
+        }
 
         if (Constants.SYSTEM_PACKAGE.equals(packageName)) {
             installSystemHooksOnce(param.getClassLoader());
@@ -685,6 +698,7 @@ public class ModuleMain extends XposedModule {
     }
 
     /** Do not open our panel while Xiaomi's notification/service-assistant panel is visible. */
+    @SuppressLint("DiscouragedApi")
     private boolean isHostPanelShowing(@NonNull Activity activity) {
         try {
             int notificationId = activity.getResources().getIdentifier(
@@ -981,6 +995,7 @@ public class ModuleMain extends XposedModule {
         return hasKnownRearScreenEntry;
     }
 
+    @SuppressLint("DiscouragedApi")
     private void bindThemeSettingsShortcutRow(@Nullable Object holder) {
         Object itemViewValue = getFieldValue(holder, "itemView");
         if (!(itemViewValue instanceof View row)) return;
@@ -1422,7 +1437,7 @@ public class ModuleMain extends XposedModule {
             return;
         }
         try {
-            String raw = Files.readString(editConfig.toPath(), StandardCharsets.UTF_8).trim();
+            String raw = readUtf8(editConfig).trim();
             if (raw.isEmpty()) {
                 return;
             }
@@ -1530,7 +1545,7 @@ public class ModuleMain extends XposedModule {
             return;
         }
         try {
-            String raw = Files.readString(editConfig.toPath(), StandardCharsets.UTF_8).trim();
+            String raw = readUtf8(editConfig).trim();
             if (raw.isEmpty()) {
                 return;
             }
@@ -1584,6 +1599,7 @@ public class ModuleMain extends XposedModule {
         }
     }
 
+    @SuppressLint("SetWorldReadable")
     private void grantThemeMagicDirectoryAccess(@Nullable File dir) {
         File current = dir;
         while (current != null && isThemeMagicPath(current.getAbsolutePath())) {
@@ -1641,11 +1657,28 @@ public class ModuleMain extends XposedModule {
         return newest;
     }
 
+    @SuppressLint("SetWorldReadable")
     private void grantReadAccess(File file) {
         // 仅设为全局可读（供主题服务跨进程读取）；写权限限所有者，且不置可执行位
         file.setReadable(true, false);
         file.setWritable(true, true);
         file.setExecutable(false, false);
+    }
+
+    private static String readUtf8(@NonNull File file) throws IOException {
+        StringBuilder content = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
+            char[] buffer = new char[8192];
+            int count;
+            while ((count = reader.read(buffer)) != -1) {
+                content.append(buffer, 0, count);
+                if (content.length() > MAX_EDIT_CONFIG_BYTES) {
+                    throw new IOException("editConfig exceeds size limit");
+                }
+            }
+        }
+        return content.toString();
     }
 
     private static final class ThemeMagicRepairTarget {

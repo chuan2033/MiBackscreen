@@ -2,9 +2,13 @@ package hook.HyperBackscreen.bridge;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.annotation.SuppressLint;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -31,6 +35,8 @@ public final class PrefsBridge {
     public static final boolean DEFAULT_DISABLE_DOUBLE_TAP_WAKE = false;
     public static final String DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES = "";
     public static final boolean DEFAULT_THEME_SETTINGS_SHORTCUT = true;
+    public static final String DEFAULT_PICKUP_ISLAND_SELECTION = "";
+    private static final String KEY_PICKUP_OPEN_TOKENS = "pickup_open_tokens";
 
     private PrefsBridge() {
     }
@@ -224,6 +230,92 @@ public final class PrefsBridge {
         writeFromUi(context, Constants.KEY_THEME_SETTINGS_SHORTCUT, enabled);
     }
 
+    /** 取件码页在模块进程写，Hook 在小爱进程读，必须走远程偏好。 */
+    @NonNull
+    public static String readPickupIslandSelectionForUi(@NonNull Context context) {
+        return readStringForUi(
+                context,
+                Constants.KEY_PICKUP_ISLAND_SELECTION,
+                DEFAULT_PICKUP_ISLAND_SELECTION);
+    }
+
+    @SuppressLint("ApplySharedPref")
+    public static void writePickupIslandSelectionFromUi(@NonNull Context context, @NonNull String value) {
+        SharedPreferences localPrefs = local(context);
+        SharedPreferences remote = remote();
+        if (remote != null) {
+            boolean committed = remote.edit()
+                    .putString(Constants.KEY_PICKUP_ISLAND_SELECTION, value)
+                    .commit();
+            if (committed) {
+                localPrefs.edit()
+                        .putString(Constants.KEY_PICKUP_ISLAND_SELECTION, value)
+                        .remove(PENDING_UI_PREFIX + Constants.KEY_PICKUP_ISLAND_SELECTION)
+                        .commit();
+            }
+        } else {
+            localPrefs.edit()
+                    .putString(Constants.KEY_PICKUP_ISLAND_SELECTION, value)
+                    .putString(PENDING_UI_PREFIX + Constants.KEY_PICKUP_ISLAND_SELECTION, value)
+                    .commit();
+        }
+    }
+
+    @NonNull
+    public static String readPickupIslandSelectionForHook(@NonNull XposedModule module) {
+        return readStringForHook(
+                module,
+                Constants.KEY_PICKUP_ISLAND_SELECTION,
+                DEFAULT_PICKUP_ISLAND_SELECTION);
+    }
+
+    /** Hook 进程登记由 PendingIntent 携带的随机令牌，页面进程用同一份远程偏好校验。 */
+    public static void writePickupOpenTokenForHook(@NonNull XposedModule module,
+                                                   @NonNull String identity,
+                                                   @NonNull String token) {
+        if (!identity.matches("[0-9a-f]{64}") || !token.matches("[0-9a-f]{32}")) return;
+        try {
+            SharedPreferences prefs = module.getRemotePreferences(Constants.PREF_GROUP);
+            List<String> records = new ArrayList<>();
+            String stored = prefs.getString(KEY_PICKUP_OPEN_TOKENS, "");
+            if (stored != null) {
+                for (String record : stored.split("\\n")) {
+                    if (record.startsWith(identity + "|") || record.isEmpty()) continue;
+                    if (record.matches("[0-9a-f]{64}\\|[0-9a-f]{32}")) records.add(record);
+                }
+            }
+            records.add(identity + "|" + token);
+            while (records.size() > 16) records.remove(0);
+            prefs.edit().putString(KEY_PICKUP_OPEN_TOKENS, String.join("\n", records)).commit();
+        } catch (Throwable error) {
+            Log.w(TAG, "Failed to store pickup open token", error);
+        }
+    }
+
+    public static boolean isPickupOpenTokenValid(@NonNull Context context,
+                                                 @NonNull String identity,
+                                                 @NonNull String token) {
+        return Boolean.TRUE.equals(validatePickupOpenToken(context, identity, token));
+    }
+
+    /**
+     * 校验取件码页面令牌：true 表示有效，false 表示明确无效，null 表示远程偏好服务暂未就绪。
+     * 页面启动可能早于 XposedService 绑定，不能把这种暂时不可用误判成没有取件码。
+     */
+    @Nullable
+    public static Boolean validatePickupOpenToken(@NonNull Context context,
+                                                  @NonNull String identity,
+                                                  @NonNull String token) {
+        if (!identity.matches("[0-9a-f]{64}") || !token.matches("[0-9a-f]{32}")) return false;
+        SharedPreferences prefs = remote();
+        if (prefs == null) {
+            Log.w(TAG, "Pickup token validation deferred: remote preferences unavailable");
+            return null;
+        }
+        String stored = prefs.getString(KEY_PICKUP_OPEN_TOKENS, "");
+        return stored != null && stored.contains(identity + "|" + token);
+    }
+
     /** 纯 UI 外观项，Hook 端不消费，只存本地。 */
     public static boolean readFloatingNavBar(@NonNull Context context) {
         return local(context).getBoolean(Constants.KEY_FLOATING_NAV_BAR, DEFAULT_FLOATING_NAV_BAR);
@@ -391,6 +483,7 @@ public final class PrefsBridge {
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_THEME_SETTINGS_SHORTCUT);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_PICKUP_ISLAND_SELECTION);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT, DEFAULT_REMOVE_WALLPAPER_LIMIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
@@ -403,6 +496,11 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,
                     DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_PICKUP_ISLAND_SELECTION,
+                    DEFAULT_PICKUP_ISLAND_SELECTION);
         } catch (Throwable e) {
             Log.w(TAG, "Failed to sync prefs on service available", e);
         }

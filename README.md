@@ -22,6 +22,7 @@
 - 解除背屏壁纸 15 张上限，并修复主题商店壁纸应用失败与状态同步。
 - 拦截背屏保护提示，支持按应用禁用背屏双击唤醒。
 - 在背屏中心注入上滑快捷面板。
+- 识别小爱记忆岛中的多个快递取件码，支持按驿站分类并选择显示在灵动岛卡片上。
 - 模块 App 提供外观（颜色模式 / 悬浮底栏 / 液态玻璃）与模块设置（入口 / 隐藏图标）。
 
 ## 主要功能
@@ -49,6 +50,7 @@
 | `system`                     | 背屏保护提示、背屏双击唤醒拦截         |
 | `com.xiaomi.subscreencenter` | 长按拦截、快捷面板                     |
 | `com.android.thememanager`   | 壁纸数量限制、壁纸应用修复、设置页入口 |
+| `com.miui.voiceassist`       | 取件码识别、灵动岛卡片点击与刷新       |
 
 最低 Android 版本为 API 36。
 
@@ -71,7 +73,7 @@
 
 1. 从 [Releases](https://github.com/chuan2033/MiBackscreen/releases) 下载最新 APK 并安装。
 2. 在 LSPosed 中启用 `MiBackscreen`。
-3. 勾选作用域：`system`、`com.xiaomi.subscreencenter`、`com.android.thememanager`。
+3. 勾选作用域：`system`、`com.xiaomi.subscreencenter`、`com.android.thememanager`、`com.miui.voiceassist`。
 4. 重启手机；只调试背屏中心或主题商店功能时，也可分别重启对应作用域进程。
 5. 打开模块 App，确认模块已激活。
 
@@ -90,6 +92,12 @@ App 内强制停止作用域进程的功能需要 root。
 - 单指从屏幕高度 70% 以下起手。
 - 向上位移超过 `32dp` 时打开面板。
 - 向下拖动或点击右上角关闭按钮退出。
+
+## 取件码
+
+- 在小爱中记忆包含多个快递取件码的通知后，点击灵动岛取件卡片进入取件码页。
+- 页面按驿站分组；每个驿站可以单独选择哪些取件码显示在灵动岛上。
+- 不同一批记忆结果不会继续带入上一批历史码；确认取件后，当前取件码页会自动关闭。
 
 ## 从源码构建
 

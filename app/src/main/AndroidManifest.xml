@@ -6,9 +6,12 @@
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
+    <uses-sdk tools:overrideLibrary="top.yukonga.miuix.kmp.blur" />
+
     <application
         android:name=".app.ModuleApp"
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="MiBackscreen"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -23,6 +26,14 @@
                 <category android:name="de.robv.android.xposed.category.MODULE_SETTINGS" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ui.pickup.PickupCodesActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:label="@string/pickup_title"
+            android:theme="@style/Theme.MiBackscreen" />
 
         <activity-alias
             android:name=".LauncherAlias"
@@ -60,7 +71,5 @@
             android:exported="true"
             tools:ignore="ExportedContentProvider" />
     </application>
-
-    <uses-sdk tools:overrideLibrary="top.yukonga.miuix.kmp.blur" />
 
 </manifest>
