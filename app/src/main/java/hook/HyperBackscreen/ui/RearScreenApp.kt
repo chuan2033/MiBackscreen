@@ -28,6 +28,10 @@ import androidx.core.view.WindowInsetsControllerCompat
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.app.ModuleApp
 import hook.HyperBackscreen.bridge.PrefsBridge
+import hook.HyperBackscreen.ui.updater.UpdateChecker
+import hook.HyperBackscreen.ui.updater.UpdateDialog
+import hook.HyperBackscreen.ui.updater.UpdateInfo
+import hook.HyperBackscreen.ui.util.AppLanguage
 import hook.HyperBackscreen.ui.util.RearDisplayCompatibility
 import hook.HyperBackscreen.ui.util.ThemeMode
 import hook.HyperBackscreen.ui.util.ThemePrefs
@@ -68,8 +72,21 @@ internal fun RearScreenApp() {
     var liquidGlass by remember {
         mutableStateOf(PrefsBridge.readLiquidGlass(context))
     }
+    var bottomBarBlur by remember {
+        mutableStateOf(PrefsBridge.readBottomBarBlur(context))
+    }
+    var appLanguage by remember {
+        mutableStateOf(AppLanguage.current(context))
+    }
+    var checkUpdates by remember {
+        mutableStateOf(PrefsBridge.readCheckUpdates(context))
+    }
+    var pendingUpdate by remember { mutableStateOf<UpdateInfo?>(null) }
     var enableSwipePanel by remember {
         mutableStateOf(PrefsBridge.readEnableSwipePanelForUi(context))
+    }
+    var enablePickup by remember {
+        mutableStateOf(PrefsBridge.readEnablePickupForUi(context))
     }
     var disableRearScreenCover by remember {
         mutableStateOf(PrefsBridge.readDisableRearScreenCoverForUi(context))
@@ -99,6 +116,14 @@ internal fun RearScreenApp() {
             RearDisplayCompatibility.isBuiltinPresentationDisabled()
         }
         if (hidden) showRearDisplayWarning = true
+    }
+
+    // 启动时自动检查更新（开关已关则跳过；检查本身有 10 分钟节流）。
+    LaunchedEffect(Unit) {
+        if (checkUpdates) {
+            val update = UpdateChecker.check()
+            if (update != null) pendingUpdate = update
+        }
     }
 
     // Xposed 服务是异步绑定的：首帧组合时可能尚未就绪，读到的是本地/默认值。
@@ -181,7 +206,11 @@ internal fun RearScreenApp() {
             fixRearScreenApply = fixRearScreenApply,
             floatingNavBar = floatingNavBar,
             liquidGlass = liquidGlass,
+            bottomBarBlur = bottomBarBlur,
+            appLanguage = appLanguage,
+            checkUpdates = checkUpdates,
             enableSwipePanel = enableSwipePanel,
+            enablePickup = enablePickup,
             disableRearScreenCover = disableRearScreenCover,
             disableDoubleTapWake = disableDoubleTapWake,
             doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
@@ -207,9 +236,25 @@ internal fun RearScreenApp() {
                 liquidGlass = newValue
                 PrefsBridge.writeLiquidGlass(context, newValue)
             },
+            onBottomBarBlurChange = { newValue ->
+                bottomBarBlur = newValue
+                PrefsBridge.writeBottomBarBlur(context, newValue)
+            },
+            onAppLanguageChange = { newValue ->
+                appLanguage = newValue
+                AppLanguage.apply(context, newValue)
+            },
+            onCheckUpdatesChange = { newValue ->
+                checkUpdates = newValue
+                PrefsBridge.writeCheckUpdates(context, newValue)
+            },
             onEnableSwipePanelChange = { newValue ->
                 enableSwipePanel = newValue
                 PrefsBridge.writeEnableSwipePanelFromUi(context, newValue)
+            },
+            onEnablePickupChange = { newValue ->
+                enablePickup = newValue
+                PrefsBridge.writeEnablePickupFromUi(context, newValue)
             },
             onDisableRearScreenCoverChange = { newValue ->
                 disableRearScreenCover = newValue
@@ -248,6 +293,15 @@ internal fun RearScreenApp() {
                 themeSettingsShortcut = enabled
                 PrefsBridge.writeThemeSettingsShortcutFromUi(context, enabled)
             }
+        )
+
+        UpdateDialog(
+            update = pendingUpdate,
+            onDownload = {
+                pendingUpdate?.let { UpdateChecker.openDownload(context, it) }
+                pendingUpdate = null
+            },
+            onDismiss = { pendingUpdate = null }
         )
 
         WindowDialog(

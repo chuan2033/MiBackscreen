@@ -5,11 +5,13 @@ import androidx.annotation.Nullable;
 import java.util.Set;
 
 public final class RearScreenWakeMatcher {
+    private static final int REAR_SCREEN_DISPLAY_GROUP_ID = 1;
+
     private RearScreenWakeMatcher() {
     }
 
     public static boolean isRearDoubleTapWake(int groupId, @Nullable Object details) {
-        return groupId == 1 && Constants.WAKE_REASON_DOUBLE_TAP.equals(details);
+        return groupId == REAR_SCREEN_DISPLAY_GROUP_ID;
     }
 
     public static boolean matchesAnyPackage(@Nullable String rawPackages, @Nullable String... candidates) {

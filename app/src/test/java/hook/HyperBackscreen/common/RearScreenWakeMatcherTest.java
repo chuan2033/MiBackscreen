@@ -7,12 +7,12 @@ import org.junit.Test;
 
 public class RearScreenWakeMatcherTest {
     @Test
-    public void isRearDoubleTapWakeOnlyMatchesRearScreenDoubleTapKey() {
+    public void isRearDoubleTapWakeMatchesRearScreenWakeRequests() {
         assertTrue(RearScreenWakeMatcher.isRearDoubleTapWake(1, Constants.WAKE_REASON_DOUBLE_TAP));
+        assertTrue(RearScreenWakeMatcher.isRearDoubleTapWake(1, "android.policy:GESTURE"));
+        assertTrue(RearScreenWakeMatcher.isRearDoubleTapWake(1, null));
 
         assertFalse(RearScreenWakeMatcher.isRearDoubleTapWake(0, Constants.WAKE_REASON_DOUBLE_TAP));
-        assertFalse(RearScreenWakeMatcher.isRearDoubleTapWake(1, "android.policy:POWER"));
-        assertFalse(RearScreenWakeMatcher.isRearDoubleTapWake(1, null));
     }
 
     @Test

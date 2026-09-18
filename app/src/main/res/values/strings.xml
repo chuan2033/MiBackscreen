@@ -13,34 +13,40 @@
     <string name="common_select_all">Select All</string>
     <string name="common_confirm">Confirm</string>
     <string name="common_version">Version %1$s</string>
+    <string name="about_version">Version %1$s (%2$d)</string>
     <string name="compat_rear_display_hidden_title">Rear display compatibility warning</string>
     <string name="compat_rear_display_hidden_message">A hidden rear-display or screen-sharing protection module may be active. It can cause rear-screen screenshot failures or black custom wallpapers. Disable the related Magisk/KernelSU module and reboot.</string>
 
     <!-- Navigation -->
     <string name="nav_home">Home</string>
+    <string name="nav_function">Functions</string>
     <string name="nav_about">About</string>
     <string name="settings_title">Settings</string>
 
     <!-- Home Page -->
-    <string name="home_settings_title">Settings</string>
+    <string name="home_log_title">Log</string>
+    <string name="log_summary">Requires root access</string>
+    <string name="log_generating">Generating log</string>
+    <string name="log_failed">Failed to generate log</string>
+    <string name="log_share_title">Share log</string>
     <string name="home_disable_long_press_title">Disable rear screen long press to switch wallpaper</string>
-    <string name="home_disable_long_press_summary_on">Currently intercepting long press to enter edit mode</string>
-    <string name="home_disable_long_press_summary_off">Currently restoring factory long press behavior</string>
+    <string name="home_disable_long_press_summary">Intercept long-press gesture to avoid accidental entry into edit mode</string>
     <string name="home_remove_wallpaper_limit_title">Remove rear screen wallpaper count limit</string>
-    <string name="home_remove_wallpaper_limit_summary_on">Removed 15 wallpaper limit</string>
-    <string name="home_remove_wallpaper_limit_summary_off">Currently keeping default 15 limit</string>
-    <string name="home_fix_apply_title">Fix rear screen apply failure</string>
-    <string name="home_fix_apply_summary">Requires theme crack to be used together</string>
-    <string name="home_system_info_title">System Info</string>
-    <string name="home_module_not_activated">Module not activated. Please activate it in Xposed!</string>
-    <string name="home_module_version">Module Version</string>
+    <string name="home_remove_wallpaper_limit_summary">Remove the 15-wallpaper limit</string>
+    <string name="home_fix_apply_title">Fix rear screen wallpaper apply failure</string>
+    <string name="home_fix_apply_summary">Requires the theme crack module to be used together</string>
+    <string name="home_status_activated">Activated</string>
+    <string name="home_status_inactive">Not active</string>
+    <string name="home_status_inactive_summary">Enable the module in LSPosed, then restart the scope</string>
     <string name="home_device">Device</string>
     <string name="home_system_version">System Version</string>
     <string name="home_android_version">Android Version</string>
+    <string name="home_theme_store_version">Theme store</string>
+    <string name="home_backscreen_version">Rear screen center</string>
 
     <!-- Config Page -->
     <string name="config_module_settings_title">Module Settings</string>
-    <string name="config_appearance_title">Appearance</string>
+    <string name="config_appearance_title">Interface</string>
     <string name="config_theme_mode_title">Color mode</string>
     <string name="config_theme_mode_system">Follow system</string>
     <string name="config_theme_mode_light">Light</string>
@@ -53,34 +59,39 @@
     <string name="config_module_entry_theme_settings">Rear screen settings</string>
     <string name="config_hide_launcher_icon">Hide home screen icon</string>
     <string name="config_floating_bar_title">Floating Bar</string>
-    <string name="config_floating_bar_summary_on">Currently using floating bar</string>
-    <string name="config_floating_bar_summary_off">Currently using standard bar</string>
+    <string name="config_floating_bar_summary">Use a floating-style bottom bar</string>
     <string name="config_liquid_glass_title">Liquid Glass</string>
-    <string name="config_liquid_glass_summary_on">Liquid glass effect enabled</string>
-    <string name="config_liquid_glass_summary_off">Liquid glass effect disabled</string>
+    <string name="config_liquid_glass_summary">Use Apple-style liquid glass</string>
+    <string name="config_bottom_bar_blur_title">Bottom bar blur</string>
+    <string name="config_bottom_bar_blur_summary">Enable the bottom bar blur effect</string>
+    <string name="config_language_title">Language</string>
+    <string name="config_language_default">Default</string>
+    <string name="config_language_chinese">简体中文</string>
+    <string name="config_language_english">English</string>
+    <string name="config_check_updates_title">Check for updates</string>
+    <string name="config_check_updates_summary_on">Automatically check for updates on launch</string>
+    <string name="config_check_updates_summary_off">Automatic update check disabled</string>
+    <string name="update_available_title">Update available</string>
+    <string name="update_download">Download</string>
+    <string name="update_cancel">Cancel</string>
     <string name="config_disable_rear_cover_title">Disable rear screen cover prompt</string>
-    <string name="config_disable_rear_cover_summary_on">Cover prompt is blocked on the rear screen</string>
-    <string name="config_disable_rear_cover_summary_off">Factory cover prompt behavior is active</string>
-    <string name="config_disable_double_tap_wake_title">Disable double-tap wake by package</string>
-    <string name="config_disable_double_tap_wake_summary_on">Listed foreground apps block rear screen double-tap wake</string>
-    <string name="config_disable_double_tap_wake_summary_off">Rear screen double-tap wake follows factory behavior</string>
+    <string name="config_disable_rear_cover_summary">Block rear screen protection popup prompts</string>
+    <string name="config_disable_double_tap_wake_title">Disable rear screen double-tap wake</string>
+    <string name="config_disable_double_tap_wake_summary">Disable rear screen double-tap wake when specified apps run in the foreground</string>
     <string name="config_add_apps_title">Add Apps</string>
     <string name="config_disabled_apps_empty">No apps selected</string>
     <plurals name="config_disabled_apps_count">
         <item quantity="one">%1$d app selected</item>
         <item quantity="other">%1$d apps selected</item>
     </plurals>
+    <string name="config_enable_pickup_title">Pickup code enhancement</string>
+    <string name="config_enable_pickup_summary">Filter the codes shown on the card</string>
     <string name="app_picker_title">Add Apps</string>
     <string name="app_picker_search_hint">Search apps</string>
     <string name="app_picker_loading">Loading apps...</string>
     <string name="app_picker_empty">No matching apps</string>
 
     <!-- About Page -->
-    <string name="about_feedback_title">Feedback</string>
-    <string name="about_feedback_log">Log</string>
-    <string name="feedback_log_generating">Generating feedback log</string>
-    <string name="feedback_log_failed">Failed to generate feedback log</string>
-    <string name="feedback_log_share_title">Share feedback log</string>
     <string name="about_developer_title">Developer</string>
     <string name="about_project_url_title">Project URL</string>
     <string name="about_credits_title">Credits</string>
@@ -90,7 +101,10 @@
     <string name="about_view_licenses">View dependencies and license information</string>
     <string name="about_donate_title">Donate</string>
     <string name="about_donate_qr_entry">If MiBackscreen helps you, support is welcome</string>
-    <string name="about_donate_afdian_entry">Support the project on Afdian</string>
+    <string name="about_donate_wechat">WeChat</string>
+    <string name="about_donate_wechat_summary">Scan with WeChat Pay</string>
+    <string name="about_donate_alipay">Alipay</string>
+    <string name="about_donate_alipay_summary">Scan with Alipay</string>
     <string name="about_donate_qr_description">Donation QR code</string>
     <string name="about_donate_scan_hint">Scan to support the developer</string>
 

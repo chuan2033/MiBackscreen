@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -43,21 +44,26 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import hook.HyperBackscreen.R
+import hook.HyperBackscreen.ui.util.AppLanguage
 import hook.HyperBackscreen.ui.util.ThemeMode
 import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.ui.about.AboutPage
+import hook.HyperBackscreen.ui.about.DonatePage
 import hook.HyperBackscreen.ui.about.LicensePage
 import hook.HyperBackscreen.ui.components.BlurredBar
 import hook.HyperBackscreen.ui.components.FloatingBottomBar
 import hook.HyperBackscreen.ui.components.FloatingBottomBarItem
 import hook.HyperBackscreen.ui.config.AppPickerPage
 import hook.HyperBackscreen.ui.config.ConfigPage
+import hook.HyperBackscreen.ui.function.FunctionPage
 import hook.HyperBackscreen.ui.home.HomePage
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
+import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.Scaffold
@@ -76,6 +82,7 @@ import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Settings
+import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.preference.CheckboxLocation
 import top.yukonga.miuix.kmp.preference.CheckboxPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -92,6 +99,7 @@ private data class NavigationTabItem(
 private val navItems = HomeNavigationPolicy.mainTabs().map { tab ->
     when (tab) {
         HomeNavigationPolicy.Tab.HOME -> NavigationTabItem(tab, R.string.nav_home, MiuixIcons.Home)
+        HomeNavigationPolicy.Tab.FUNCTION -> NavigationTabItem(tab, R.string.nav_function, MiuixIcons.Tune)
         HomeNavigationPolicy.Tab.ABOUT -> NavigationTabItem(tab, R.string.nav_about, MiuixIcons.Info)
     }
 }
@@ -99,7 +107,8 @@ private val navItems = HomeNavigationPolicy.mainTabs().map { tab ->
 private enum class DetailPage {
     Settings,
     License,
-    AppPicker
+    AppPicker,
+    Donate
 }
 
 private data class RestartScopeItem(
@@ -121,6 +130,9 @@ internal fun HomeScreen(
     fixRearScreenApply: Boolean,
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
+    bottomBarBlur: Boolean,
+    appLanguage: AppLanguage,
+    checkUpdates: Boolean,
     enableSwipePanel: Boolean,
     disableRearScreenCover: Boolean,
     disableDoubleTapWake: Boolean,
@@ -132,6 +144,9 @@ internal fun HomeScreen(
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
+    onBottomBarBlurChange: (Boolean) -> Unit,
+    onAppLanguageChange: (AppLanguage) -> Unit,
+    onCheckUpdatesChange: (Boolean) -> Unit,
     onEnableSwipePanelChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onDisableDoubleTapWakeChange: (Boolean) -> Unit,
@@ -141,11 +156,14 @@ internal fun HomeScreen(
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     themeSettingsShortcut: Boolean,
-    onThemeSettingsShortcutChange: (Boolean) -> Unit
+    onThemeSettingsShortcutChange: (Boolean) -> Unit,
+    enablePickup: Boolean,
+    onEnablePickupChange: (Boolean) -> Unit
 ) {
     var selected by remember { mutableStateOf(HomeNavigationPolicy.Tab.HOME) }
     var detailPage by remember { mutableStateOf<DetailPage?>(null) }
     val homeListState = rememberLazyListState()
+    val functionListState = rememberLazyListState()
     val aboutListState = rememberLazyListState()
 
     AnimatedContent(
@@ -167,10 +185,16 @@ internal fun HomeScreen(
             DetailPage.Settings -> SettingsPage(
                 floatingNavBar = floatingNavBar,
                 liquidGlass = liquidGlass,
+                bottomBarBlur = bottomBarBlur,
+                appLanguage = appLanguage,
+                checkUpdates = checkUpdates,
                 enableSwipePanel = enableSwipePanel,
                 launcherIconHidden = launcherIconHidden,
                 onFloatingNavBarChange = onFloatingNavBarChange,
                 onLiquidGlassChange = onLiquidGlassChange,
+                onBottomBarBlurChange = onBottomBarBlurChange,
+                onAppLanguageChange = onAppLanguageChange,
+                onCheckUpdatesChange = onCheckUpdatesChange,
                 onEnableSwipePanelChange = onEnableSwipePanelChange,
                 onLauncherIconHiddenChange = onLauncherIconHiddenChange,
                 themeMode = themeMode,
@@ -180,6 +204,7 @@ internal fun HomeScreen(
                 onBack = { detailPage = null }
             )
             DetailPage.License -> LicensePage(onBack = { detailPage = null })
+            DetailPage.Donate -> DonatePage(onBack = { detailPage = null })
             DetailPage.AppPicker -> AppPickerPage(
                 selectedPackages = doubleTapWakeDisabledPackages,
                 onSelectedPackagesChange = onDoubleTapWakeDisabledPackagesChange,
@@ -189,6 +214,7 @@ internal fun HomeScreen(
                 selected = selected,
                 listState = when (selected) {
                     HomeNavigationPolicy.Tab.HOME -> homeListState
+                    HomeNavigationPolicy.Tab.FUNCTION -> functionListState
                     HomeNavigationPolicy.Tab.ABOUT -> aboutListState
                 },
                 onSelectedChange = { selected = it },
@@ -197,6 +223,9 @@ internal fun HomeScreen(
                 fixRearScreenApply = fixRearScreenApply,
                 floatingNavBar = floatingNavBar,
                 liquidGlass = liquidGlass,
+                bottomBarBlur = bottomBarBlur,
+                appLanguage = appLanguage,
+                checkUpdates = checkUpdates,
                 enableSwipePanel = enableSwipePanel,
                 disableRearScreenCover = disableRearScreenCover,
                 disableDoubleTapWake = disableDoubleTapWake,
@@ -208,6 +237,9 @@ internal fun HomeScreen(
                 onFixRearScreenApplyChange = onFixRearScreenApplyChange,
                 onFloatingNavBarChange = onFloatingNavBarChange,
                 onLiquidGlassChange = onLiquidGlassChange,
+                onBottomBarBlurChange = onBottomBarBlurChange,
+                onAppLanguageChange = onAppLanguageChange,
+                onCheckUpdatesChange = onCheckUpdatesChange,
                 onEnableSwipePanelChange = onEnableSwipePanelChange,
                 onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                 onDisableDoubleTapWakeChange = onDisableDoubleTapWakeChange,
@@ -215,11 +247,14 @@ internal fun HomeScreen(
                 onSettingsClick = { detailPage = DetailPage.Settings },
                 onAddDisabledAppsClick = { detailPage = DetailPage.AppPicker },
                 onLicenseClick = { detailPage = DetailPage.License },
+                onDonateClick = { detailPage = DetailPage.Donate },
                 onForceStopPackage = onForceStopPackage,
                 themeMode = themeMode,
                 onThemeModeChange = onThemeModeChange,
                 themeSettingsShortcut = themeSettingsShortcut,
-                onThemeSettingsShortcutChange = onThemeSettingsShortcutChange
+                onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
+                enablePickup = enablePickup,
+                onEnablePickupChange = onEnablePickupChange
             )
         }
     }
@@ -229,10 +264,16 @@ internal fun HomeScreen(
 private fun SettingsPage(
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
+    bottomBarBlur: Boolean,
+    appLanguage: AppLanguage,
+    checkUpdates: Boolean,
     enableSwipePanel: Boolean,
     launcherIconHidden: Boolean,
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
+    onBottomBarBlurChange: (Boolean) -> Unit,
+    onAppLanguageChange: (AppLanguage) -> Unit,
+    onCheckUpdatesChange: (Boolean) -> Unit,
     onEnableSwipePanelChange: (Boolean) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
     themeMode: ThemeMode,
@@ -289,10 +330,16 @@ private fun SettingsPage(
                     ConfigPage(
                         floatingNavBar = floatingNavBar,
                         liquidGlass = liquidGlass,
+                        bottomBarBlur = bottomBarBlur,
+                        appLanguage = appLanguage,
+                        checkUpdates = checkUpdates,
                         enableSwipePanel = enableSwipePanel,
                         launcherIconHidden = launcherIconHidden,
                         onFloatingNavBarChange = onFloatingNavBarChange,
                         onLiquidGlassChange = onLiquidGlassChange,
+                        onBottomBarBlurChange = onBottomBarBlurChange,
+                        onAppLanguageChange = onAppLanguageChange,
+                        onCheckUpdatesChange = onCheckUpdatesChange,
                         onEnableSwipePanelChange = onEnableSwipePanelChange,
                         onLauncherIconHiddenChange = onLauncherIconHiddenChange,
                         themeMode = themeMode,
@@ -319,6 +366,9 @@ private fun MainContent(
     fixRearScreenApply: Boolean,
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
+    bottomBarBlur: Boolean,
+    appLanguage: AppLanguage,
+    checkUpdates: Boolean,
     enableSwipePanel: Boolean,
     disableRearScreenCover: Boolean,
     disableDoubleTapWake: Boolean,
@@ -330,6 +380,9 @@ private fun MainContent(
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
+    onBottomBarBlurChange: (Boolean) -> Unit,
+    onAppLanguageChange: (AppLanguage) -> Unit,
+    onCheckUpdatesChange: (Boolean) -> Unit,
     onEnableSwipePanelChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onDisableDoubleTapWakeChange: (Boolean) -> Unit,
@@ -337,11 +390,14 @@ private fun MainContent(
     onSettingsClick: () -> Unit,
     onAddDisabledAppsClick: () -> Unit,
     onLicenseClick: () -> Unit,
+    onDonateClick: () -> Unit,
     onForceStopPackage: (String) -> Unit,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     themeSettingsShortcut: Boolean,
-    onThemeSettingsShortcutChange: (Boolean) -> Unit
+    onThemeSettingsShortcutChange: (Boolean) -> Unit,
+    enablePickup: Boolean,
+    onEnablePickupChange: (Boolean) -> Unit
 ) {
     val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
     val surfaceColor = MiuixTheme.colorScheme.surface
@@ -419,18 +475,26 @@ private fun MainContent(
                     when (selected) {
                         HomeNavigationPolicy.Tab.HOME -> item {
                             HomePage(
+                                moduleActivated = moduleActivated,
+                                usesDynamicColors = themeMode.usesDynamicColors,
+                                onDonateClick = onDonateClick
+                            )
+                        }
+                        HomeNavigationPolicy.Tab.FUNCTION -> item {
+                            FunctionPage(
                                 disableLongPress = disableLongPress,
                                 removeWallpaperLimit = removeWallpaperLimit,
                                 fixRearScreenApply = fixRearScreenApply,
                                 disableRearScreenCover = disableRearScreenCover,
                                 disableDoubleTapWake = disableDoubleTapWake,
                                 doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
-                                moduleActivated = moduleActivated,
+                                enablePickup = enablePickup,
                                 onDisableLongPressChange = onDisableLongPressChange,
                                 onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
                                 onFixRearScreenApplyChange = onFixRearScreenApplyChange,
                                 onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                                 onDisableDoubleTapWakeChange = onDisableDoubleTapWakeChange,
+                                onEnablePickupChange = onEnablePickupChange,
                                 onAddDisabledAppsClick = onAddDisabledAppsClick
                             )
                         }
@@ -452,13 +516,23 @@ private fun MainContent(
                 NavigationBar(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .textureBlur(
-                            backdrop = backdrop,
-                            shape = RectangleShape,
-                            blurRadius = 20f,
-                            colors = glassBlurColors
+                        .then(
+                            if (bottomBarBlur) {
+                                Modifier.textureBlur(
+                                    backdrop = backdrop,
+                                    shape = RectangleShape,
+                                    blurRadius = 20f,
+                                    colors = glassBlurColors
+                                )
+                            } else {
+                                Modifier
+                            }
                         ),
-                    color = MiuixTheme.colorScheme.surface.copy(alpha = 0.48f),
+                    color = if (bottomBarBlur) {
+                        MiuixTheme.colorScheme.surface.copy(alpha = 0.48f)
+                    } else {
+                        MiuixTheme.colorScheme.surface
+                    },
                     showDivider = true
                 ) {
                     navItems.forEach { item ->
@@ -472,7 +546,7 @@ private fun MainContent(
                 }
             }
 
-            if (floatingNavBar) {
+            if (floatingNavBar && liquidGlass) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -484,7 +558,7 @@ private fun MainContent(
                         onSelected = { index -> onSelectedChange(navItems[index].tab) },
                         backdrop = backdrop,
                         tabsCount = navItems.size,
-                        isBlurEnabled = liquidGlass
+                        isBlurEnabled = bottomBarBlur
                     ) {
                         navItems.forEach { item ->
                             FloatingBottomBarItem(
@@ -503,6 +577,48 @@ private fun MainContent(
                                     fontSize = 10.sp
                                 )
                             }
+                        }
+                    }
+                }
+            }
+
+            // 悬浮但不开液态玻璃时走 miuix 原生浮动导航栏，只显示图标。
+            if (floatingNavBar && !liquidGlass) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = 16.dp)
+                ) {
+                    FloatingNavigationBar(
+                        modifier = Modifier.then(
+                            if (bottomBarBlur) {
+                                Modifier.textureBlur(
+                                    backdrop = backdrop,
+                                    shape = RoundedCornerShape(28.dp),
+                                    blurRadius = 20f,
+                                    colors = glassBlurColors
+                                )
+                            } else {
+                                Modifier
+                            }
+                        ),
+                        color = if (bottomBarBlur) {
+                            MiuixTheme.colorScheme.surface.copy(alpha = 0.48f)
+                        } else {
+                            MiuixTheme.colorScheme.surfaceContainer
+                        },
+                        cornerRadius = 28.dp,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        showDivider = false
+                    ) {
+                        navItems.forEach { item ->
+                            FloatingNavigationBarItem(
+                                selected = selected == item.tab,
+                                onClick = { onSelectedChange(item.tab) },
+                                icon = item.icon,
+                                label = ""
+                            )
                         }
                     }
                 }

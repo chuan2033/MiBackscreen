@@ -1,15 +1,15 @@
-<h1 align="center">MiBackscreen</h1>
+<h1>MiBackscreen</h1>
 
-<p align="center">
+<p>
   用于小米 17 Pro 系列的背屏Xposed模块。<br>
  为背屏补全壁纸管理、背屏保护与快捷面板等功能。
 </p>
 
-<p align="center">
+<p>
   <a href="./README_EN.md">English</a> · <a href="https://github.com/chuan2033/MiBackscreen">项目主页</a>
 </p>
 
-<p align="center">
+<p>
   <a href="https://github.com/chuan2033/MiBackscreen/releases"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/chuan2033/MiBackscreen?display_name=release"></a>
  <a href="https://github.com/chuan2033/MiBackscreen/stargazers"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/chuan2033/MiBackscreen?style=flat"></a>
  <a href="https://github.com/chuan2033/MiBackscreen/issues"><img alt="GitHub Issues" src="https://img.shields.io/github/issues/chuan2033/MiBackscreen"></a>
@@ -17,13 +17,13 @@
  <a href="https://github.com/LSPosed/LSPosed"><img src="https://img.shields.io/badge/Framework-LSPosed%20%2F%20Xposed-5C6BC0" alt="Framework"></a>
 </p>
 
+
 ## 功能概览
 
 - 解除背屏壁纸 15 张上限，并修复主题商店壁纸应用失败与状态同步。
 - 拦截背屏保护提示，支持按应用禁用背屏双击唤醒。
 - 在背屏中心注入上滑快捷面板。
 - 识别小爱记忆岛中的多个快递取件码，支持按驿站分类并选择显示在灵动岛卡片上。
-- 模块 App 提供外观（颜色模式 / 悬浮底栏 / 液态玻璃）与模块设置（入口 / 隐藏图标）。
 
 ## 主要功能
 
@@ -75,7 +75,7 @@
 2. 在 LSPosed 中启用 `MiBackscreen`。
 3. 勾选作用域：`system`、`com.xiaomi.subscreencenter`、`com.android.thememanager`、`com.miui.voiceassist`。
 4. 重启手机；只调试背屏中心或主题商店功能时，也可分别重启对应作用域进程。
-5. 打开模块 App，确认模块已激活。
+5. 打开模块 App，主页状态卡显示已激活（绿卡）即可。
 
 App 内强制停止作用域进程的功能需要 root。
 
@@ -98,6 +98,7 @@ App 内强制停止作用域进程的功能需要 root。
 - 在小爱中记忆包含多个快递取件码的通知后，点击灵动岛取件卡片进入取件码页。
 - 页面按驿站分组；每个驿站可以单独选择哪些取件码显示在灵动岛上。
 - 不同一批记忆结果不会继续带入上一批历史码；确认取件后，当前取件码页会自动关闭。
+- 模块 App「功能」页提供「取件码增强」总开关，默认开启；关闭后完全走原生逻辑，无需重启小爱作用域。
 
 ## 从源码构建
 
@@ -140,13 +141,13 @@ adb shell am start --display 1 -n com.xiaomi.subscreencenter/.SubScreenLauncher
 
 在 [Issues](https://github.com/chuan2033/MiBackscreen/issues) 提交反馈，请附带：
 
-1. LSPosed 模块日志（设置 → 日志 → 详细日志）。
+1. LSPosed 模块日志（主页 → 日志）。
 2. 设备型号、系统版本与模块版本。
 3. 复现步骤。
 4. 预期行为与实际行为。
 5. 相关截图。
 
-模块 App 内"关于 → 反馈 → 日志"可生成 ZIP 反馈包并调起系统分享面板（生成时机见上方使用说明）。
+模块 App 主页「日志」卡可生成 ZIP 反馈包并调起系统分享面板（需 root 授权才采集完整日志，生成时机见上方使用说明）。
 
 ## 免责声明
 

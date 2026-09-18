@@ -12,34 +12,40 @@
     <string name="common_select_all">全选</string>
     <string name="common_confirm">确定</string>
     <string name="common_version">版本 %1$s</string>
+    <string name="about_version">版本 %1$s（%2$d）</string>
     <string name="compat_rear_display_hidden_title">检测到系统背屏显示属性异常</string>
     <string name="compat_rear_display_hidden_message">检测到隐藏背屏/防屏幕共享模块可能正在生效，可能导致背屏截图失败、自定义壁纸黑屏。请在 Magisk/KernelSU 中禁用相关模块并重启。</string>
 
     <!-- Navigation -->
     <string name="nav_home">主页</string>
+    <string name="nav_function">功能</string>
     <string name="nav_about">关于</string>
     <string name="settings_title">设置</string>
 
     <!-- Home Page -->
-    <string name="home_settings_title">功能设置</string>
+    <string name="home_log_title">日志</string>
+    <string name="log_summary">请授权root权限使用</string>
+    <string name="log_generating">正在生成日志</string>
+    <string name="log_failed">日志生成失败</string>
+    <string name="log_share_title">分享日志</string>
     <string name="home_disable_long_press_title">禁用背屏长按切换壁纸</string>
-    <string name="home_disable_long_press_summary_on">当前会拦截长按进入编辑态</string>
-    <string name="home_disable_long_press_summary_off">当前恢复原厂长按行为</string>
-    <string name="home_remove_wallpaper_limit_title">去除背屏壁纸数量限制</string>
-    <string name="home_remove_wallpaper_limit_summary_on">已去除15张壁纸上限</string>
-    <string name="home_remove_wallpaper_limit_summary_off">当前保持默认15张上限</string>
-    <string name="home_fix_apply_title">修复背屏应用失败</string>
-    <string name="home_fix_apply_summary">需搭配主题破解使用</string>
-    <string name="home_system_info_title">当前系统信息</string>
-    <string name="home_module_not_activated">模块未激活，请在Xposed激活！</string>
-    <string name="home_module_version">模块版本</string>
+    <string name="home_disable_long_press_summary">拦截长按手势，避免误触进入编辑模式</string>
+    <string name="home_remove_wallpaper_limit_title">移除背屏壁纸数量限制</string>
+    <string name="home_remove_wallpaper_limit_summary">去除15张壁纸上限</string>
+    <string name="home_fix_apply_title">修复背屏壁纸应用失败</string>
+    <string name="home_fix_apply_summary">需搭配主题破解模块使用</string>
+    <string name="home_status_activated">已激活</string>
+    <string name="home_status_inactive">未激活</string>
+    <string name="home_status_inactive_summary">请在 LSPosed 中启用模块，然后重启作用域</string>
     <string name="home_device">机型</string>
     <string name="home_system_version">系统版本</string>
     <string name="home_android_version">安卓版本</string>
+    <string name="home_theme_store_version">主题商店</string>
+    <string name="home_backscreen_version">背屏中心</string>
 
     <!-- Config Page -->
     <string name="config_module_settings_title">模块设置</string>
-    <string name="config_appearance_title">外观</string>
+    <string name="config_appearance_title">界面</string>
     <string name="config_theme_mode_title">颜色模式</string>
     <string name="config_theme_mode_system">跟随系统</string>
     <string name="config_theme_mode_light">浅色</string>
@@ -52,33 +58,38 @@
     <string name="config_module_entry_theme_settings">妙享背屏</string>
     <string name="config_hide_launcher_icon">隐藏桌面图标</string>
     <string name="config_floating_bar_title">悬浮底栏</string>
-    <string name="config_floating_bar_summary_on">当前使用悬浮底栏</string>
-    <string name="config_floating_bar_summary_off">当前使用普通底栏</string>
+    <string name="config_floating_bar_summary">使用悬浮样式的底栏</string>
     <string name="config_liquid_glass_title">液态玻璃</string>
-    <string name="config_liquid_glass_summary_on">已启用液态玻璃效果</string>
-    <string name="config_liquid_glass_summary_off">关闭液态玻璃效果</string>
+    <string name="config_liquid_glass_summary">使用Apple风格的液态玻璃</string>
+    <string name="config_bottom_bar_blur_title">底栏模糊</string>
+    <string name="config_bottom_bar_blur_summary">启用底栏的模糊效果</string>
+    <string name="config_language_title">语言</string>
+    <string name="config_language_default">默认</string>
+    <string name="config_language_chinese">简体中文</string>
+    <string name="config_language_english">English</string>
+    <string name="config_check_updates_title">检查更新</string>
+    <string name="config_check_updates_summary_on">启动时自动检查是否有新版本</string>
+    <string name="config_check_updates_summary_off">已关闭自动检查</string>
+    <string name="update_available_title">检测到新版本</string>
+    <string name="update_download">下载</string>
+    <string name="update_cancel">取消</string>
     <string name="config_disable_rear_cover_title">禁用背屏保护提示</string>
-    <string name="config_disable_rear_cover_summary_on">已拦截背屏保护提示</string>
-    <string name="config_disable_rear_cover_summary_off">当前保持原厂提示行为</string>
-    <string name="config_disable_double_tap_wake_title">按包名禁用背屏双击唤醒</string>
-    <string name="config_disable_double_tap_wake_summary_on">名单内应用在正屏前台时会禁用背屏双击唤醒</string>
-    <string name="config_disable_double_tap_wake_summary_off">当前保持原厂双击唤醒行为</string>
+    <string name="config_disable_rear_cover_summary">屏蔽背屏保护弹窗提醒</string>
+    <string name="config_disable_double_tap_wake_title">禁用背屏双击唤醒</string>
+    <string name="config_disable_double_tap_wake_summary">指定App前台运行时，关闭背屏双击唤醒</string>
     <string name="config_add_apps_title">新添加应用</string>
     <string name="config_disabled_apps_empty">未选择应用</string>
     <plurals name="config_disabled_apps_count">
         <item quantity="other">已选择 %1$d 个应用</item>
     </plurals>
+    <string name="config_enable_pickup_title">取件码增强</string>
+    <string name="config_enable_pickup_summary">识别到多个取件码时，可以进行筛选</string>
     <string name="app_picker_title">新添加应用</string>
     <string name="app_picker_search_hint">搜索应用</string>
     <string name="app_picker_loading">正在读取应用...</string>
     <string name="app_picker_empty">没有匹配的应用</string>
 
     <!-- About Page -->
-    <string name="about_feedback_title">反馈</string>
-    <string name="about_feedback_log">日志</string>
-    <string name="feedback_log_generating">正在生成反馈日志</string>
-    <string name="feedback_log_failed">反馈日志生成失败</string>
-    <string name="feedback_log_share_title">分享反馈日志</string>
     <string name="about_developer_title">开发者</string>
     <string name="about_project_url_title">项目地址</string>
     <string name="about_credits_title">引用</string>
@@ -88,7 +99,10 @@
     <string name="about_view_licenses">查看依赖与许可证信息</string>
     <string name="about_donate_title">捐赠</string>
     <string name="about_donate_qr_entry">如果你觉得项目有用，欢迎给予支持</string>
-    <string name="about_donate_afdian_entry">用爱发电，支持项目</string>
+    <string name="about_donate_wechat">微信</string>
+    <string name="about_donate_wechat_summary">微信扫码支持</string>
+    <string name="about_donate_alipay">支付宝</string>
+    <string name="about_donate_alipay_summary">支付宝扫码支持</string>
     <string name="about_donate_qr_description">捐赠二维码</string>
     <string name="about_donate_scan_hint">扫码支持开发者</string>
 

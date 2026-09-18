@@ -11,27 +11,31 @@ import java.lang.reflect.Method;
 
 public class HomeNavigationPolicyTest {
     @Test
-    public void mainTabsOnlyExposeHomeAndAbout() {
+    public void mainTabsExposeHomeFunctionAndAbout() {
         assertArrayEquals(
                 new HomeNavigationPolicy.Tab[]{
                         HomeNavigationPolicy.Tab.HOME,
+                        HomeNavigationPolicy.Tab.FUNCTION,
                         HomeNavigationPolicy.Tab.ABOUT
                 },
                 HomeNavigationPolicy.mainTabs());
     }
 
     @Test
-    public void topActionIsRestartOnHomeAndSettingsOnAbout() {
+    public void topActionIsRestartOnHomeAndFunctionAndSettingsOnAbout() {
         assertEquals(
                 HomeNavigationPolicy.TopAction.RESTART,
                 HomeNavigationPolicy.topActionFor(HomeNavigationPolicy.Tab.HOME));
+        assertEquals(
+                HomeNavigationPolicy.TopAction.RESTART,
+                HomeNavigationPolicy.topActionFor(HomeNavigationPolicy.Tab.FUNCTION));
         assertEquals(
                 HomeNavigationPolicy.TopAction.SETTINGS,
                 HomeNavigationPolicy.topActionFor(HomeNavigationPolicy.Tab.ABOUT));
     }
 
     @Test
-    public void floatingBottomBarItemsStayWideEnoughForTwoTabs() throws Exception {
+    public void floatingBottomBarItemsStayWideEnoughForTabs() throws Exception {
         assertTrue(layoutDp("floatingBottomBarItemMinWidthDp") >= 96);
     }
 

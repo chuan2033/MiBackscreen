@@ -9,12 +9,10 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,27 +26,25 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.bridge.PrefsBridge
 import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.common.PickupCodes
 import hook.HyperBackscreen.ui.components.BlurredBar
+import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.util.ThemePrefs
-import top.yukonga.miuix.kmp.basic.HorizontalDivider
-import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TopAppBar
@@ -57,13 +53,15 @@ import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.preference.CheckboxLocation
+import top.yukonga.miuix.kmp.preference.CheckboxPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme
 import top.yukonga.miuix.kmp.theme.platformDynamicColors
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
-import androidx.compose.ui.state.ToggleableState
 
 private data class PickupGroup(val station: String, val codes: List<String>) {
     val identity: String get() = PickupCodes.displayIdentity(codes, station)
@@ -289,6 +287,17 @@ private fun PickupCodesPage(payload: PickupPayload, onBack: () -> Unit) {
                                 tint = MiuixTheme.colorScheme.onBackground
                             )
                         }
+                    },
+                    actions = {
+                        if (payload.codeCount > 0) {
+                            TextButton(
+                                text = stringResource(
+                                    if (allSelected) R.string.pickup_deselect_all
+                                    else R.string.pickup_select_all
+                                ),
+                                onClick = { setAllSelected(!allSelected) }
+                            )
+                        }
                     }
                 )
             }
@@ -320,15 +329,11 @@ private fun PickupCodesPage(payload: PickupPayload, onBack: () -> Unit) {
                         }
                     }
                 }
-                payload.groups.forEachIndexed { index, group ->
+                payload.groups.forEach { group ->
                     item(key = group.identity) {
                         PickupGroupBlock(
                             group = group,
                             visibleCodes = selectedByGroup[group.identity].orEmpty(),
-                            showTopSpacing = index > 0,
-                            showSelectAll = index == 0 && payload.codeCount > 0,
-                            allSelected = allSelected,
-                            onSelectAll = { setAllSelected(!allSelected) },
                             onVisibleCodesChange = { next ->
                                 applySelections(selectedByGroup + (group.identity to next))
                             }
@@ -347,85 +352,34 @@ private fun PickupCodesPage(payload: PickupPayload, onBack: () -> Unit) {
 private fun PickupGroupBlock(
     group: PickupGroup,
     visibleCodes: Set<String>,
-    showTopSpacing: Boolean,
-    showSelectAll: Boolean,
-    allSelected: Boolean,
-    onSelectAll: () -> Unit,
     onVisibleCodesChange: (Set<String>) -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (showTopSpacing) Modifier.padding(top = 20.dp) else Modifier)
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    if (group.station.isNotEmpty()) {
-                        Text(
-                            group.station,
-                            color = MiuixTheme.colorScheme.onSurface,
-                            style = MiuixTheme.textStyles.body1
-                        )
-                    }
-                    Text(
-                        pluralStringResource(R.plurals.pickup_count, group.codes.size, group.codes.size),
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        style = MiuixTheme.textStyles.body2
-                    )
-                }
-                if (showSelectAll) {
-                    TextButton(
-                        text = stringResource(
-                            if (allSelected) R.string.pickup_deselect_all
-                            else R.string.pickup_select_all
-                        ),
-                        onClick = onSelectAll
-                    )
-                }
-            }
-        }
-        group.codes.forEachIndexed { index, code ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 12.dp)
-                    .clickable {
-                        onVisibleCodesChange(
-                            if (visibleCodes.contains(code)) visibleCodes - code
-                            else visibleCodes + code
-                        )
-                    },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+    val groupTitle = if (group.station.isEmpty()) stringResource(R.string.pickup_title) else group.station
+    Column(modifier = Modifier.fillMaxWidth()) {
+        SmallTitle(
+            text = groupTitle,
+            insideMargin = PaddingValues(16.dp, 8.dp)
+        )
+        Text(
+            pluralStringResource(R.plurals.pickup_count, group.codes.size, group.codes.size),
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 8.dp),
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            style = MiuixTheme.textStyles.body2
+        )
+        CardBlock(pressFeedbackType = PressFeedbackType.None) {
+            group.codes.forEach { code ->
                 val checked = visibleCodes.contains(code)
-                Text(
-                    (index + 1).toString(),
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    style = MiuixTheme.textStyles.body2
-                )
-                Text(
-                    code,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    color = MiuixTheme.colorScheme.onSurface,
-                    style = MiuixTheme.textStyles.title2.copy(fontFamily = FontFamily.Monospace)
-                )
-                Checkbox(
-                    state = if (checked) ToggleableState.On else ToggleableState.Off,
-                    onClick = {
-                        onVisibleCodesChange(if (checked) visibleCodes - code else visibleCodes + code)
+                CheckboxPreference(
+                    title = code,
+                    checked = checked,
+                    checkboxLocation = CheckboxLocation.End,
+                    onCheckedChange = { next ->
+                        onVisibleCodesChange(if (next) visibleCodes + code else visibleCodes - code)
                     }
                 )
             }
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 12.dp))
         }
     }
 }

@@ -29,7 +29,7 @@ import java.util.zip.ZipOutputStream
 
 internal object FeedbackLogExporter {
     private const val COMMAND_TIMEOUT_SECONDS = 20L
-    private const val FEEDBACK_SCHEMA_VERSION = 4
+    private const val FEEDBACK_SCHEMA_VERSION = 5
     private const val MAX_LSPOSED_OUTPUT_BYTES = 256 * 1024
     private const val MAX_LOGCAT_OUTPUT_BYTES = 1024 * 1024
     private const val MAX_HOST_LOG_OUTPUT_BYTES = 1024 * 1024
@@ -66,6 +66,7 @@ internal object FeedbackLogExporter {
             val systemDiagnostics = collectSystemDiagnostics()
             val hostLog = collectSubScreenCenterLog()
             val databaseSnapshot = collectDatabaseSnapshot(databaseDirectory)
+            val pickupState = buildPickupState(appContext, lsposedLog, logcat)
 
             try {
                 ZipOutputStream(FileOutputStream(output)).use { zip ->
@@ -73,6 +74,7 @@ internal object FeedbackLogExporter {
                     zip.addText("device.txt", buildDeviceReport(appContext))
                     zip.addText("config.txt", buildConfigReport(appContext))
                     zip.addText("hook-status.txt", buildHookStatus(lsposedLog))
+                    zip.addText("pickup-state.txt", pickupState)
                     zip.addText("system-diagnostics.txt", systemDiagnostics)
                     zip.addText("rear-screen-state.txt", rearScreenState)
                     zip.addText("rear-screen-files.txt", rearScreenFiles)
@@ -118,7 +120,7 @@ internal object FeedbackLogExporter {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(
-            Intent.createChooser(sendIntent, context.getString(R.string.feedback_log_share_title)),
+            Intent.createChooser(sendIntent, context.getString(R.string.log_share_title)),
         )
     }
 
@@ -159,6 +161,7 @@ internal object FeedbackLogExporter {
         appendLine("disable_double_tap_wake=${PrefsBridge.readDisableDoubleTapWakeForUi(context)}")
         appendLine("double_tap_wake_disabled_packages=${PrefsBridge.readDoubleTapWakeDisabledPackagesForUi(context)}")
         appendLine("theme_settings_shortcut=${PrefsBridge.readThemeSettingsShortcutForUi(context)}")
+        appendLine("pickup_island_selection=${PrefsBridge.readPickupIslandSelectionForUi(context)}")
         appendLine("floating_nav_bar=${PrefsBridge.readFloatingNavBar(context)}")
         appendLine("liquid_glass=${PrefsBridge.readLiquidGlass(context)}")
         appendLine("launcher_icon_hidden=${LauncherIconController.isHidden(context)}")
@@ -178,6 +181,43 @@ internal object FeedbackLogExporter {
             "No hook status lines found. See mibackscreen-lsposed.log for collection details.\n"
         } else {
             statusLines.joinToString(separator = "\n", postfix = "\n")
+        }
+    }
+
+    /**
+     * 取件码功能的现场快照：当前选择记录 + 小爱作用域里的 Hook 标记 + 最近的取件码日志。
+     * 远程排查「开关不生效 / 背屏卡片不更新」时，看这一个文件就能判断卡在哪一步。
+     */
+    private fun buildPickupState(context: Context, lsposedLog: String, logcat: String): String {
+        val selection = runCatching {
+            PrefsBridge.readPickupIslandSelectionForUi(context)
+        }.getOrDefault("")
+        val markers = listOf(
+            "Pickup card hook installed",
+            "Pickup card hook targets unavailable",
+            "Pickup confirmation hook installed",
+            "Pickup notification refresh hook installed",
+            "Unable to install pickup card hook",
+        )
+        val pickupLines = logcat.lineSequence().filter { it.contains("Pickup") }.toList().takeLast(40)
+        return buildString {
+            appendLine("# 取件码（PickupCodes）状态")
+            appendLine("pickup_island_selection=${selection.ifEmpty { "(empty)" }}")
+            appendLine("pickup_island_selection_length=${selection.length}")
+            appendLine()
+            appendLine("## 小爱作用域内的 Hook 标记（来自 mibackscreen-lsposed.log）")
+            markers.forEach { marker ->
+                val hits = lsposedLog.lineSequence().filter { it.contains(marker) }.toList()
+                appendLine("$marker=${hits.size}")
+                hits.takeLast(2).forEach { appendLine("  $it") }
+            }
+            appendLine()
+            appendLine("## 最近的取件码日志（来自 mibackscreen-logcat.log，最多 40 行）")
+            if (pickupLines.isEmpty()) {
+                appendLine("(none)")
+            } else {
+                pickupLines.forEach { appendLine(it) }
+            }
         }
     }
 

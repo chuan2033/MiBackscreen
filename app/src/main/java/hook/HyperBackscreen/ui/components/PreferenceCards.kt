@@ -1,10 +1,18 @@
 package hook.HyperBackscreen.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -21,6 +29,7 @@ internal fun CardBlock(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     pressFeedbackType: PressFeedbackType = PressFeedbackType.Tilt,
+    translucent: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
@@ -30,7 +39,11 @@ internal fun CardBlock(
         cornerRadius = HomeUiTokens.CardCornerRadius,
         insideMargin = PaddingValues(),
         colors = CardDefaults.defaultColors(
-            color = MiuixTheme.colorScheme.surfaceContainer,
+            color = if (translucent) {
+                MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f)
+            } else {
+                MiuixTheme.colorScheme.surfaceContainer
+            },
             contentColor = MiuixTheme.colorScheme.onSurfaceContainer
         ),
         pressFeedbackType = pressFeedbackType,
@@ -38,6 +51,31 @@ internal fun CardBlock(
         holdDownState = false,
         onClick = onClick ?: {},
         onLongPress = {}
+    ) {
+        content()
+    }
+}
+
+/** 卡片里受开关控制的选项：出现时向下展开并淡入，消失时收起并淡出。 */
+@Composable
+internal fun ColumnScope.AnimatedPreferenceVisibility(
+    visible: Boolean,
+    content: @Composable () -> Unit
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = expandVertically(
+            animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+            expandFrom = Alignment.Top
+        ) + fadeIn(
+            animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
+        ),
+        exit = shrinkVertically(
+            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+            shrinkTowards = Alignment.Top
+        ) + fadeOut(
+            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+        )
     ) {
         content()
     }

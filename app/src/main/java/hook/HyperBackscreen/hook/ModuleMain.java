@@ -48,15 +48,15 @@ import hook.HyperBackscreen.bridge.PrefsBridge;
 import hook.HyperBackscreen.bridge.DiagnosticLogStore;
 import hook.HyperBackscreen.common.Constants;
 import hook.HyperBackscreen.common.RearScreenWakeMatcher;
+import hook.HyperBackscreen.common.ThemeResourceAccess;
 import hook.HyperBackscreen.ui.SwipePanelHost;
 import io.github.libxposed.api.XposedModule;
 
 public class ModuleMain extends XposedModule {
     private static final long REAR_SELECTION_PENDING_TIMEOUT_MS = 15_000L;
     private static final long THEME_DATABASE_SYNC_DEDUP_WINDOW_MS = 2_000L;
+    private static final long REAR_WAKE_DECISION_LOG_INTERVAL_MS = 5_000L;
     private static final long MAX_EDIT_CONFIG_BYTES = 512 * 1024L;
-    private static final String THEME_MAGIC_DIR = "/data/system/theme_magic";
-    private static final String THEME_MAGIC_USERS_DIR = THEME_MAGIC_DIR + "/users/";
     private volatile boolean systemHooksInstalled = false;
     private volatile boolean hooksInstalled = false;
     private volatile boolean themeStoreHooksInstalled = false;
@@ -70,6 +70,7 @@ public class ModuleMain extends XposedModule {
     @Nullable
     private volatile Integer lastThemeDatabaseSyncedWidgetId;
     private volatile long lastThemeDatabaseSyncedAtElapsed;
+    private volatile long lastRearWakeDecisionLoggedAtElapsed;
 
     @Override
     public void onModuleLoaded(@NonNull ModuleLoadedParam param) {
@@ -208,7 +209,9 @@ public class ModuleMain extends XposedModule {
                                     (Integer) groupIdValue,
                                     detailsValue)) {
                         String[] packageNames = resolveForegroundPackages(chain.getThisObject());
-                        if (PrefsBridge.shouldSkipDoubleTapWakeForPackages(this, packageNames)) {
+                        boolean skipped = PrefsBridge.shouldSkipDoubleTapWakeForPackages(this, packageNames);
+                        logRearWakeDecision((Integer) groupIdValue, detailsValue, packageNames, skipped);
+                        if (skipped) {
                             log(Log.DEBUG, Constants.LOG_TAG,
                                     "Rear screen double tap wake skipped for "
                                             + joinPackageNames(packageNames));
@@ -232,10 +235,21 @@ public class ModuleMain extends XposedModule {
                             && RearScreenWakeMatcher.isRearDoubleTapWake(
                                     (Integer) groupIdValue,
                                     detailsValue)) {
-                        String packageName = resolveForegroundPackage(chain.getThisObject());
-                        if (PrefsBridge.shouldSkipDoubleTapWakeForPackage(this, packageName)) {
+                        String[] packageNames = resolveForegroundPackages(getFieldValue(
+                                chain.getThisObject(),
+                                Constants.SYSTEM_POWER_MANAGER_SERVICE_IMPL_FIELD));
+                        if (packageNames.length == 0) {
+                            String packageName = resolveForegroundPackage(chain.getThisObject());
+                            if (packageName != null) {
+                                packageNames = new String[]{packageName};
+                            }
+                        }
+                        boolean skipped = PrefsBridge.shouldSkipDoubleTapWakeForPackages(this, packageNames);
+                        logRearWakeDecision((Integer) groupIdValue, detailsValue, packageNames, skipped);
+                        if (skipped) {
                             log(Log.DEBUG, Constants.LOG_TAG,
-                                    "Rear screen double tap wake skipped for " + packageName);
+                                    "Rear screen double tap wake skipped for "
+                                            + joinPackageNames(packageNames));
                             return true;
                         }
                     }
@@ -823,6 +837,9 @@ public class ModuleMain extends XposedModule {
                             ? getFieldValue(chain.getThisObject(), Constants.THEME_APPLY_BEAN_FIELD)
                             : null;
                     ThemeMagicRepairTarget repairTarget = ThemeMagicRepairTarget.from(bean);
+                    if (fixApply) {
+                        grantRearScreenRuntimeAccess();
+                    }
                     if (bean != null) {
                         if (fixApply) {
                             promoteReappliedWallpaper(bean, classLoader);
@@ -833,6 +850,10 @@ public class ModuleMain extends XposedModule {
                         patchThemeMagicAssetAccess(bean);
                     }
                     Object result = chain.proceed();
+                    if (fixApply) {
+                        // 壁纸文件是在本流程内才复制进运行目录的，落库后再兜一次。
+                        grantRearScreenRuntimeAccess();
+                    }
                     if (repairTarget != null) {
                         scheduleThemeMagicAssetRepair(repairTarget);
                     }
@@ -1051,9 +1072,11 @@ public class ModuleMain extends XposedModule {
                 new Class[]{Bundle.class},
                 Constants.THEME_REAR_SETTING_ACTIVITY + "#onCreate",
                 chain -> {
-                    if (PrefsBridge.shouldFixRearScreenApply(this)
-                            && chain.getThisObject() instanceof Activity activity) {
-                        runThemeDatabaseSelectionSync(activity, classLoader);
+                    if (PrefsBridge.shouldFixRearScreenApply(this)) {
+                        grantRearScreenRuntimeAccess();
+                        if (chain.getThisObject() instanceof Activity activity) {
+                            runThemeDatabaseSelectionSync(activity, classLoader);
+                        }
                     }
                     return chain.proceed();
                 }
@@ -1065,9 +1088,11 @@ public class ModuleMain extends XposedModule {
                 new Class[]{},
                 Constants.THEME_REAR_SETTING_ACTIVITY + "#onResume",
                 chain -> {
-                    if (PrefsBridge.shouldFixRearScreenApply(this)
-                            && chain.getThisObject() instanceof Activity activity) {
-                        runThemeDatabaseSelectionSync(activity, classLoader);
+                    if (PrefsBridge.shouldFixRearScreenApply(this)) {
+                        grantRearScreenRuntimeAccess();
+                        if (chain.getThisObject() instanceof Activity activity) {
+                            runThemeDatabaseSelectionSync(activity, classLoader);
+                        }
                     }
                     return chain.proceed();
                 }
@@ -1372,11 +1397,13 @@ public class ModuleMain extends XposedModule {
     private void patchThemeMagicAssetAccess(Object bean) {
         try {
             LinkedHashSet<File> files = new LinkedHashSet<>();
+            addThemeResourceFile(files, asString(callNoArgMethodQuietly(bean, "getResLocalPath")));
+            addThemeResourceFile(files, asString(callNoArgMethodQuietly(bean, "getResSnapshotPath")));
             String editConfigPath = asString(callNoArgMethodQuietly(bean, "getMamlEditConfigPath"));
-            addThemeMagicFile(files, editConfigPath);
-            addThemeMagicFile(files, asString(callNoArgMethodQuietly(bean, "getSnapshotPreviewPath")));
-            addThemeMagicFile(files, asString(callNoArgMethodQuietly(bean, "getMetaPath")));
-            addThemeMagicFile(files, asString(callNoArgMethodQuietly(bean, "getMetaSnapshotPath")));
+            addThemeResourceFile(files, editConfigPath);
+            addThemeResourceFile(files, asString(callNoArgMethodQuietly(bean, "getSnapshotPreviewPath")));
+            addThemeResourceFile(files, asString(callNoArgMethodQuietly(bean, "getMetaPath")));
+            addThemeResourceFile(files, asString(callNoArgMethodQuietly(bean, "getMetaSnapshotPath")));
 
             if (!isEmpty(editConfigPath)) {
                 collectThemeMagicFilesFromEditConfig(new File(editConfigPath), files);
@@ -1390,11 +1417,11 @@ public class ModuleMain extends XposedModule {
                 } else {
                     missingFiles++;
                 }
-                grantThemeMagicAssetAccess(file);
+                grantThemeResourceAssetAccess(file);
             }
             if (!files.isEmpty()) {
                 log(Log.INFO, Constants.LOG_TAG,
-                        "Patched rear screen theme_magic assets: total=" + files.size()
+                        "Patched rear screen theme resources: total=" + files.size()
                                 + ", existing=" + existingFiles
                                 + ", missing=" + missingFiles);
             }
@@ -1417,6 +1444,7 @@ public class ModuleMain extends XposedModule {
                             }
                         }
                         repairThemeMagicAssets(target);
+                        grantRearScreenRuntimeAccess();
                     }
                 },
                 "MiBackscreen-ThemeMagicAssetRepair");
@@ -1450,7 +1478,7 @@ public class ModuleMain extends XposedModule {
                     out.write(bytes);
                     out.getFD().sync();
                 }
-                grantThemeMagicAssetAccess(editConfig);
+                grantThemeResourceAssetAccess(editConfig);
                 log(Log.INFO, Constants.LOG_TAG,
                         "Rewrote rear screen theme_magic asset references: copied="
                                 + stats.copied + ", missing=" + stats.missing);
@@ -1504,7 +1532,7 @@ public class ModuleMain extends XposedModule {
             @NonNull ThemeMagicRepairTarget target,
             @NonNull RepairStats stats
     ) {
-        if (!isThemeMagicUserPath(path)) {
+        if (!ThemeResourceAccess.isThemeMagicUserPath(path)) {
             return path;
         }
         File source = new File(path);
@@ -1518,7 +1546,7 @@ public class ModuleMain extends XposedModule {
                 return path;
             }
         }
-        grantReadAccess(destination);
+        grantThemeResourceAssetAccess(destination);
         stats.copied++;
         return destination.getAbsolutePath();
     }
@@ -1563,7 +1591,7 @@ public class ModuleMain extends XposedModule {
             while (keys.hasNext()) {
                 Object value = object.opt(keys.next());
                 if (value instanceof String) {
-                    addThemeMagicFile(files, (String) value);
+                    addThemeResourceFile(files, (String) value);
                 } else {
                     collectThemeMagicFilesFromJson(value, files);
                 }
@@ -1572,7 +1600,7 @@ public class ModuleMain extends XposedModule {
             for (int i = 0; i < array.length(); i++) {
                 Object value = array.opt(i);
                 if (value instanceof String) {
-                    addThemeMagicFile(files, (String) value);
+                    addThemeResourceFile(files, (String) value);
                 } else {
                     collectThemeMagicFilesFromJson(value, files);
                 }
@@ -1580,33 +1608,65 @@ public class ModuleMain extends XposedModule {
         }
     }
 
-    private void addThemeMagicFile(@NonNull Set<File> files, @Nullable String path) {
-        if (isEmpty(path) || !isThemeMagicUserPath(path)) {
+    private void addThemeResourceFile(@NonNull Set<File> files, @Nullable String path) {
+        if (isEmpty(path) || !ThemeResourceAccess.isGrantablePath(path)) {
             return;
         }
         files.add(new File(path));
     }
 
-    private void grantThemeMagicAssetAccess(@NonNull File file) {
-        grantThemeMagicDirectoryAccess(file.getParentFile());
+    private void grantThemeResourceAssetAccess(@NonNull File file) {
+        grantThemeResourceDirectoryAccess(file.getParentFile());
         if (!file.exists()) {
             return;
         }
         if (file.isDirectory()) {
-            grantThemeMagicDirectoryAccess(file);
+            grantThemeResourceDirectoryAccess(file);
         } else {
             grantReadAccess(file);
         }
     }
 
     @SuppressLint("SetWorldReadable")
-    private void grantThemeMagicDirectoryAccess(@Nullable File dir) {
+    private void grantThemeResourceDirectoryAccess(@Nullable File dir) {
         File current = dir;
-        while (current != null && isThemeMagicPath(current.getAbsolutePath())) {
+        while (current != null && ThemeResourceAccess.isGrantablePath(current.getAbsolutePath())) {
             current.setReadable(true, false);
             current.setWritable(true, true);
             current.setExecutable(true, false);
             current = current.getParentFile();
+        }
+    }
+
+    /**
+     * 保证背屏运行目录可被背屏中心读取：目录 other 需 r-x，目录内 rearscreen_*.mrc 需 other r。
+     * 背屏中心按普通应用 uid 运行、不是该目录属主；目录一旦停在 700，它就读不到壁纸文件，
+     * 会把收到的 widget 全部判为无效并回退系统默认壁纸（表现为"应用成功但界面没变"）。
+     * 只在主题商店进程调用——它才是 /data/system/theme 的属主，其它进程改不动。
+     */
+    private void grantRearScreenRuntimeAccess() {
+        try {
+            File dir = new File(ThemeResourceAccess.REAR_SCREEN_RUNTIME_DIR);
+            if (!dir.isDirectory()) {
+                return;
+            }
+            grantThemeResourceDirectoryAccess(dir);
+            File[] children = dir.listFiles();
+            int grantedFiles = 0;
+            if (children != null) {
+                for (File child : children) {
+                    if (child == null || !child.isFile()) continue;
+                    String name = child.getName();
+                    if (!name.startsWith("rearscreen_") || !name.endsWith(".mrc")) continue;
+                    grantReadAccess(child);
+                    grantedFiles++;
+                }
+            }
+            log(Log.DEBUG, Constants.LOG_TAG,
+                    "Rear screen runtime access ensured: dir=" + dir.getName()
+                            + ", files=" + grantedFiles);
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "grantRearScreenRuntimeAccess failed", e);
         }
     }
 
@@ -1703,7 +1763,7 @@ public class ModuleMain extends XposedModule {
         static ThemeMagicRepairTarget from(@Nullable Object bean) {
             if (bean == null) return null;
             String editConfigPath = asString(callNoArgMethodQuietly(bean, "getMamlEditConfigPath"));
-            if (isEmpty(editConfigPath) || !isThemeMagicUserPath(editConfigPath)) {
+            if (isEmpty(editConfigPath) || !ThemeResourceAccess.isThemeMagicUserPath(editConfigPath)) {
                 return null;
             }
             return new ThemeMagicRepairTarget(
@@ -1730,14 +1790,6 @@ public class ModuleMain extends XposedModule {
         }
         String sanitized = value.replaceAll("[^A-Za-z0-9._-]", "_");
         return sanitized.isEmpty() ? fallback : sanitized;
-    }
-
-    private static boolean isThemeMagicUserPath(@NonNull String path) {
-        return path.startsWith(THEME_MAGIC_USERS_DIR);
-    }
-
-    private static boolean isThemeMagicPath(@NonNull String path) {
-        return path.equals(THEME_MAGIC_DIR) || path.startsWith(THEME_MAGIC_DIR + "/");
     }
 
     @Nullable
@@ -1808,6 +1860,24 @@ public class ModuleMain extends XposedModule {
             builder.append(packageName);
         }
         return builder.length() == 0 ? "[]" : builder.toString();
+    }
+
+    private void logRearWakeDecision(
+            int groupId,
+            @Nullable Object details,
+            @Nullable String[] packageNames,
+            boolean skipped
+    ) {
+        long now = SystemClock.elapsedRealtime();
+        if (!skipped && now - lastRearWakeDecisionLoggedAtElapsed < REAR_WAKE_DECISION_LOG_INTERVAL_MS) {
+            return;
+        }
+        lastRearWakeDecisionLoggedAtElapsed = now;
+        log(Log.DEBUG, Constants.LOG_TAG,
+                "Rear screen wake decision: groupId=" + groupId
+                        + ", details=" + String.valueOf(details)
+                        + ", foreground=" + joinPackageNames(packageNames)
+                        + ", skipped=" + skipped);
     }
 
     private boolean safeCopy(File src, File dst) {

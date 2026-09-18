@@ -88,8 +88,11 @@ public class PickupCodesTest {
     @Test public void islandTextLaysOutTwoPerRowAndCapsAtFour() {
         List<String> six = Arrays.asList("a1", "a2", "a3", "a4", "a5", "a6");
         String text = PickupCodes.formatIslandText(six);
+        String firstRow = text.split("\n", -1)[0];
         assertEquals(PickupCodes.ISLAND_MAX_ROWS, text.split("\n", -1).length);
-        assertEquals(2, text.split("\n", -1)[0].split("\\s+").length);
+        assertTrue(firstRow.contains("a1"));
+        assertTrue(firstRow.contains("a2"));
+        assertFalse(firstRow.contains("a3"));
         assertTrue(text.contains("a4"));
         assertFalse(text.contains("a5"));
         assertFalse(text.contains("a6"));

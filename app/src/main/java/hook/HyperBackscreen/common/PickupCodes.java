@@ -180,7 +180,7 @@ public final class PickupCodes {
     public static final int MAX_ISLAND_CODES = 4;
     public static final int ISLAND_CODES_PER_ROW = 2;
     public static final int ISLAND_MAX_ROWS = MAX_ISLAND_CODES / ISLAND_CODES_PER_ROW;
-    private static final String ISLAND_CODE_GAP = " ";
+    private static final String ISLAND_CODE_GAP = ",";
 
     public static String formatCollapsedText(List<String> codes) {
         if (codes.isEmpty()) return "取件码";

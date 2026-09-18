@@ -12,11 +12,15 @@ public final class Constants {
     public static final String KEY_FIX_REAR_SCREEN_APPLY = "fix_rear_screen_apply";
     public static final String KEY_FLOATING_NAV_BAR = "floating_nav_bar";
     public static final String KEY_LIQUID_GLASS = "liquid_glass";
+    public static final String KEY_BOTTOM_BAR_BLUR = "bottom_bar_blur";
+    public static final String KEY_CHECK_UPDATES = "check_updates";
     public static final String KEY_ENABLE_SWIPE_PANEL = "enable_swipe_panel";
     public static final String KEY_DISABLE_REAR_SCREEN_COVER = "disable_rear_screen_cover";
     public static final String KEY_DISABLE_DOUBLE_TAP_WAKE = "disable_double_tap_wake";
     public static final String KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES = "double_tap_wake_disabled_packages";
     public static final String KEY_THEME_SETTINGS_SHORTCUT = "theme_settings_shortcut";
+    // 小爱记忆岛取件码增强的总开关。
+    public static final String KEY_ENABLE_PICKUP = "enable_pickup";
     // 取件码页选择：记录"哪些取件码显示在记忆岛卡片上"，按驿站或无站点码组区分。
     public static final String KEY_PICKUP_ISLAND_SELECTION = "pickup_island_selection";
     public static final String PANEL_PREFERENCE_AUTHORITY = MODULE_PACKAGE + ".PanelPreferences";

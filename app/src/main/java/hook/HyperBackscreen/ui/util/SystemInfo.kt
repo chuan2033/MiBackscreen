@@ -1,5 +1,7 @@
 ﻿package hook.HyperBackscreen.ui.util
 
+import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 
 internal fun currentDeviceName(): String {
@@ -22,6 +24,18 @@ internal fun currentHyperOSVersion(): String {
         return osName
     }
     return "MIUI"
+}
+
+internal fun currentPackageVersion(context: Context, packageName: String): String {
+    return try {
+        val info = context.packageManager.getPackageInfo(
+            packageName,
+            PackageManager.PackageInfoFlags.of(0)
+        )
+        info.versionName?.takeIf { it.isNotBlank() } ?: "—"
+    } catch (_: Exception) {
+        "—"
+    }
 }
 
 private fun getSystemProperty(key: String): String? {

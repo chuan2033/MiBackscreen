@@ -5,7 +5,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
+import hook.HyperBackscreen.ui.components.AnimatedPreferenceVisibility
 import hook.HyperBackscreen.ui.components.CardBlock
+import hook.HyperBackscreen.ui.util.AppLanguage
 import hook.HyperBackscreen.ui.util.ThemeMode
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.preference.SwitchPreference
@@ -16,10 +18,16 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 internal fun ConfigPage(
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
+    bottomBarBlur: Boolean,
+    appLanguage: AppLanguage,
+    checkUpdates: Boolean,
     enableSwipePanel: Boolean,
     launcherIconHidden: Boolean,
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
+    onBottomBarBlurChange: (Boolean) -> Unit,
+    onAppLanguageChange: (AppLanguage) -> Unit,
+    onCheckUpdatesChange: (Boolean) -> Unit,
     onEnableSwipePanelChange: (Boolean) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
     themeMode: ThemeMode,
@@ -27,6 +35,63 @@ internal fun ConfigPage(
     themeSettingsShortcut: Boolean,
     onThemeSettingsShortcutChange: (Boolean) -> Unit
 ) {
+    SmallTitle(text = stringResource(R.string.config_module_settings_title), insideMargin = PaddingValues(16.dp, 8.dp))
+    CardBlock(pressFeedbackType = PressFeedbackType.None) {
+        WindowDropdownPreference(
+            items = listOf(
+                stringResource(R.string.config_module_entry_disabled),
+                stringResource(R.string.config_module_entry_theme_settings)
+            ),
+            selectedIndex = if (themeSettingsShortcut) 1 else 0,
+            title = stringResource(R.string.config_module_entry_title),
+            onSelectedIndexChange = { index ->
+                onThemeSettingsShortcutChange(index == 1)
+            }
+        )
+        SwitchPreference(
+            checked = launcherIconHidden,
+            onCheckedChange = onLauncherIconHiddenChange,
+            title = stringResource(R.string.config_hide_launcher_icon)
+        )
+        SwitchPreference(
+            checked = checkUpdates,
+            onCheckedChange = onCheckUpdatesChange,
+            title = stringResource(R.string.config_check_updates_title),
+            summary = if (checkUpdates) {
+                stringResource(R.string.config_check_updates_summary_on)
+            } else {
+                stringResource(R.string.config_check_updates_summary_off)
+            }
+        )
+        SwitchPreference(
+            checked = enableSwipePanel,
+            onCheckedChange = onEnableSwipePanelChange,
+            title = stringResource(R.string.config_swipe_panel_title),
+            summary = if (enableSwipePanel) {
+                stringResource(R.string.config_swipe_panel_summary_on)
+            } else {
+                stringResource(R.string.config_swipe_panel_summary_off)
+            }
+        )
+        WindowDropdownPreference(
+            items = listOf(
+                stringResource(R.string.config_language_default),
+                stringResource(R.string.config_language_chinese),
+                stringResource(R.string.config_language_english)
+            ),
+            selectedIndex = appLanguage.index,
+            title = stringResource(R.string.config_language_title),
+            summary = when (appLanguage) {
+                AppLanguage.SYSTEM -> stringResource(R.string.config_language_default)
+                AppLanguage.CHINESE -> stringResource(R.string.config_language_chinese)
+                AppLanguage.ENGLISH -> stringResource(R.string.config_language_english)
+            },
+            onSelectedIndexChange = { index ->
+                onAppLanguageChange(AppLanguage.fromIndex(index))
+            }
+        )
+    }
+
     SmallTitle(text = stringResource(R.string.config_appearance_title), insideMargin = PaddingValues(16.dp, 8.dp))
     CardBlock(pressFeedbackType = PressFeedbackType.None) {
         WindowDropdownPreference(
@@ -48,53 +113,21 @@ internal fun ConfigPage(
             checked = floatingNavBar,
             onCheckedChange = onFloatingNavBarChange,
             title = stringResource(R.string.config_floating_bar_title),
-            summary = if (floatingNavBar) {
-                stringResource(R.string.config_floating_bar_summary_on)
-            } else {
-                stringResource(R.string.config_floating_bar_summary_off)
-            }
+            summary = stringResource(R.string.config_floating_bar_summary)
         )
-        if (floatingNavBar) {
+        AnimatedPreferenceVisibility(visible = floatingNavBar) {
             SwitchPreference(
                 checked = liquidGlass,
                 onCheckedChange = onLiquidGlassChange,
                 title = stringResource(R.string.config_liquid_glass_title),
-                summary = if (liquidGlass) {
-                    stringResource(R.string.config_liquid_glass_summary_on)
-                } else {
-                    stringResource(R.string.config_liquid_glass_summary_off)
-                }
+                summary = stringResource(R.string.config_liquid_glass_summary)
             )
         }
-    }
-
-    SmallTitle(text = stringResource(R.string.config_module_settings_title), insideMargin = PaddingValues(16.dp, 8.dp))
-    CardBlock(pressFeedbackType = PressFeedbackType.None) {
-        WindowDropdownPreference(
-            items = listOf(
-                stringResource(R.string.config_module_entry_disabled),
-                stringResource(R.string.config_module_entry_theme_settings)
-            ),
-            selectedIndex = if (themeSettingsShortcut) 1 else 0,
-            title = stringResource(R.string.config_module_entry_title),
-            onSelectedIndexChange = { index ->
-                onThemeSettingsShortcutChange(index == 1)
-            }
-        )
         SwitchPreference(
-            checked = launcherIconHidden,
-            onCheckedChange = onLauncherIconHiddenChange,
-            title = stringResource(R.string.config_hide_launcher_icon)
-        )
-        SwitchPreference(
-            checked = enableSwipePanel,
-            onCheckedChange = onEnableSwipePanelChange,
-            title = stringResource(R.string.config_swipe_panel_title),
-            summary = if (enableSwipePanel) {
-                stringResource(R.string.config_swipe_panel_summary_on)
-            } else {
-                stringResource(R.string.config_swipe_panel_summary_off)
-            }
+            checked = bottomBarBlur,
+            onCheckedChange = onBottomBarBlurChange,
+            title = stringResource(R.string.config_bottom_bar_blur_title),
+            summary = stringResource(R.string.config_bottom_bar_blur_summary)
         )
     }
 }

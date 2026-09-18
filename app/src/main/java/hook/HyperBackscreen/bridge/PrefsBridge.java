@@ -30,7 +30,12 @@ public final class PrefsBridge {
     public static final boolean DEFAULT_FIX_REAR_SCREEN_APPLY = false;
     private static final boolean DEFAULT_FLOATING_NAV_BAR = false;
     private static final boolean DEFAULT_LIQUID_GLASS = false;
+    /** 三种底栏共用的背景模糊开关；默认开，保持与旧版观感一致。 */
+    private static final boolean DEFAULT_BOTTOM_BAR_BLUR = true;
+    /** 启动时自动检查 GitHub Release 是否有新版；默认开。 */
+    private static final boolean DEFAULT_CHECK_UPDATES = true;
     public static final boolean DEFAULT_ENABLE_SWIPE_PANEL = true;
+    public static final boolean DEFAULT_ENABLE_PICKUP = true;
     public static final boolean DEFAULT_DISABLE_REAR_SCREEN_COVER = false;
     public static final boolean DEFAULT_DISABLE_DOUBLE_TAP_WAKE = false;
     public static final String DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES = "";
@@ -190,6 +195,14 @@ public final class PrefsBridge {
         return readForUi(context, Constants.KEY_ENABLE_SWIPE_PANEL, DEFAULT_ENABLE_SWIPE_PANEL);
     }
 
+    public static boolean readEnablePickupForUi(@NonNull Context context) {
+        return readForUi(context, Constants.KEY_ENABLE_PICKUP, DEFAULT_ENABLE_PICKUP);
+    }
+
+    public static void writeEnablePickupFromUi(@NonNull Context context, boolean enabled) {
+        writeFromUi(context, Constants.KEY_ENABLE_PICKUP, enabled);
+    }
+
     public static void writeEnableSwipePanelFromUi(@NonNull Context context, boolean enabled) {
         writeFromUi(context, Constants.KEY_ENABLE_SWIPE_PANEL, enabled);
     }
@@ -333,6 +346,22 @@ public final class PrefsBridge {
         local(context).edit().putBoolean(Constants.KEY_LIQUID_GLASS, enabled).apply();
     }
 
+    public static boolean readBottomBarBlur(@NonNull Context context) {
+        return local(context).getBoolean(Constants.KEY_BOTTOM_BAR_BLUR, DEFAULT_BOTTOM_BAR_BLUR);
+    }
+
+    public static void writeBottomBarBlur(@NonNull Context context, boolean enabled) {
+        local(context).edit().putBoolean(Constants.KEY_BOTTOM_BAR_BLUR, enabled).apply();
+    }
+
+    public static boolean readCheckUpdates(@NonNull Context context) {
+        return local(context).getBoolean(Constants.KEY_CHECK_UPDATES, DEFAULT_CHECK_UPDATES);
+    }
+
+    public static void writeCheckUpdates(@NonNull Context context, boolean enabled) {
+        local(context).edit().putBoolean(Constants.KEY_CHECK_UPDATES, enabled).apply();
+    }
+
     public static boolean shouldBlockLongPressEdit(@NonNull XposedModule module) {
         return readForHook(module, Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT);
     }
@@ -347,6 +376,10 @@ public final class PrefsBridge {
 
     public static boolean shouldEnableSwipePanel(@NonNull XposedModule module) {
         return readForHook(module, Constants.KEY_ENABLE_SWIPE_PANEL, DEFAULT_ENABLE_SWIPE_PANEL);
+    }
+
+    public static boolean shouldEnablePickup(@NonNull XposedModule module) {
+        return readForHook(module, Constants.KEY_ENABLE_PICKUP, DEFAULT_ENABLE_PICKUP);
     }
 
     public static boolean shouldShowThemeSettingsShortcut(@NonNull XposedModule module) {
@@ -488,6 +521,7 @@ public final class PrefsBridge {
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT, DEFAULT_REMOVE_WALLPAPER_LIMIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_SWIPE_PANEL, DEFAULT_ENABLE_SWIPE_PANEL);
+            syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_PICKUP, DEFAULT_ENABLE_PICKUP);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_REAR_SCREEN_COVER, DEFAULT_DISABLE_REAR_SCREEN_COVER);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, DEFAULT_DISABLE_DOUBLE_TAP_WAKE);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_THEME_SETTINGS_SHORTCUT, DEFAULT_THEME_SETTINGS_SHORTCUT);

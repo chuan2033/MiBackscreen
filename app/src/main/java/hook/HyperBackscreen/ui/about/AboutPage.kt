@@ -11,15 +11,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import top.yukonga.miuix.kmp.squircle.squircleClip
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -28,60 +22,25 @@ import hook.HyperBackscreen.R
 import hook.HyperBackscreen.ui.components.AboutArrowPreference
 import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import android.widget.Toast
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
-import top.yukonga.miuix.kmp.window.WindowDialog
 
 @Composable
 internal fun AboutPage(onLicenseClick: () -> Unit = {}) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var generatingFeedback by remember { mutableStateOf(false) }
-    var showDonate by remember { mutableStateOf(false) }
-
     AboutHeader()
 
-    SmallTitle(text = stringResource(R.string.about_developer_title), insideMargin = PaddingValues(16.dp, 8.dp))
-    CardBlock(pressFeedbackType = PressFeedbackType.None) {
-        AboutArrowPreference(title = "AxlQ", summary = null, url = "https://github.com/chuan2033")
-    }
-
-    SmallTitle(text = stringResource(R.string.about_project_url_title), insideMargin = PaddingValues(16.dp, 8.dp))
     CardBlock(pressFeedbackType = PressFeedbackType.None) {
         AboutArrowPreference(
-            title = "MiBackscreen",
-            summary = null,
-            url = "https://github.com/chuan2033/MiBackscreen"
+            title = stringResource(R.string.about_developer_title),
+            summary = "AxlQ",
+            url = "https://github.com/chuan2033"
         )
-    }
-
-    SmallTitle(text = stringResource(R.string.about_feedback_title), insideMargin = PaddingValues(16.dp, 8.dp))
-    CardBlock(pressFeedbackType = PressFeedbackType.None) {
         AboutArrowPreference(
-            title = stringResource(R.string.about_feedback_log),
-            summary = null,
-            onClick = {
-                if (generatingFeedback) return@AboutArrowPreference
-                generatingFeedback = true
-                Toast.makeText(context, R.string.feedback_log_generating, Toast.LENGTH_SHORT).show()
-                scope.launch {
-                    val file = withContext(Dispatchers.IO) {
-                        FeedbackLogExporter.create(context)
-                    }
-                    generatingFeedback = false
-                    if (file != null) {
-                        FeedbackLogExporter.share(context, file)
-                    } else {
-                        Toast.makeText(context, R.string.feedback_log_failed, Toast.LENGTH_SHORT).show()
-                    }
-                }
-            },
+            title = stringResource(R.string.about_project_url_title),
+            summary = "MiBackscreen",
+            url = "https://github.com/chuan2033/MiBackscreen"
         )
     }
 
@@ -99,43 +58,6 @@ internal fun AboutPage(onLicenseClick: () -> Unit = {}) {
         )
     }
 
-    SmallTitle(text = stringResource(R.string.about_donate_title), insideMargin = PaddingValues(16.dp, 8.dp))
-    CardBlock(pressFeedbackType = PressFeedbackType.None) {
-        AboutArrowPreference(
-            title = stringResource(R.string.about_donate_qr_entry),
-            summary = null,
-            onClick = { showDonate = true }
-        )
-        AboutArrowPreference(
-            title = stringResource(R.string.about_donate_afdian_entry),
-            summary = null,
-            url = "https://afdian.com/a/MiBackscreen"
-        )
-    }
-
-    WindowDialog(
-        show = showDonate,
-        title = stringResource(R.string.about_donate_title),
-        onDismissRequest = { showDonate = false }
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.qr_donate),
-                contentDescription = stringResource(R.string.about_donate_qr_description),
-                modifier = Modifier.size(220.dp),
-                contentScale = ContentScale.Fit
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = stringResource(R.string.about_donate_scan_hint),
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                style = MiuixTheme.textStyles.body2
-            )
-        }
-    }
 }
 
 @Composable
@@ -170,7 +92,7 @@ private fun AboutHeader() {
         )
         Spacer(modifier = Modifier.height(HomeUiTokens.AboutVersionSpacing))
         Text(
-            text = stringResource(R.string.common_version, BuildConfig.VERSION_NAME),
+            text = stringResource(R.string.about_version, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             style = MiuixTheme.textStyles.body2
         )

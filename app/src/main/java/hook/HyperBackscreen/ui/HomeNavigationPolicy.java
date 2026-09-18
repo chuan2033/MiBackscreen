@@ -1,13 +1,14 @@
 package hook.HyperBackscreen.ui;
 
 public final class HomeNavigationPolicy {
-    private static final Tab[] MAIN_TABS = {Tab.HOME, Tab.ABOUT};
+    private static final Tab[] MAIN_TABS = {Tab.HOME, Tab.FUNCTION, Tab.ABOUT};
 
     private HomeNavigationPolicy() {
     }
 
     public enum Tab {
         HOME,
+        FUNCTION,
         ABOUT
     }
 

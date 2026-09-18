@@ -115,6 +115,9 @@ final class PickupCodeHook {
             module.hook(onReceive)
                     .setExceptionMode(XposedModule.ExceptionMode.PROTECTIVE)
                     .intercept(chain -> {
+                        if (!PrefsBridge.shouldEnablePickup(module)) {
+                            return chain.proceed();
+                        }
                         List<Object> args = chain.getArgs();
                         Intent intent = args.size() > 1 && args.get(1) instanceof Intent
                                 ? (Intent) args.get(1) : null;
@@ -193,6 +196,9 @@ final class PickupCodeHook {
             module.hook(notify)
                     .setExceptionMode(XposedModule.ExceptionMode.PROTECTIVE)
                     .intercept(chain -> {
+                        if (!PrefsBridge.shouldEnablePickup(module)) {
+                            return chain.proceed();
+                        }
                         List<Object> args = chain.getArgs();
                         int notificationIndex = args.size() - 1;
                         int idIndex = args.size() == 2 ? 0 : 1;
@@ -253,6 +259,7 @@ final class PickupCodeHook {
                     .setExceptionMode(XposedModule.ExceptionMode.PROTECTIVE)
                     .intercept(chain -> {
                         Object original = chain.proceed();
+                        if (!PrefsBridge.shouldEnablePickup(module)) return original;
                         try {
                             List<Object> args = chain.getArgs();
                             String scene = (String) sceneValue.invoke(args.get(sceneIndex));
@@ -483,13 +490,38 @@ final class PickupCodeHook {
         if (title == null || !PickupCodes.shouldAddEntry("delivery", title.toString())) return false;
         try {
             JSONObject params = new JSONObject(extras.getString(ISLAND_PARAM, ""));
-            return "memory".equals(params.optString("business"))
-                    && "pickup_code".equals(params.getJSONObject("param_island")
-                            .getJSONObject("bigIslandArea").getJSONObject("imageTextInfoLeft")
-                            .getJSONObject("picInfo").optString("pic"));
+            if (!"memory".equals(params.optString("business"))) return false;
+            JSONObject imageText = params.getJSONObject("param_island")
+                    .getJSONObject("bigIslandArea").getJSONObject("imageTextInfoLeft")
+                    .getJSONObject("textInfo");
+            // 图片 icon 随快递公司变化（菜鸟 pickup_code、通达系 ic_logo_xxx），不能写死；
+            // 场景标签才是稳定的判据（快递取件=取件码，外卖取餐=取餐码）。
+            String label = imageText.optString("title");
+            String expected = pickupCodeLabel();
+            if (expected.equals(label)) return true;
+            Log.d(Constants.LOG_TAG, "Pickup notification ignored: label=" + label
+                    + " expected=" + expected);
+            return false;
         } catch (Exception ignored) {
             return false;
         }
+    }
+
+    /** 快递取件卡的场景标签，取自宿主资源以免写死中文。 */
+    private static String pickupCodeLabel() {
+        Context context = pickupContext;
+        if (context != null) {
+            try {
+                int id = context.getResources().getIdentifier("memory_scene_name_delivery", "string",
+                        Constants.VOICE_ASSIST_PACKAGE);
+                if (id != 0) {
+                    String value = context.getString(id);
+                    if (value != null && !value.isEmpty()) return value;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return "取件码";
     }
 
     private static boolean patchNotification(Notification notification, Context context,
@@ -524,6 +556,13 @@ final class PickupCodeHook {
             patchRemoteView(extras, "miui.focus.rv.tinyNight", context, module,
                     "memory_scene_tiny_remote_view", "memory_scene_tiny_content_area",
                     "memory_scene_tiny_title", visible, identity, parsed, station);
+            // 背屏（妙享背屏）的卡片在同一个通知里，key 前缀是 miui.rear.*。
+            patchRemoteView(extras, "miui.rear.rv", context, module,
+                    "memory_scene_rear_remote_view", "memory_scene_rear_content_area",
+                    "memory_scene_rear_title", visible, identity, parsed, station);
+            patchRemoteView(extras, "miui.rear.rvAOD", context, module,
+                    "memory_scene_rear_remote_view", "memory_scene_rear_content_area",
+                    "memory_scene_rear_title", visible, identity, parsed, station);
 
             notification.extras = extras;
             return true;
@@ -645,8 +684,14 @@ final class PickupCodeHook {
         views.setTextViewText(titleId, text);
         views.setBoolean(titleId, "setSingleLine", rows.length == 1);
         views.setInt(titleId, "setMaxLines", rows.length);
-        String prefix = titleName.equals("memory_scene_tiny_title")
-                ? "memory_scene_tiny" : "memory_scene_focused";
+        String prefix;
+        if ("memory_scene_tiny_title".equals(titleName)) {
+            prefix = "memory_scene_tiny";
+        } else if ("memory_scene_rear_title".equals(titleName)) {
+            prefix = "memory_scene_rear";
+        } else {
+            prefix = "memory_scene_focused";
+        }
         int sizeId = context.getResources().getIdentifier(prefix + "_title_text_size", "dimen",
                 Constants.VOICE_ASSIST_PACKAGE);
         int widthId = context.getResources().getIdentifier(prefix + "_text_width", "dimen",
@@ -660,10 +705,12 @@ final class PickupCodeHook {
             paint.setTextSize(baseSize);
             float widest = 0;
             for (String row : rows) widest = Math.max(widest, paint.measureText(row));
-            // Retain XiaoAi's width fitting for unusually long codes.
-            float scale = widest <= width ? 1f : Math.max(0.75f, width / widest);
+            // 按行宽精确适配，不设下限：背屏标题区只有 127dp，卡在 75% 会照样被省略号截断。
+            float scale = (width <= 0f || widest <= 0f) ? 1f : Math.min(1f, width / widest);
             float textSize = baseSize * scale;
             views.setTextViewTextSize(titleId, TypedValue.COMPLEX_UNIT_PX, textSize);
+            Log.d(Constants.LOG_TAG, "Pickup title fit " + titleName + ": rows=" + rows.length
+                    + " width=" + width + " widest=" + widest + " size=" + textSize);
             return textSize;
         }
         return 0;
