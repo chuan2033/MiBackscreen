@@ -28,6 +28,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.app.ModuleApp
 import hook.HyperBackscreen.bridge.PrefsBridge
+import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.ui.updater.UpdateChecker
 import hook.HyperBackscreen.ui.updater.UpdateDialog
 import hook.HyperBackscreen.ui.updater.UpdateInfo
@@ -56,12 +57,30 @@ internal fun RearScreenApp() {
     val scope = rememberCoroutineScope()
     val restartSuccess = stringResource(R.string.restart_success)
     val restartFailed = stringResource(R.string.restart_failed)
+    fun refreshScopes(vararg packageNames: String) {
+        scope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                packageNames.distinct().all { forceStopPackage(it) }
+            }
+            Toast.makeText(
+                context,
+                if (ok) restartSuccess else restartFailed,
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
 
     var disableLongPress by remember {
         mutableStateOf(PrefsBridge.readDisableLongPressForUi(context))
     }
     var removeWallpaperLimit by remember {
         mutableStateOf(PrefsBridge.readRemoveWallpaperLimitForUi(context))
+    }
+    var enableAppCard by remember {
+        mutableStateOf(PrefsBridge.readEnableAppCardForUi(context))
+    }
+    var removeAppCardLimit by remember {
+        mutableStateOf(PrefsBridge.readRemoveAppCardLimitForUi(context))
     }
     var fixRearScreenApply by remember {
         mutableStateOf(PrefsBridge.readFixRearScreenApplyForUi(context))
@@ -82,9 +101,6 @@ internal fun RearScreenApp() {
         mutableStateOf(PrefsBridge.readCheckUpdates(context))
     }
     var pendingUpdate by remember { mutableStateOf<UpdateInfo?>(null) }
-    var enableSwipePanel by remember {
-        mutableStateOf(PrefsBridge.readEnableSwipePanelForUi(context))
-    }
     var enablePickup by remember {
         mutableStateOf(PrefsBridge.readEnablePickupForUi(context))
     }
@@ -131,16 +147,17 @@ internal fun RearScreenApp() {
     DisposableEffect(Unit) {
         val listener = Runnable {
             scope.launch {
-                val (dlp, rwl, fix) = withContext(Dispatchers.IO) {
-                    Triple(
+                val values = withContext(Dispatchers.IO) {
+                    listOf(
                         PrefsBridge.readDisableLongPressForUi(context),
                         PrefsBridge.readRemoveWallpaperLimitForUi(context),
+                        PrefsBridge.readEnableAppCardForUi(context),
+                        PrefsBridge.readRemoveAppCardLimitForUi(context),
                         PrefsBridge.readFixRearScreenApplyForUi(context)
                     )
                 }
-                val (swipe, shortcut) = withContext(Dispatchers.IO) {
-                    PrefsBridge.readEnableSwipePanelForUi(context) to
-                        PrefsBridge.readThemeSettingsShortcutForUi(context)
+                val shortcut = withContext(Dispatchers.IO) {
+                    PrefsBridge.readThemeSettingsShortcutForUi(context)
                 }
                 val (cover, doubleTap, packages) = withContext(Dispatchers.IO) {
                     Triple(
@@ -149,10 +166,11 @@ internal fun RearScreenApp() {
                         PrefsBridge.readDoubleTapWakeDisabledPackagesForUi(context)
                     )
                 }
-                disableLongPress = dlp
-                removeWallpaperLimit = rwl
-                fixRearScreenApply = fix
-                enableSwipePanel = swipe
+                disableLongPress = values[0]
+                removeWallpaperLimit = values[1]
+                enableAppCard = values[2]
+                removeAppCardLimit = values[3]
+                fixRearScreenApply = values[4]
                 themeSettingsShortcut = shortcut
                 disableRearScreenCover = cover
                 disableDoubleTapWake = doubleTap
@@ -203,13 +221,14 @@ internal fun RearScreenApp() {
         HomeScreen(
             disableLongPress = disableLongPress,
             removeWallpaperLimit = removeWallpaperLimit,
+            removeAppCardLimit = removeAppCardLimit,
             fixRearScreenApply = fixRearScreenApply,
             floatingNavBar = floatingNavBar,
             liquidGlass = liquidGlass,
             bottomBarBlur = bottomBarBlur,
             appLanguage = appLanguage,
             checkUpdates = checkUpdates,
-            enableSwipePanel = enableSwipePanel,
+            enableAppCard = enableAppCard,
             enablePickup = enablePickup,
             disableRearScreenCover = disableRearScreenCover,
             disableDoubleTapWake = disableDoubleTapWake,
@@ -223,10 +242,17 @@ internal fun RearScreenApp() {
             onRemoveWallpaperLimitChange = { newValue ->
                 removeWallpaperLimit = newValue
                 PrefsBridge.writeRemoveWallpaperLimitFromUi(context, newValue)
+                refreshScopes(Constants.THEME_STORE_PACKAGE)
+            },
+            onRemoveAppCardLimitChange = { newValue ->
+                removeAppCardLimit = newValue
+                PrefsBridge.writeRemoveAppCardLimitFromUi(context, newValue)
+                refreshScopes(Constants.TARGET_PACKAGE)
             },
             onFixRearScreenApplyChange = { newValue ->
                 fixRearScreenApply = newValue
                 PrefsBridge.writeFixRearScreenApplyFromUi(context, newValue)
+                refreshScopes(Constants.TARGET_PACKAGE, Constants.THEME_STORE_PACKAGE)
             },
             onFloatingNavBarChange = { newValue ->
                 floatingNavBar = newValue
@@ -248,9 +274,10 @@ internal fun RearScreenApp() {
                 checkUpdates = newValue
                 PrefsBridge.writeCheckUpdates(context, newValue)
             },
-            onEnableSwipePanelChange = { newValue ->
-                enableSwipePanel = newValue
-                PrefsBridge.writeEnableSwipePanelFromUi(context, newValue)
+            onEnableAppCardChange = { newValue ->
+                enableAppCard = newValue
+                PrefsBridge.writeEnableAppCardFromUi(context, newValue)
+                refreshScopes(Constants.TARGET_PACKAGE)
             },
             onEnablePickupChange = { newValue ->
                 enablePickup = newValue
@@ -292,6 +319,7 @@ internal fun RearScreenApp() {
             onThemeSettingsShortcutChange = { enabled ->
                 themeSettingsShortcut = enabled
                 PrefsBridge.writeThemeSettingsShortcutFromUi(context, enabled)
+                refreshScopes(Constants.THEME_STORE_PACKAGE)
             }
         )
 

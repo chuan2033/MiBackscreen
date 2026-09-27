@@ -1,12 +1,14 @@
 package hook.HyperBackscreen.ui
 
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Color
-import android.graphics.Typeface
+import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
+import android.os.SystemClock
 import android.text.TextUtils
 import android.util.Log
 import android.util.TypedValue
@@ -16,6 +18,8 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -41,10 +45,15 @@ import kotlin.math.min
 object SwipePanelHost {
     private const val TAG = Constants.LOG_TAG
     private const val KNOWN_BACKSCREEN_SAFE_LEFT_PX = 298
-    private const val DISMISS_ANIMATION_MS = 180L
+    private const val DISMISS_ANIMATION_MS = 340L
+    private const val EXPAND_ANIMATION_MS = 340L
+    private const val CARD_DISMISS_MIN_SCALE = 0.8f
+    /** 面板展开后的圆角；展开/缩回时在它与胶囊圆角之间过渡。 */
+    private const val PANEL_CORNER_RADIUS_DP = 24
+    /** 底部这条窄区域上的上滑用来关闭面板，并从系统手势区里排除。 */
+    private const val BOTTOM_SWIPE_REGION_RATIO = 0.78f
     private const val SETTLE_MIN_MS = 100L
     private const val SETTLE_MAX_MS = 320L
-    private const val HEADER_TEXT_SP = 19f
     private const val ROW_TITLE_TEXT_SP = 16f
     private const val ROW_SUMMARY_TEXT_SP = 13f
 
@@ -59,6 +68,7 @@ object SwipePanelHost {
 
     private var container: FrameLayout? = null
     private var panel: SwipeDismissCard? = null
+    private var originRect: FloatArray? = null
     private var hostActivity = WeakReference<Activity>(null)
     private var dismissing = false
     private var openingDrag = false
@@ -67,6 +77,15 @@ object SwipePanelHost {
     private var pendingSettleOpen: Boolean? = null
     private var pendingVelocityY = 0f
     private var dragGeneration = 0L
+    private var launcherGestureFromBottom = false
+    private var launcherGestureDraggingUp = false
+    private var launcherGestureDownX = 0f
+    private var launcherGestureDownY = 0f
+    private var launcherGestureDismissDistance = 0f
+    private var launcherTouchDownX = 0f
+    private var launcherTouchDownY = 0f
+    private var launcherSwipeClickSuppressUntil = 0L
+    private val cardInterpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
 
     @JvmStatic
     fun beginOpeningDrag(activity: Activity, fingerY: Float) {
@@ -124,7 +143,180 @@ object SwipePanelHost {
     @JvmStatic
     fun isOpeningDrag(): Boolean = openingDrag
 
-    private fun attachPanel(activity: Activity, decor: ViewGroup): BuiltPanel {
+    /**
+     * 从背屏卡片入口打开面板：对齐系统卡片的展开方式，从被点击的那张卡片位置放大到整块面板。
+     */
+    @JvmStatic
+    fun show(activity: Activity, origin: View?) {
+        if (activity.isFinishing || activity.isDestroyed) return
+        if (isShowing()) return
+
+        removePanel(container)
+        val decor = activity.window?.decorView as? ViewGroup ?: return
+        val generation = ++dragGeneration
+        openingDrag = false
+        dragAttachPending = false
+        pendingSettleOpen = null
+        pendingVelocityY = 0f
+        hostActivity = WeakReference(activity)
+
+        decor.post {
+            if (generation != dragGeneration || hostActivity.get() !== activity) {
+                return@post
+            }
+            if (activity.isFinishing || activity.isDestroyed) {
+                clearReferences()
+                return@post
+            }
+            val built = attachPanel(activity, decor)
+            expandFromOriginatingCard(built, origin)
+            Log.d(TAG, "Panel opened from card entry")
+        }
+    }
+
+    private fun expandWithHostCardView(built: BuiltPanel, origin: View?): Boolean {
+        if (origin == null) return false
+        val root = built.root
+        val cardExpand = root.parent as? View ?: return false
+        val launcherPanel = findHostLauncherPanel(root) ?: return false
+        if (cardExpand.id != hostCardExpandContainerId(root)) return false
+        return try {
+            val callbackClass = Class.forName(
+                "U1.C0110j",
+                false,
+                launcherPanel.javaClass.classLoader,
+            )
+            val callbackConstructor = callbackClass.declaredConstructors.firstOrNull {
+                it.parameterTypes.size == 2
+                    && it.parameterTypes[1] == Integer.TYPE
+            } ?: run {
+                Log.w(TAG, "Host LauncherCardView callback constructor missing")
+                return false
+            }
+            callbackConstructor.isAccessible = true
+            val callback = callbackConstructor.newInstance(launcherPanel, 1)
+
+            callHostAnimationStatus(launcherPanel, "showAppCard", true)
+            callHostRecyclerScale(launcherPanel, 1f, CARD_DISMISS_MIN_SCALE)
+
+            val expand = cardExpand.javaClass.declaredMethods.firstOrNull {
+                it.name == "c"
+                    && it.parameterTypes.size == 2
+                    && it.parameterTypes[0] == View::class.java
+                    && it.parameterTypes[1].isAssignableFrom(callbackClass)
+            } ?: run {
+                Log.w(TAG, "Host LauncherCardView expand method missing")
+                return false
+            }
+            expand.isAccessible = true
+            expand.invoke(cardExpand, origin, callback)
+            originRect = originRect(root, origin)
+            Log.d(TAG, "Panel expanded with host LauncherCardView")
+            true
+        } catch (t: Throwable) {
+            Log.w(TAG, "Host LauncherCardView expand failed", t)
+            callHostAnimationStatus(launcherPanel, "showAppCard", false)
+            false
+        }
+    }
+
+    private fun reattachPanelToVisibleHostLayer(root: FrameLayout, decor: ViewGroup) {
+        val hostLayer = findHostLauncherContainer(decor)
+        val target = if (hostLayer != null && hostLayer.visibility == View.VISIBLE) hostLayer else decor
+        if (root.parent === target) return
+        (root.parent as? ViewGroup)?.removeView(root)
+        target.addView(root)
+        Log.d(TAG, "Panel reattached for fallback expand")
+    }
+
+    /** 把整块面板缩到 origin 卡片的屏幕矩形再放大回来；取不到 origin 时退化成上滑入场。 */
+    private fun expandFromOriginatingCard(built: BuiltPanel, origin: View?) {
+        val card = built.card
+        val root = built.root
+        val metrics = root.resources.displayMetrics
+        val width = card.width.takeIf { it > 0 } ?: metrics.widthPixels
+        val height = card.height.takeIf { it > 0 } ?: metrics.heightPixels
+        if (width <= 0 || height <= 0) return
+
+        val rect = originRect(root, origin)
+        if (rect == null) {
+            Log.d(TAG, "Panel expand fallback: origin unavailable")
+            originRect = null
+            card.translationY = height.toFloat()
+            settleOpeningDrag(true, 0f)
+            return
+        }
+
+        Log.d(TAG, "Panel expand from " + rect[0] + "," + rect[1]
+                + " " + rect[2] + "x" + rect[3] + " into " + width + "x" + height)
+        originRect = rect
+        card.pivotX = 0f
+        card.pivotY = 0f
+        card.translationX = rect[0]
+        card.translationY = rect[1]
+        card.scaleX = (rect[2] / width).coerceIn(0.05f, 1f)
+        card.scaleY = (rect[3] / height).coerceIn(0.05f, 1f)
+        card.alpha = 0.86f
+        card.animate()
+            .translationX(0f)
+            .translationY(0f)
+            .scaleX(1f)
+            .scaleY(1f)
+            .alpha(1f)
+            .setDuration(EXPAND_ANIMATION_MS)
+            .setInterpolator(cardInterpolator)
+            .start()
+        animateCornerRadius(card, capsuleCornerRadius(card, rect), panelCornerRadius(card),
+                EXPAND_ANIMATION_MS)
+    }
+
+    /** 胶囊是圆头的，所以展开起点用卡片高度的一半做圆角。 */
+    private fun capsuleCornerRadius(card: View, rect: FloatArray): Float =
+        min(rect[3] / 2f, card.height.takeIf { it > 0 }?.toFloat() ?: rect[3] / 2f)
+
+    private fun panelCornerRadius(card: View): Float = dp(card.context, PANEL_CORNER_RADIUS_DP)
+    private fun animateCornerRadius(
+        card: View,
+        from: Float,
+        to: Float,
+        duration: Long,
+    ) {
+        val background = card.background as? GradientDrawable ?: return
+        ValueAnimator.ofFloat(from, to).apply {
+            this.duration = duration
+            interpolator = DecelerateInterpolator()
+            addUpdateListener {
+                background.cornerRadius = it.animatedValue as Float
+                background.invalidateSelf()
+            }
+            start()
+        }
+    }
+
+    /**
+     * origin 在面板根布局坐标系里的矩形（左、上、宽、高），取不到返回 null。
+     *
+     * 调用时面板刚 addView 还没布局，所以越界判断只能用屏幕尺寸，不能用 root.height。
+     */
+    private fun originRect(root: View, origin: View?): FloatArray? {
+        if (origin == null || origin.width <= 0 || origin.height <= 0) return null
+        val rootLocation = IntArray(2)
+        root.getLocationOnScreen(rootLocation)
+        val originLocation = IntArray(2)
+        origin.getLocationOnScreen(originLocation)
+        val left = (originLocation[0] - rootLocation[0]).toFloat()
+        val top = (originLocation[1] - rootLocation[1]).toFloat()
+        val screenHeight = root.resources.displayMetrics.heightPixels
+        // 卡片可能被回收过，位置明显越界时不用它做起点。
+        if (top + origin.height < 0 || top > screenHeight) return null
+        return floatArrayOf(left, top, origin.width.toFloat(), origin.height.toFloat())
+    }
+
+    private fun attachPanel(
+        activity: Activity,
+        decor: ViewGroup,
+        preferHostCardExpand: Boolean = false,
+    ): BuiltPanel {
         val built = buildPanel(activity)
         container = built.root
         panel = built.card
@@ -139,10 +331,111 @@ object SwipePanelHost {
             }
         })
 
-        decor.addView(built.root)
+        val hostCardExpand = if (preferHostCardExpand) findHostCardExpandContainer(decor) else null
+        val hostLayer = findHostLauncherContainer(decor)
+        if (hostCardExpand != null && hostLayer?.visibility == View.VISIBLE) {
+            hostCardExpand.addView(built.root)
+            Log.d(TAG, "Panel attached inside host card expand container")
+        } else if (hostLayer != null && hostLayer.visibility == View.VISIBLE) {
+            hostLayer.addView(built.root)
+            Log.d(TAG, "Panel attached inside host launcher container")
+        } else {
+            decor.addView(built.root)
+            Log.d(TAG, "Panel attached to decor")
+        }
         built.root.requestFocus()
+        applyGestureExclusion(decor)
         Log.d(TAG, "Panel drag started: safeLeft=${built.safeLeft}px")
         return built
+    }
+
+    private fun hostLauncherContainerId(view: View): Int =
+        view.resources.getIdentifier(
+            "launcher_container",
+            "id",
+            Constants.TARGET_PACKAGE,
+        )
+
+    private fun hostCardExpandContainerId(view: View): Int =
+        view.resources.getIdentifier(
+            "card_expand_container",
+            "id",
+            Constants.TARGET_PACKAGE,
+        )
+
+    private fun findHostLauncherContainer(view: View): ViewGroup? {
+        val id = hostLauncherContainerId(view)
+        if (id == 0) return null
+        return view.rootView?.findViewById<View>(id) as? ViewGroup
+    }
+
+    private fun findHostCardExpandContainer(view: View): ViewGroup? {
+        val id = hostCardExpandContainerId(view)
+        if (id == 0) return null
+        return view.rootView?.findViewById<View>(id) as? ViewGroup
+    }
+
+    private fun findHostLauncherPanel(view: View): View? {
+        val launcherContainer = findHostLauncherContainer(view) ?: return null
+        var current = launcherContainer.parent
+        while (current is View) {
+            if (current.javaClass.name == "U1.C0118n") return current
+            current = current.parent
+        }
+        return null
+    }
+
+    private fun callHostAnimationStatus(launcherPanel: View, source: String, animating: Boolean) {
+        try {
+            val method = launcherPanel.javaClass.getDeclaredMethod(
+                "y",
+                String::class.java,
+                Boolean::class.javaPrimitiveType,
+            )
+            method.isAccessible = true
+            method.invoke(launcherPanel, source, animating)
+        } catch (t: Throwable) {
+            Log.w(TAG, "Host animation status update failed", t)
+        }
+    }
+
+    private fun callHostRecyclerScale(launcherPanel: View, from: Float, to: Float) {
+        try {
+            val method = launcherPanel.javaClass.getDeclaredMethod(
+                "A",
+                Float::class.javaPrimitiveType,
+                Float::class.javaPrimitiveType,
+            )
+            method.isAccessible = true
+            method.invoke(launcherPanel, from, to)
+        } catch (t: Throwable) {
+            Log.w(TAG, "Host recycler scale animation failed", t)
+        }
+    }
+
+    /**
+     * 面板在屏幕上时把底部关闭区域从系统手势里排除。
+     *
+     * 背屏底部是系统导航手势区，不排除的话"底部上滑关面板"会被系统抢走，面板收不到。
+     */
+    private fun applyGestureExclusion(decor: View) {
+        try {
+            if (decor.width <= 0 || decor.height <= 0) return
+            val top = (decor.height * BOTTOM_SWIPE_REGION_RATIO).toInt()
+            decor.setSystemGestureExclusionRects(
+                listOf(Rect(0, top, decor.width, decor.height)),
+            )
+        } catch (ignored: Throwable) {
+            // 部分 ROM 不支持，忽略
+        }
+    }
+
+    private fun clearGestureExclusion(view: View?) {
+        try {
+            view?.setSystemGestureExclusionRects(emptyList())
+        } catch (ignored: Throwable) {
+            // 部分 ROM 不支持，忽略
+        }
     }
 
     private fun applyOpeningDragTop(card: View, root: View, fingerY: Float) {
@@ -189,6 +482,12 @@ object SwipePanelHost {
 
     @JvmStatic
     fun dismiss() {
+        dismiss(false)
+    }
+
+    /** 关闭面板。底部上滑按宿主 upDragToClose 的整层缩放淡出处理。 */
+    @JvmStatic
+    fun dismiss(upward: Boolean) {
         val root = container ?: return
         if (dismissing) return
         dismissing = true
@@ -199,16 +498,179 @@ object SwipePanelHost {
             return
         }
         card.animate().cancel()
-        card.animate()
-            .translationY(root.height.toFloat())
+
+        animateLauncherStyleDismiss(card, root)
+    }
+
+    private fun animateLauncherStyleDismiss(card: View, root: FrameLayout) {
+        val target = launcherAnimationTarget(root, card)
+        target.animate().cancel()
+        target.pivotX = target.width / 2f
+        target.pivotY = target.height / 2f
+        target.animate()
+            .translationX(0f)
+            .translationY(0f)
+            .scaleX(CARD_DISMISS_MIN_SCALE)
+            .scaleY(CARD_DISMISS_MIN_SCALE)
+            .alpha(0f)
             .setDuration(DISMISS_ANIMATION_MS)
-            .withEndAction { removePanel(root) }
+            .setInterpolator(cardInterpolator)
+            .withEndAction {
+                removePanel(root)
+                target.post { resetDismissTarget(target) }
+            }
             .start()
+    }
+
+    private fun launcherAnimationTarget(root: FrameLayout, card: View): View {
+        val hostId = hostLauncherContainerId(root)
+        var current = root.parent
+        while (current is View) {
+            if (hostId != 0 && current.id == hostId) return current
+            current = current.parent
+        }
+        return card
+    }
+
+    private fun applyLauncherDismissProgress(card: View, distance: Float) {
+        val root = container
+        val target = if (root != null) launcherAnimationTarget(root, card) else card
+        val height = target.height.takeIf { it > 0 }?.toFloat()
+            ?: target.resources.displayMetrics.heightPixels.toFloat()
+        val progress = (distance / (height * 0.36f)).coerceIn(0f, 1f)
+        val scale = 1f - (1f - CARD_DISMISS_MIN_SCALE) * progress
+        target.pivotX = target.width / 2f
+        target.pivotY = target.height / 2f
+        target.translationX = 0f
+        target.translationY = 0f
+        target.scaleX = scale
+        target.scaleY = scale
+        target.alpha = 1f
+    }
+
+    private fun resetLauncherDismissProgress(card: View) {
+        val root = container
+        val target = if (root != null) launcherAnimationTarget(root, card) else card
+        target.animate()
+            .translationX(0f)
+            .translationY(0f)
+            .scaleX(1f)
+            .scaleY(1f)
+            .alpha(1f)
+            .setDuration(150L)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+    }
+
+    private fun resetDismissTarget(target: View) {
+        target.animate().cancel()
+        target.translationX = 0f
+        target.translationY = 0f
+        target.scaleX = 1f
+        target.scaleY = 1f
+        target.alpha = 1f
     }
 
     @JvmStatic
     fun isShowing(): Boolean =
         container?.visibility == View.VISIBLE && container?.parent != null && !dismissing
+
+    @JvmStatic
+    fun trackLauncherTouch(event: MotionEvent?, context: Context?) {
+        if (event == null) return
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                launcherTouchDownX = event.rawX
+                launcherTouchDownY = event.rawY
+                launcherSwipeClickSuppressUntil = 0L
+            }
+
+            MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP -> {
+                val dx = event.rawX - launcherTouchDownX
+                val dy = event.rawY - launcherTouchDownY
+                val slop = ViewConfiguration.get(
+                    context ?: panel?.context ?: hostActivity.get() ?: return,
+                ).scaledTouchSlop
+                if (dy < -slop && abs(dy) > abs(dx) * 1.15f) {
+                    launcherSwipeClickSuppressUntil = SystemClock.uptimeMillis() + 120L
+                }
+            }
+        }
+    }
+
+    @JvmStatic
+    fun shouldSuppressModuleCardClick(): Boolean =
+        SystemClock.uptimeMillis() < launcherSwipeClickSuppressUntil
+
+    @JvmStatic
+    fun handleLauncherGesture(event: MotionEvent?): Boolean {
+        val card = panel ?: return false
+        if (event == null || !isShowing()) return false
+
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                launcherGestureDownX = event.rawX
+                launcherGestureDownY = event.rawY
+                launcherGestureDraggingUp = false
+                launcherGestureDismissDistance = 0f
+                launcherGestureFromBottom = event.y > card.height * BOTTOM_SWIPE_REGION_RATIO
+                if (launcherGestureFromBottom) {
+                    Log.d(TAG, "launcher gesture captured for panel dismissal")
+                }
+                return launcherGestureFromBottom
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                if (!launcherGestureFromBottom) return false
+                val dx = event.rawX - launcherGestureDownX
+                val dy = event.rawY - launcherGestureDownY
+                val slop = ViewConfiguration.get(card.context).scaledTouchSlop
+                if (!launcherGestureDraggingUp
+                    && dy < -slop && abs(dy) > abs(dx) * 1.15f) {
+                    launcherGestureDraggingUp = true
+                    card.animate().cancel()
+                    Log.d(TAG, "launcher gesture upward drag captured")
+                }
+                if (launcherGestureDraggingUp) {
+                    launcherGestureDismissDistance = max(0f, -dy)
+                    applyLauncherDismissProgress(card, launcherGestureDismissDistance)
+                }
+                return true
+            }
+
+            MotionEvent.ACTION_UP -> {
+                if (!launcherGestureFromBottom) return false
+                val wasDragging = launcherGestureDraggingUp
+                val threshold = max(
+                    dp(card.context, 8),
+                    min(card.height * 0.04f, dp(card.context, 18)),
+                )
+                Log.d(TAG, "launcher gesture up: dragging=" + wasDragging
+                        + " distance=" + launcherGestureDismissDistance + " threshold=" + threshold)
+                if (wasDragging && launcherGestureDismissDistance >= threshold) {
+                    dismiss(true)
+                } else {
+                    resetLauncherDismissProgress(card)
+                }
+                launcherGestureFromBottom = false
+                launcherGestureDraggingUp = false
+                launcherGestureDismissDistance = 0f
+                return true
+            }
+
+            MotionEvent.ACTION_CANCEL -> {
+                if (!launcherGestureFromBottom) return false
+                if (launcherGestureDraggingUp) {
+                    resetLauncherDismissProgress(card)
+                }
+                launcherGestureFromBottom = false
+                launcherGestureDraggingUp = false
+                launcherGestureDismissDistance = 0f
+                return true
+            }
+        }
+        return launcherGestureFromBottom
+    }
 
     private data class BuiltPanel(
         val root: FrameLayout,
@@ -241,7 +703,7 @@ object SwipePanelHost {
             }
         }
 
-        val card = SwipeDismissCard(activity) { dismiss() }.apply {
+        val card = SwipeDismissCard(activity) { upward -> dismiss(upward) }.apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.TOP
             layoutParams = FrameLayout.LayoutParams(
@@ -249,12 +711,9 @@ object SwipePanelHost {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 Gravity.BOTTOM,
             )
-            background = fullPanelBackground(dark)
+            background = fullPanelBackground(dark, activity)
             isClickable = true
         }
-
-        card.addView(handleBar(activity, dark))
-        card.addView(headerRow(activity, dark, strings.title, safeLeft))
 
         if (restartRequired) {
             card.addView(
@@ -284,7 +743,7 @@ object SwipePanelHost {
 
         val content = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(safeLeft, 0, 0, 0)
+            setPadding(safeLeft, dp(activity, 14).toInt(), 0, 0)
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -293,7 +752,7 @@ object SwipePanelHost {
 
         val disableInitial = PrefsBridge.readDisableLongPressForRemote()
         val removeInitial = PrefsBridge.readRemoveWallpaperLimitForRemote()
-
+        val removeAppCardInitial = PrefsBridge.readRemoveAppCardLimitForRemote()
         content.addView(
             switchRow(
                 activity = activity,
@@ -316,6 +775,18 @@ object SwipePanelHost {
                 saveFailed = strings.saveFailed,
                 initial = removeInitial,
                 onChange = { PrefsBridge.requestRemoveWallpaperLimitWrite(activity, it) },
+            ),
+        )
+        content.addView(
+            switchRow(
+                activity = activity,
+                dark = dark,
+                title = strings.removeAppCardTitle,
+                summaryOn = strings.removeAppCardOn,
+                summaryOff = strings.removeAppCardOff,
+                saveFailed = strings.saveFailed,
+                initial = removeAppCardInitial,
+                onChange = { PrefsBridge.requestRemoveAppCardLimitWrite(activity, it) },
             ),
         )
         content.addView(
@@ -361,68 +832,6 @@ object SwipePanelHost {
         }
         val minimumPanelWidth = dp(activity, 180).toInt()
         return desired.coerceIn(0, max(0, metrics.widthPixels - minimumPanelWidth))
-    }
-
-    private fun handleBar(activity: Activity, dark: Boolean): View {
-        val width = dp(activity, 36).toInt()
-        val height = dp(activity, 4).toInt()
-        return View(activity).apply {
-            layoutParams = LinearLayout.LayoutParams(width, height).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-                topMargin = dp(activity, 7).toInt()
-                bottomMargin = dp(activity, 3).toInt()
-            }
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = height / 2f
-                setColor(if (dark) Color.argb(0x66, 255, 255, 255) else Color.argb(0x33, 0, 0, 0))
-            }
-        }
-    }
-
-    private fun headerRow(
-        activity: Activity,
-        dark: Boolean,
-        titleText: String,
-        safeLeft: Int,
-    ): LinearLayout {
-        val horizontal = dp(activity, 12).toInt()
-        return LinearLayout(activity).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = dp(activity, 44).toInt()
-            setPadding(safeLeft + horizontal, 0, dp(activity, 14).toInt(), 0)
-
-            addView(
-                TextView(activity).apply {
-                    text = titleText
-                    textSize = HEADER_TEXT_SP
-                    setTextColor(if (dark) Color.WHITE else Color.BLACK)
-                    setTypeface(null, Typeface.BOLD)
-                    maxLines = 1
-                    ellipsize = TextUtils.TruncateAt.END
-                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                },
-            )
-            addView(
-                TextView(activity).apply {
-                    text = "✕"
-                    textSize = 22f
-                    gravity = Gravity.CENTER
-                    contentDescription = titleText
-                    setTextColor(
-                        if (dark) Color.argb(0xCC, 255, 255, 255)
-                        else Color.argb(0x99, 0, 0, 0),
-                    )
-                    layoutParams = LinearLayout.LayoutParams(
-                        dp(activity, 44).toInt(),
-                        dp(activity, 44).toInt(),
-                    )
-                    isClickable = true
-                    setOnClickListener { dismiss() }
-                },
-            )
-        }
     }
 
     private fun switchRow(
@@ -515,10 +924,11 @@ object SwipePanelHost {
         return row
     }
 
-    private fun fullPanelBackground(dark: Boolean): GradientDrawable {
+    private fun fullPanelBackground(dark: Boolean, context: Context): GradientDrawable {
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             setColor(Color.parseColor(if (dark) "#1e1e20" else "#f6f6f8"))
+            cornerRadius = dp(context, PANEL_CORNER_RADIUS_DP)
         }
     }
 
@@ -529,7 +939,13 @@ object SwipePanelHost {
         }
         expectedRoot.animate().cancel()
         panel?.animate()?.cancel()
-        (expectedRoot.parent as? ViewGroup)?.removeView(expectedRoot)
+        val parent = expectedRoot.parent as? ViewGroup
+        // 关闭手势由 Activity 级 dispatchTouchEvent hook 整体消费，父 ViewGroup 收不到 UP，
+        // 无法自行复位 FLAG_DISALLOW_INTERCEPT（SwipeDismissCard 上滑时置位）。该标记残留会让
+        // 宿主手势层持续收不到触摸，表现为关闭面板后要再滑一次长按才恢复。移除前显式清掉。
+        panel?.parent?.requestDisallowInterceptTouchEvent(false)
+        clearGestureExclusion(expectedRoot.rootView)
+        parent?.removeView(expectedRoot)
         if (container === expectedRoot) clearReferences()
     }
 
@@ -537,6 +953,7 @@ object SwipePanelHost {
         dragGeneration++
         container = null
         panel = null
+        originRect = null
         hostActivity.clear()
         dismissing = false
         openingDrag = false
@@ -544,6 +961,14 @@ object SwipePanelHost {
         pendingDragTop = 0f
         pendingSettleOpen = null
         pendingVelocityY = 0f
+        launcherGestureFromBottom = false
+        launcherGestureDraggingUp = false
+        launcherGestureDownX = 0f
+        launcherGestureDownY = 0f
+        launcherGestureDismissDistance = 0f
+        launcherTouchDownX = 0f
+        launcherTouchDownY = 0f
+        launcherSwipeClickSuppressUntil = 0L
     }
 
     private fun dp(context: Context, value: Int): Float =
@@ -594,41 +1019,54 @@ object SwipePanelHost {
         val removeTitle = get(R.string.panel_remove_limit_title, "去除背屏壁纸数量限制")
         val removeOn = get(R.string.panel_remove_limit_on, "当前已去除15张上限")
         val removeOff = get(R.string.panel_remove_limit_off, "当前保持默认15张上限")
+        val removeAppCardTitle = get(R.string.panel_remove_app_card_limit_title, "移除背屏应用卡数量限制")
+        val removeAppCardOn = get(R.string.panel_remove_app_card_limit_on, "当前已去除15个应用卡上限")
+        val removeAppCardOff = get(R.string.panel_remove_app_card_limit_off, "当前保持默认15个应用卡上限")
         val saveFailed = get(R.string.panel_save_failed, "保存失败，请在主应用中修改")
     }
 
     /**
-     * 在不抢走 Switch 点击的前提下识别向下拖动：只有纵向位移超过 touchSlop 后才拦截，
-     * 此时系统会向原子控件发送 ACTION_CANCEL，后续事件由面板完成关闭动画。
+     * 在不抢走 Switch 点击的前提下识别底部上滑：只有起点落在底部区域并且纵向位移
+     * 超过 touchSlop 后才拦截，此时系统会向原子控件发送 ACTION_CANCEL。
      */
     private class SwipeDismissCard(
         context: Context,
-        private val onDismiss: () -> Unit,
+        private val onDismiss: (upward: Boolean) -> Unit,
     ) : LinearLayout(context) {
         private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
         private var downX = 0f
         private var downY = 0f
-        private var dragging = false
+        private var fromBottom = false
+        private var draggingUp = false
+        private var dismissDistance = 0f
 
         override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     downX = event.rawX
                     downY = event.rawY
-                    dragging = false
+                    draggingUp = false
+                    dismissDistance = 0f
+                    fromBottom = event.y > height * BOTTOM_SWIPE_REGION_RATIO
+                    Log.d(TAG, "dismiss card down: y=" + event.y + " height=" + height
+                            + " fromBottom=" + fromBottom)
                 }
 
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - downX
                     val dy = event.rawY - downY
-                    if (dy > touchSlop && dy > abs(dx) * 1.15f) {
-                        dragging = true
+                    if (!draggingUp && fromBottom
+                        && dy < -touchSlop && abs(dy) > abs(dx) * 1.15f) {
+                        draggingUp = true
                         parent?.requestDisallowInterceptTouchEvent(true)
+                        Log.d(TAG, "dismiss card intercept upward drag")
                         return true
                     }
                 }
 
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> dragging = false
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    draggingUp = false
+                }
             }
             return false
         }
@@ -638,40 +1076,52 @@ object SwipePanelHost {
                 MotionEvent.ACTION_DOWN -> {
                     downX = event.rawX
                     downY = event.rawY
-                    dragging = false
+                    draggingUp = false
+                    dismissDistance = 0f
+                    fromBottom = event.y > height * BOTTOM_SWIPE_REGION_RATIO
                     return true
                 }
 
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - downX
                     val dy = event.rawY - downY
-                    if (!dragging && dy > touchSlop && dy > abs(dx) * 1.15f) dragging = true
-                    if (dragging) {
-                        translationY = max(0f, dy)
+                    if (!draggingUp && fromBottom
+                        && dy < -touchSlop && abs(dy) > abs(dx) * 1.15f) {
+                        draggingUp = true
+                    }
+                    if (draggingUp) {
+                        dismissDistance = max(0f, -dy)
+                        applyLauncherDismissProgress(this, dismissDistance)
                         return true
                     }
                 }
 
                 MotionEvent.ACTION_UP -> {
-                    if (dragging) {
+                    if (draggingUp) {
                         val threshold = max(
-                            dp(context, 24),
-                            min(height * 0.22f, dp(context, 48)),
+                            dp(context, 8),
+                            min(height * 0.04f, dp(context, 18)),
                         )
-                        if (translationY >= threshold) {
-                            onDismiss()
+                        Log.d(TAG, "dismiss card up released: distance=" + dismissDistance
+                                + " threshold=" + threshold)
+                        if (dismissDistance >= threshold) {
+                            onDismiss(true)
                         } else {
-                            animate().translationY(0f).setDuration(150L).start()
+                            resetLauncherDismissProgress(this)
                         }
-                        dragging = false
+                        draggingUp = false
+                        dismissDistance = 0f
                         return true
                     }
                     return performClick()
                 }
 
                 MotionEvent.ACTION_CANCEL -> {
-                    if (dragging) animate().translationY(0f).setDuration(150L).start()
-                    dragging = false
+                    if (draggingUp) {
+                        resetLauncherDismissProgress(this)
+                    }
+                    draggingUp = false
+                    dismissDistance = 0f
                     return true
                 }
             }

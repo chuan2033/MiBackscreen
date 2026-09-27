@@ -29,7 +29,7 @@ import java.util.zip.ZipOutputStream
 
 internal object FeedbackLogExporter {
     private const val COMMAND_TIMEOUT_SECONDS = 20L
-    private const val FEEDBACK_SCHEMA_VERSION = 5
+    private const val FEEDBACK_SCHEMA_VERSION = 6
     private const val MAX_LSPOSED_OUTPUT_BYTES = 256 * 1024
     private const val MAX_LOGCAT_OUTPUT_BYTES = 1024 * 1024
     private const val MAX_HOST_LOG_OUTPUT_BYTES = 1024 * 1024
@@ -137,6 +137,8 @@ internal object FeedbackLogExporter {
         appendLine("fingerprint=${Build.FINGERPRINT}")
         appendPackageVersion(context, Constants.TARGET_PACKAGE)
         appendPackageVersion(context, Constants.THEME_STORE_PACKAGE)
+        appendPackageVersion(context, Constants.PERSONAL_ASSISTANT_PACKAGE)
+        appendPackageVersion(context, Constants.VOICE_ASSIST_PACKAGE)
     }
 
     private fun StringBuilder.appendPackageVersion(context: Context, packageName: String) {
@@ -155,8 +157,8 @@ internal object FeedbackLogExporter {
     private fun buildConfigReport(context: Context): String = buildString {
         appendLine("disable_long_press_edit=${PrefsBridge.readDisableLongPressForUi(context)}")
         appendLine("remove_wallpaper_limit=${PrefsBridge.readRemoveWallpaperLimitForUi(context)}")
+        appendLine("remove_app_card_limit=${PrefsBridge.readRemoveAppCardLimitForUi(context)}")
         appendLine("fix_rear_screen_apply=${PrefsBridge.readFixRearScreenApplyForUi(context)}")
-        appendLine("enable_swipe_panel=${PrefsBridge.readEnableSwipePanelForUi(context)}")
         appendLine("disable_rear_screen_cover=${PrefsBridge.readDisableRearScreenCoverForUi(context)}")
         appendLine("disable_double_tap_wake=${PrefsBridge.readDisableDoubleTapWakeForUi(context)}")
         appendLine("double_tap_wake_disabled_packages=${PrefsBridge.readDoubleTapWakeDisabledPackagesForUi(context)}")
@@ -231,7 +233,7 @@ internal object FeedbackLogExporter {
     private fun collectLogcat(): String = runRootCommand(
         // 全量 logcat 在日志较多的设备上可能超过采集超时；限制为各缓冲区最近 20000 行。
         "logcat -b all -d -v threadtime -t 20000 2>/dev/null " +
-            "| grep -Eai 'MiBackscreen|subscreencenter|SubScreen|MainPanel|PersistenceManager|RearScreen|rear_screen|theme_rear_widget|theme_magic|MAML|\\.mrc|AndroidRuntime' " +
+            "| grep -Eai 'MiBackscreen|subscreencenter|SubScreen|MainPanel|PersistenceManager|RearScreen|rear_screen|theme_rear_widget|theme_magic|MAML|\\.mrc|AndroidRuntime|personalassistant|Personal assistant|BackScreenStore|appcard|AI_GENERATED_APP|rearScreenAiApp|Peeko|Lumi|mibackscreen_18_personalization' " +
             "| tail -c $MAX_LOGCAT_OUTPUT_BYTES",
         MAX_LOGCAT_OUTPUT_BYTES,
     )
@@ -247,7 +249,7 @@ internal object FeedbackLogExporter {
             "echo; echo '=== related secure settings ==='; settings --user \"\$user_id\" list secure 2>/dev/null | grep -Eai 'rear|sub.?screen|back.?screen' || echo 'No matching secure settings'; " +
             "echo; echo '=== related system settings ==='; settings --user \"\$user_id\" list system 2>/dev/null | grep -Eai 'rear|sub.?screen|back.?screen' || echo 'No matching system settings'; " +
             "echo; echo '=== related global settings ==='; settings list global 2>/dev/null | grep -Eai 'rear|sub.?screen|back.?screen|theme|maml' || echo 'No matching global settings'; " +
-            "for f in \"\$base/subscreencenter/config/user_pref.json\" \"\$base/subscreencenter/config/widget.json\" \"\$base/rearScreen/runtime.json\"; do " +
+            "for f in \"\$base/subscreencenter/config/user_pref.json\" \"\$base/subscreencenter/config/widget.json\" \"\$base/subscreencenter/config/appInfo.json\" \"\$base/rearScreen/runtime.json\"; do " +
             "echo; echo \"=== file: \$f ===\"; " +
             "if [ -f \"\$f\" ]; then stat -c 'path=%n size=%s modified=%y mode=%a owner=%U:%G' \"\$f\" 2>&1; sha256sum \"\$f\" 2>&1; cat \"\$f\" 2>&1; echo; else echo 'MISSING'; fi; " +
             "done; " +
@@ -261,7 +263,7 @@ internal object FeedbackLogExporter {
             "[ -n \"\$user_id\" ] || user_id=0; " +
             "base=\"/data/system/theme_magic/users/\$user_id\"; " +
             "echo '=== filesystem ==='; df -h \"\$base\" 2>&1; " +
-            "for root in \"\$base/rearScreen\" \"\$base/subscreencenter/config\"; do " +
+            "for root in \"\$base/rearScreen\" \"\$base/rearScreenAiApp_Theme\" \"\$base/back_screen_card\" \"\$base/subscreencenter/config\" \"/product/media/rearscreen/appcard\" \"/system/media/rearscreen/appcard\"; do " +
             "echo; echo \"=== manifest: \$root ===\"; " +
             "if [ -d \"\$root\" ]; then find \"\$root\" -maxdepth 5 -type d 2>/dev/null | while IFS= read -r d; do stat -c '%n|type=dir|modified=%y|mode=%a|owner=%U:%G' \"\$d\" 2>&1; done; else echo 'MISSING'; fi; " +
             "echo; echo \"=== files: \$root ===\"; " +
@@ -286,7 +288,7 @@ internal object FeedbackLogExporter {
             "echo '=== resource probe ==='; date '+generated_at=%Y-%m-%d %H:%M:%S %z'; echo \"current_user=\$user_id\"; " +
             "print_path() { p=\"\$1\"; if [ -e \"\$p\" ]; then ls -ldZ \"\$p\" 2>&1; stat -c 'path=%n type=%F size=%s modified=%y mode=%a owner=%U:%G' \"\$p\" 2>&1; else echo \"MISSING: \$p\"; fi; }; " +
             "echo; echo '=== parent directories ==='; " +
-            "for p in /data /data/system /data/system/theme /data/system/theme/rearScreen /data/system/theme/rearScreenWhite /data/system/theme/rights /data/system/theme_magic /data/system/theme_magic/users \"/data/system/theme_magic/users/\$user_id\" \"\$base\" \"\$base/rearScreen\" \"\$base/subscreencenter\" \"\$base/subscreencenter/config\"; do print_path \"\$p\"; done; " +
+            "for p in /data /data/system /data/system/theme /data/system/theme/rearScreen /data/system/theme/rearScreenWhite /data/system/theme/rights /data/system/theme_magic /data/system/theme_magic/users \"/data/system/theme_magic/users/\$user_id\" \"\$base\" \"\$base/rearScreen\" \"\$base/rearScreenAiApp_Theme\" \"\$base/back_screen_card\" \"\$base/subscreencenter\" \"\$base/subscreencenter/config\" /product/media/rearscreen /product/media/rearscreen/appcard /system/media/rearscreen /system/media/rearscreen/appcard /product/etc/precust_theme/theme/.data/content/rearscreen /product/etc/precust_theme/theme/.data/meta/rearscreen /product/etc/precust_theme/theme/.data/preview/theme /product/etc/precust_theme/theme/.data/rights/theme ${Constants.AI_MATE_PEEKO_PREVIEW_PATH} ${Constants.AI_MATE_LUMI_PREVIEW_PATH}; do print_path \"\$p\"; done; " +
             "settings --user \"\$user_id\" get secure theme_rear_widget 2>/dev/null > \"\$tmp\"; " +
             "for f in \"\$base/subscreencenter/config/widget.json\" \"\$base/rearScreen/runtime.json\"; do [ -f \"\$f\" ] && cat \"\$f\" >> \"\$tmp\"; done; " +
             "if [ -d \"\$base/rearScreen\" ]; then find \"\$base/rearScreen\" -maxdepth 2 -type f -name editConfig 2>/dev/null | sort | tail -n 80 | while IFS= read -r f; do echo \"\$f\" >> \"\$tmp\"; cat \"\$f\" >> \"\$tmp\"; done; fi; " +
@@ -315,7 +317,7 @@ internal object FeedbackLogExporter {
             "if [ -d \"\$root\" ]; then ls -lZ \"\$root\" 2>&1; else echo 'MISSING'; fi; " +
             "done; " +
             "theme_root=\"/storage/emulated/\$user_id/Android/data/com.android.thememanager/files/MIUI/theme/.data\"; " +
-            "for root in \"\$theme_root/content/rearscreen\" \"\$theme_root/meta/rearscreen\" \"\$theme_root/preview/theme\"; do " +
+            "for root in \"\$theme_root/content/rearscreen\" \"\$theme_root/meta/rearscreen\" \"\$theme_root/preview/theme\" \"/data/system/theme_magic/users/\$user_id/rearScreenAiApp_Theme\" \"/data/system/theme_magic/users/\$user_id/back_screen_card\"; do " +
             "echo; echo \"=== theme cache manifest: \$root ===\"; " +
             "if [ -d \"\$root\" ]; then find \"\$root\" -maxdepth 3 -type f 2>/dev/null | sort | tail -n 500 | while IFS= read -r f; do stat -c '%n|size=%s|modified=%y|mode=%a|owner=%U:%G' \"\$f\" 2>&1; done; else echo 'MISSING'; fi; " +
             "done; " +
@@ -330,12 +332,16 @@ internal object FeedbackLogExporter {
             "echo; echo '=== compatibility properties ==='; getprop vendor.display.builtin_presentation 2>&1 | sed 's/^/vendor.display.builtin_presentation=/'; " +
             "echo; echo '=== build properties ==='; getprop 2>/dev/null | grep -Eai 'ro\\.product|ro\\.build\\.|ro\\.system\\.|ro\\.vendor\\.|ro\\.miui|ro\\.hyperos|persist\\.sys\\.|persist\\.miui|persist\\.hyperos' | sort; " +
             "echo; echo '=== storage ==='; df -h /data /data/system /data/system/theme /data/system/theme_magic 2>&1; " +
+            "echo; echo '=== mibackscreen addon module ==='; " +
+            "if [ -x /data/adb/ksu/bin/ksud ]; then /data/adb/ksu/bin/ksud module list 2>&1 | grep -A20 -B2 'mibackscreen_18_personalization\\|MiBackscreen' || true; else echo 'ksud unavailable'; fi; " +
+            "for f in /data/adb/modules/mibackscreen_18_personalization/module.prop /data/adb/modules/mibackscreen_18_personalization/disable; do echo; echo \"--- \$f ---\"; if [ -e \"\$f\" ]; then cat \"\$f\" 2>&1; else echo 'MISSING'; fi; done; " +
+            "echo; echo '=== rear resource mounts ==='; mount 2>/dev/null | grep -E 'media/rearscreen|precust_theme/theme/.data' || echo 'No MiBackscreen resource mounts'; " +
             "echo; echo '=== related packages ==='; " +
-            "for pkg in ${Constants.TARGET_PACKAGE} ${Constants.THEME_STORE_PACKAGE} ${Constants.MODULE_PACKAGE}; do " +
+            "for pkg in ${Constants.TARGET_PACKAGE} ${Constants.THEME_STORE_PACKAGE} ${Constants.PERSONAL_ASSISTANT_PACKAGE} ${Constants.VOICE_ASSIST_PACKAGE} ${Constants.MODULE_PACKAGE}; do " +
             "echo; echo \"--- package: \$pkg ---\"; " +
             "dumpsys package \"\$pkg\" 2>/dev/null | grep -Eai 'Package \\[|versionName|versionCode|codePath|resourcePath|dataDir|userId=|pkgFlags|privateFlags|enabled=|stopped=|firstInstallTime|lastUpdateTime|installerPackageName|targetSdk|uses-permission|granted=true' | head -n 220 || echo 'No package dump'; " +
             "done; " +
-            "echo; echo '=== related processes ==='; ps -A -o USER,PID,PPID,NAME,ARGS 2>/dev/null | grep -E 'subscreencenter|thememanager|HyperBackscreen' || ps -A 2>/dev/null | grep -E 'subscreencenter|thememanager|HyperBackscreen' || echo 'No related process'; " +
+            "echo; echo '=== related processes ==='; ps -A -o USER,PID,PPID,NAME,ARGS 2>/dev/null | grep -E 'subscreencenter|thememanager|personalassistant|voiceassist|HyperBackscreen' || ps -A 2>/dev/null | grep -E 'subscreencenter|thememanager|personalassistant|voiceassist|HyperBackscreen' || echo 'No related process'; " +
             "} | tail -c $MAX_SYSTEM_DIAGNOSTICS_OUTPUT_BYTES",
         MAX_SYSTEM_DIAGNOSTICS_OUTPUT_BYTES,
     )
@@ -357,7 +363,14 @@ internal object FeedbackLogExporter {
         if (!destination.exists() && !destination.mkdirs()) {
             return DatabaseSnapshot(emptyList(), "Failed to create database staging directory.\n")
         }
-        val databaseNames = listOf("rearScreen.db", "rearScreen.db-wal", "rearScreen.db-shm")
+        val databaseNames = listOf(
+            "rearScreen.db",
+            "rearScreen.db-wal",
+            "rearScreen.db-shm",
+            "rearScreenAiApp.db",
+            "rearScreenAiApp.db-wal",
+            "rearScreenAiApp.db-shm",
+        )
         val stagedNames = databaseNames.flatMap { name ->
             listOf("credential-$name", "device-$name")
         }
@@ -387,6 +400,13 @@ internal object FeedbackLogExporter {
                 "if [ ! -f \"\$db\" ]; then echo 'MISSING: rearScreen.db'; " +
                 "elif command -v sqlite3 >/dev/null 2>&1; then " +
                 "sqlite3 -header -separator '|' \"\$db\" \"PRAGMA user_version; SELECT resId,applyId,resName,position,applyTime,updateTime,isDownload,isThirdParties,supportAon,resLocalPath,resSnapshotPath,rightPath,metaPath,metaSnapshotPath,mamlEditConfigPath,snapshotPreviewPath FROM rearScreenMine ORDER BY position DESC;\" 2>&1; " +
+                "else echo 'sqlite3 unavailable; inspect the included database snapshot.'; fi; " +
+                "echo; echo '=== rearScreenAiApp database schema ==='; " +
+                "db=\"/data/user/\$user_id/com.android.thememanager/databases/rearScreenAiApp.db\"; " +
+                "if [ ! -f \"\$db\" ]; then db=\"/data/user_de/\$user_id/com.android.thememanager/databases/rearScreenAiApp.db\"; fi; " +
+                "if [ ! -f \"\$db\" ]; then echo 'MISSING: rearScreenAiApp.db'; " +
+                "elif command -v sqlite3 >/dev/null 2>&1; then " +
+                "sqlite3 -header -separator '|' \"\$db\" \"PRAGMA user_version; SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name;\" 2>&1; " +
                 "else echo 'sqlite3 unavailable; inspect the included database snapshot.'; fi " +
                 "| tail -c $MAX_DATABASE_REPORT_OUTPUT_BYTES",
             MAX_DATABASE_REPORT_OUTPUT_BYTES,

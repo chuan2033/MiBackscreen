@@ -5,6 +5,7 @@ import static org.junit.Assert.assertNull;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import org.junit.Test;
 
@@ -50,5 +51,18 @@ public class SettingsEntryPlacementTest {
                         "user_guide",
                         "phone_case",
                         "brightness")));
+    }
+
+    @Test
+    public void reservesConsecutiveSlotsAfterAnchorForInjectedEntries() {
+        List<Integer> indexes = SettingsEntryPlacement.insertionIndexesAfterAnchor(
+                Arrays.asList(
+                        "subscreen_person",
+                        "serve_assistant",
+                        "user_guide",
+                        "phone_case"),
+                2);
+
+        assertEquals(Arrays.asList(3, 4), indexes);
     }
 }

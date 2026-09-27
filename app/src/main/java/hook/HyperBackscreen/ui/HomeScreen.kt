@@ -20,19 +20,25 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults.flingBehavior
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -73,6 +79,7 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurDefaults
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
@@ -87,6 +94,7 @@ import top.yukonga.miuix.kmp.preference.CheckboxLocation
 import top.yukonga.miuix.kmp.preference.CheckboxPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
+import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.window.WindowDialog
 
@@ -127,13 +135,14 @@ private val restartScopeItems = listOf(
 internal fun HomeScreen(
     disableLongPress: Boolean,
     removeWallpaperLimit: Boolean,
+    removeAppCardLimit: Boolean,
     fixRearScreenApply: Boolean,
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
     bottomBarBlur: Boolean,
     appLanguage: AppLanguage,
     checkUpdates: Boolean,
-    enableSwipePanel: Boolean,
+    enableAppCard: Boolean,
     disableRearScreenCover: Boolean,
     disableDoubleTapWake: Boolean,
     doubleTapWakeDisabledPackages: String,
@@ -141,13 +150,14 @@ internal fun HomeScreen(
     moduleActivated: Boolean,
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
+    onRemoveAppCardLimitChange: (Boolean) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
     onBottomBarBlurChange: (Boolean) -> Unit,
     onAppLanguageChange: (AppLanguage) -> Unit,
     onCheckUpdatesChange: (Boolean) -> Unit,
-    onEnableSwipePanelChange: (Boolean) -> Unit,
+    onEnableAppCardChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onDisableDoubleTapWakeChange: (Boolean) -> Unit,
     onDoubleTapWakeDisabledPackagesChange: (String) -> Unit,
@@ -188,14 +198,14 @@ internal fun HomeScreen(
                 bottomBarBlur = bottomBarBlur,
                 appLanguage = appLanguage,
                 checkUpdates = checkUpdates,
-                enableSwipePanel = enableSwipePanel,
+                enableAppCard = enableAppCard,
                 launcherIconHidden = launcherIconHidden,
                 onFloatingNavBarChange = onFloatingNavBarChange,
                 onLiquidGlassChange = onLiquidGlassChange,
                 onBottomBarBlurChange = onBottomBarBlurChange,
                 onAppLanguageChange = onAppLanguageChange,
                 onCheckUpdatesChange = onCheckUpdatesChange,
-                onEnableSwipePanelChange = onEnableSwipePanelChange,
+                onEnableAppCardChange = onEnableAppCardChange,
                 onLauncherIconHiddenChange = onLauncherIconHiddenChange,
                 themeMode = themeMode,
                 onThemeModeChange = onThemeModeChange,
@@ -212,21 +222,19 @@ internal fun HomeScreen(
             )
             null -> MainContent(
                 selected = selected,
-                listState = when (selected) {
-                    HomeNavigationPolicy.Tab.HOME -> homeListState
-                    HomeNavigationPolicy.Tab.FUNCTION -> functionListState
-                    HomeNavigationPolicy.Tab.ABOUT -> aboutListState
-                },
+                homeListState = homeListState,
+                functionListState = functionListState,
+                aboutListState = aboutListState,
                 onSelectedChange = { selected = it },
                 disableLongPress = disableLongPress,
                 removeWallpaperLimit = removeWallpaperLimit,
+                removeAppCardLimit = removeAppCardLimit,
                 fixRearScreenApply = fixRearScreenApply,
                 floatingNavBar = floatingNavBar,
                 liquidGlass = liquidGlass,
                 bottomBarBlur = bottomBarBlur,
                 appLanguage = appLanguage,
                 checkUpdates = checkUpdates,
-                enableSwipePanel = enableSwipePanel,
                 disableRearScreenCover = disableRearScreenCover,
                 disableDoubleTapWake = disableDoubleTapWake,
                 doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
@@ -234,13 +242,13 @@ internal fun HomeScreen(
                 moduleActivated = moduleActivated,
                 onDisableLongPressChange = onDisableLongPressChange,
                 onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
+                onRemoveAppCardLimitChange = onRemoveAppCardLimitChange,
                 onFixRearScreenApplyChange = onFixRearScreenApplyChange,
                 onFloatingNavBarChange = onFloatingNavBarChange,
                 onLiquidGlassChange = onLiquidGlassChange,
                 onBottomBarBlurChange = onBottomBarBlurChange,
                 onAppLanguageChange = onAppLanguageChange,
                 onCheckUpdatesChange = onCheckUpdatesChange,
-                onEnableSwipePanelChange = onEnableSwipePanelChange,
                 onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                 onDisableDoubleTapWakeChange = onDisableDoubleTapWakeChange,
                 onLauncherIconHiddenChange = onLauncherIconHiddenChange,
@@ -267,14 +275,14 @@ private fun SettingsPage(
     bottomBarBlur: Boolean,
     appLanguage: AppLanguage,
     checkUpdates: Boolean,
-    enableSwipePanel: Boolean,
+    enableAppCard: Boolean,
     launcherIconHidden: Boolean,
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
     onBottomBarBlurChange: (Boolean) -> Unit,
     onAppLanguageChange: (AppLanguage) -> Unit,
     onCheckUpdatesChange: (Boolean) -> Unit,
-    onEnableSwipePanelChange: (Boolean) -> Unit,
+    onEnableAppCardChange: (Boolean) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
@@ -333,14 +341,14 @@ private fun SettingsPage(
                         bottomBarBlur = bottomBarBlur,
                         appLanguage = appLanguage,
                         checkUpdates = checkUpdates,
-                        enableSwipePanel = enableSwipePanel,
+                        enableAppCard = enableAppCard,
                         launcherIconHidden = launcherIconHidden,
                         onFloatingNavBarChange = onFloatingNavBarChange,
                         onLiquidGlassChange = onLiquidGlassChange,
                         onBottomBarBlurChange = onBottomBarBlurChange,
                         onAppLanguageChange = onAppLanguageChange,
                         onCheckUpdatesChange = onCheckUpdatesChange,
-                        onEnableSwipePanelChange = onEnableSwipePanelChange,
+                        onEnableAppCardChange = onEnableAppCardChange,
                         onLauncherIconHiddenChange = onLauncherIconHiddenChange,
                         themeMode = themeMode,
                         onThemeModeChange = onThemeModeChange,
@@ -357,64 +365,34 @@ private fun SettingsPage(
 }
 
 @Composable
-private fun MainContent(
-    selected: HomeNavigationPolicy.Tab,
+private fun MainTabPage(
+    tab: HomeNavigationPolicy.Tab,
     listState: LazyListState,
-    onSelectedChange: (HomeNavigationPolicy.Tab) -> Unit,
+    backdrop: LayerBackdrop,
+    moduleActivated: Boolean,
     disableLongPress: Boolean,
     removeWallpaperLimit: Boolean,
+    removeAppCardLimit: Boolean,
     fixRearScreenApply: Boolean,
-    floatingNavBar: Boolean,
-    liquidGlass: Boolean,
-    bottomBarBlur: Boolean,
-    appLanguage: AppLanguage,
-    checkUpdates: Boolean,
-    enableSwipePanel: Boolean,
     disableRearScreenCover: Boolean,
     disableDoubleTapWake: Boolean,
     doubleTapWakeDisabledPackages: String,
-    launcherIconHidden: Boolean,
-    moduleActivated: Boolean,
+    enablePickup: Boolean,
+    themeMode: ThemeMode,
+    onDonateClick: () -> Unit,
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
+    onRemoveAppCardLimitChange: (Boolean) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
-    onFloatingNavBarChange: (Boolean) -> Unit,
-    onLiquidGlassChange: (Boolean) -> Unit,
-    onBottomBarBlurChange: (Boolean) -> Unit,
-    onAppLanguageChange: (AppLanguage) -> Unit,
-    onCheckUpdatesChange: (Boolean) -> Unit,
-    onEnableSwipePanelChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onDisableDoubleTapWakeChange: (Boolean) -> Unit,
-    onLauncherIconHiddenChange: (Boolean) -> Unit,
-    onSettingsClick: () -> Unit,
+    onEnablePickupChange: (Boolean) -> Unit,
     onAddDisabledAppsClick: () -> Unit,
     onLicenseClick: () -> Unit,
-    onDonateClick: () -> Unit,
-    onForceStopPackage: (String) -> Unit,
-    themeMode: ThemeMode,
-    onThemeModeChange: (ThemeMode) -> Unit,
-    themeSettingsShortcut: Boolean,
-    onThemeSettingsShortcutChange: (Boolean) -> Unit,
-    enablePickup: Boolean,
-    onEnablePickupChange: (Boolean) -> Unit
+    onRestartClick: () -> Unit,
+    onSettingsClick: () -> Unit
 ) {
     val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
-    val surfaceColor = MiuixTheme.colorScheme.surface
-    val backdrop = rememberLayerBackdrop {
-        drawRect(surfaceColor)
-        drawContent()
-    }
-    val glassBlurColors = BlurDefaults.blurColors(
-        blendColors = listOf(
-            BlendColorEntry(
-                color = MiuixTheme.colorScheme.surface.copy(alpha = 0.4f)
-            )
-        )
-    )
-
-    var showRestartDialog by remember { mutableStateOf(false) }
-    val checkedItems = remember { mutableStateMapOf<String, Boolean>() }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -422,18 +400,18 @@ private fun MainContent(
         topBar = {
             BlurredBar(backdrop) {
                 TopAppBar(
-                    title = stringResource(navItems.first { it.tab == selected }.labelRes),
+                    title = stringResource(navItems.first { it.tab == tab }.labelRes),
                     color = Color.Transparent,
                     scrollBehavior = scrollBehavior,
                     actions = {
-                        val topAction = HomeNavigationPolicy.topActionFor(selected)
+                        val topAction = HomeNavigationPolicy.topActionFor(tab)
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
                                 .clickable {
                                     when (topAction) {
-                                        HomeNavigationPolicy.TopAction.RESTART -> showRestartDialog = true
+                                        HomeNavigationPolicy.TopAction.RESTART -> onRestartClick()
                                         HomeNavigationPolicy.TopAction.SETTINGS -> onSettingsClick()
                                     }
                                 },
@@ -458,59 +436,200 @@ private fun MainContent(
             }
         }
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.layerBackdrop(backdrop)) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .scrollEndHaptic()
-                        .overScrollVertical()
-                        .nestedScroll(scrollBehavior.nestedScrollConnection)
-                        .padding(horizontal = 12.dp),
-                    contentPadding = PaddingValues(
-                        top = innerPadding.calculateTopPadding()
-                    )
-                ) {
-                    when (selected) {
-                        HomeNavigationPolicy.Tab.HOME -> item {
-                            HomePage(
-                                moduleActivated = moduleActivated,
-                                usesDynamicColors = themeMode.usesDynamicColors,
-                                onDonateClick = onDonateClick
-                            )
-                        }
-                        HomeNavigationPolicy.Tab.FUNCTION -> item {
-                            FunctionPage(
-                                disableLongPress = disableLongPress,
-                                removeWallpaperLimit = removeWallpaperLimit,
-                                fixRearScreenApply = fixRearScreenApply,
-                                disableRearScreenCover = disableRearScreenCover,
-                                disableDoubleTapWake = disableDoubleTapWake,
-                                doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
-                                enablePickup = enablePickup,
-                                onDisableLongPressChange = onDisableLongPressChange,
-                                onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
-                                onFixRearScreenApplyChange = onFixRearScreenApplyChange,
-                                onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
-                                onDisableDoubleTapWakeChange = onDisableDoubleTapWakeChange,
-                                onEnablePickupChange = onEnablePickupChange,
-                                onAddDisabledAppsClick = onAddDisabledAppsClick
-                            )
-                        }
-                        HomeNavigationPolicy.Tab.ABOUT -> item {
-                            AboutPage(onLicenseClick = onLicenseClick)
-                        }
-                    }
-                    item {
-                        Spacer(
-                            Modifier
-                                .height(HomeNavigationPolicy.mainContentBottomSpacerDp().dp)
-                                .navigationBarsPadding()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .layerBackdrop(backdrop)
+        ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .scrollEndHaptic()
+                    .overScrollVertical()
+                    .nestedScroll(scrollBehavior.nestedScrollConnection)
+                    .padding(horizontal = 12.dp),
+                contentPadding = PaddingValues(
+                    top = innerPadding.calculateTopPadding()
+                )
+            ) {
+                when (tab) {
+                    HomeNavigationPolicy.Tab.HOME -> item {
+                        HomePage(
+                            moduleActivated = moduleActivated,
+                            usesDynamicColors = themeMode.usesDynamicColors,
+                            onDonateClick = onDonateClick
                         )
                     }
+                    HomeNavigationPolicy.Tab.FUNCTION -> item {
+                        FunctionPage(
+                            disableLongPress = disableLongPress,
+                            removeWallpaperLimit = removeWallpaperLimit,
+                            removeAppCardLimit = removeAppCardLimit,
+                            fixRearScreenApply = fixRearScreenApply,
+                            disableRearScreenCover = disableRearScreenCover,
+                            disableDoubleTapWake = disableDoubleTapWake,
+                            doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
+                            enablePickup = enablePickup,
+                            onDisableLongPressChange = onDisableLongPressChange,
+                            onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
+                            onRemoveAppCardLimitChange = onRemoveAppCardLimitChange,
+                            onFixRearScreenApplyChange = onFixRearScreenApplyChange,
+                            onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
+                            onDisableDoubleTapWakeChange = onDisableDoubleTapWakeChange,
+                            onEnablePickupChange = onEnablePickupChange,
+                            onAddDisabledAppsClick = onAddDisabledAppsClick
+                        )
+                    }
+                    HomeNavigationPolicy.Tab.ABOUT -> item {
+                        AboutPage(onLicenseClick = onLicenseClick)
+                    }
+                }
+                item {
+                    Spacer(
+                        Modifier
+                            .height(HomeNavigationPolicy.mainContentBottomSpacerDp().dp)
+                            .navigationBarsPadding()
+                    )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun MainContent(
+    selected: HomeNavigationPolicy.Tab,
+    homeListState: LazyListState,
+    functionListState: LazyListState,
+    aboutListState: LazyListState,
+    onSelectedChange: (HomeNavigationPolicy.Tab) -> Unit,
+    disableLongPress: Boolean,
+    removeWallpaperLimit: Boolean,
+    removeAppCardLimit: Boolean,
+    fixRearScreenApply: Boolean,
+    floatingNavBar: Boolean,
+    liquidGlass: Boolean,
+    bottomBarBlur: Boolean,
+    appLanguage: AppLanguage,
+    checkUpdates: Boolean,
+    disableRearScreenCover: Boolean,
+    disableDoubleTapWake: Boolean,
+    doubleTapWakeDisabledPackages: String,
+    launcherIconHidden: Boolean,
+    moduleActivated: Boolean,
+    onDisableLongPressChange: (Boolean) -> Unit,
+    onRemoveWallpaperLimitChange: (Boolean) -> Unit,
+    onRemoveAppCardLimitChange: (Boolean) -> Unit,
+    onFixRearScreenApplyChange: (Boolean) -> Unit,
+    onFloatingNavBarChange: (Boolean) -> Unit,
+    onLiquidGlassChange: (Boolean) -> Unit,
+    onBottomBarBlurChange: (Boolean) -> Unit,
+    onAppLanguageChange: (AppLanguage) -> Unit,
+    onCheckUpdatesChange: (Boolean) -> Unit,
+    onDisableRearScreenCoverChange: (Boolean) -> Unit,
+    onDisableDoubleTapWakeChange: (Boolean) -> Unit,
+    onLauncherIconHiddenChange: (Boolean) -> Unit,
+    onSettingsClick: () -> Unit,
+    onAddDisabledAppsClick: () -> Unit,
+    onLicenseClick: () -> Unit,
+    onDonateClick: () -> Unit,
+    onForceStopPackage: (String) -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
+    themeSettingsShortcut: Boolean,
+    onThemeSettingsShortcutChange: (Boolean) -> Unit,
+    enablePickup: Boolean,
+    onEnablePickupChange: (Boolean) -> Unit
+) {
+    val surfaceColor = MiuixTheme.colorScheme.surface
+    val tabContentBackdrop = rememberLayerBackdrop {
+        drawRect(surfaceColor)
+        drawContent()
+    }
+    val bottomBarBackdrop = rememberLayerBackdrop {
+        drawRect(surfaceColor)
+        drawContent()
+    }
+    val glassBlurColors = BlurDefaults.blurColors(
+        blendColors = listOf(
+            BlendColorEntry(
+                color = MiuixTheme.colorScheme.surface.copy(alpha = 0.4f)
+            )
+        )
+    )
+
+    var showRestartDialog by remember { mutableStateOf(false) }
+    val checkedItems = remember { mutableStateMapOf<String, Boolean>() }
+    val selectedPage = navItems.indexOfFirst { it.tab == selected }.coerceAtLeast(0)
+    val pagerState = rememberPagerState(initialPage = selectedPage) { navItems.size }
+    LaunchedEffect(selectedPage) {
+        if (pagerState.currentPage != selectedPage || pagerState.targetPage != selectedPage) {
+            pagerState.animateScrollToPage(
+                page = selectedPage,
+                animationSpec = PagerNavigationSpringSpec
+            )
+        }
+    }
+
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }.collect { page ->
+            navItems.getOrNull(page)?.tab?.let(onSelectedChange)
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (bottomBarBlur) {
+                        Modifier.layerBackdrop(bottomBarBackdrop)
+                    } else {
+                        Modifier
+                    }
+                ),
+            beyondViewportPageCount = navItems.size - 1,
+            overscrollEffect = null,
+            flingBehavior = flingBehavior(
+                state = pagerState,
+                snapAnimationSpec = PagerNavigationSpringSpec
+            )
+        ) { page ->
+            val tab = navItems[page].tab
+            MainTabPage(
+                tab = tab,
+                listState = when (tab) {
+                    HomeNavigationPolicy.Tab.HOME -> homeListState
+                    HomeNavigationPolicy.Tab.FUNCTION -> functionListState
+                    HomeNavigationPolicy.Tab.ABOUT -> aboutListState
+                },
+                backdrop = tabContentBackdrop,
+                moduleActivated = moduleActivated,
+                disableLongPress = disableLongPress,
+                removeWallpaperLimit = removeWallpaperLimit,
+                removeAppCardLimit = removeAppCardLimit,
+                fixRearScreenApply = fixRearScreenApply,
+                disableRearScreenCover = disableRearScreenCover,
+                disableDoubleTapWake = disableDoubleTapWake,
+                doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
+                enablePickup = enablePickup,
+                themeMode = themeMode,
+                onDonateClick = onDonateClick,
+                onDisableLongPressChange = onDisableLongPressChange,
+                onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
+                onRemoveAppCardLimitChange = onRemoveAppCardLimitChange,
+                onFixRearScreenApplyChange = onFixRearScreenApplyChange,
+                onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
+                onDisableDoubleTapWakeChange = onDisableDoubleTapWakeChange,
+                onEnablePickupChange = onEnablePickupChange,
+                onAddDisabledAppsClick = onAddDisabledAppsClick,
+                onLicenseClick = onLicenseClick,
+                onRestartClick = { showRestartDialog = true },
+                onSettingsClick = onSettingsClick
+            )
+        }
 
             if (!floatingNavBar) {
                 NavigationBar(
@@ -519,7 +638,7 @@ private fun MainContent(
                         .then(
                             if (bottomBarBlur) {
                                 Modifier.textureBlur(
-                                    backdrop = backdrop,
+                                    backdrop = bottomBarBackdrop,
                                     shape = RectangleShape,
                                     blurRadius = 20f,
                                     colors = glassBlurColors
@@ -552,13 +671,14 @@ private fun MainContent(
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
                         .padding(bottom = 16.dp)
+                        .offset(y = 12.dp)
                 ) {
-                    FloatingBottomBar(
-                        selectedIndex = { navItems.indexOfFirst { it.tab == selected } },
-                        onSelected = { index -> onSelectedChange(navItems[index].tab) },
-                        backdrop = backdrop,
-                        tabsCount = navItems.size,
-                        isBlurEnabled = bottomBarBlur
+                        FloatingBottomBar(
+                            selectedIndex = { navItems.indexOfFirst { it.tab == selected } },
+                            onSelected = { index -> onSelectedChange(navItems[index].tab) },
+                            backdrop = bottomBarBackdrop,
+                            tabsCount = navItems.size,
+                            isBlurEnabled = bottomBarBlur
                     ) {
                         navItems.forEach { item ->
                             FloatingBottomBarItem(
@@ -588,13 +708,13 @@ private fun MainContent(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
-                        .padding(bottom = 16.dp)
+                        .offset(y = 40.dp)
                 ) {
                     FloatingNavigationBar(
                         modifier = Modifier.then(
                             if (bottomBarBlur) {
                                 Modifier.textureBlur(
-                                    backdrop = backdrop,
+                                    backdrop = bottomBarBackdrop,
                                     shape = RoundedCornerShape(28.dp),
                                     blurRadius = 20f,
                                     colors = glassBlurColors
@@ -623,7 +743,6 @@ private fun MainContent(
                     }
                 }
             }
-        }
     }
 
     WindowDialog(

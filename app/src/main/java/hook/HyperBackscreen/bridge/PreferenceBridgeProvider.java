@@ -54,10 +54,12 @@ public final class PreferenceBridgeProvider extends ContentProvider {
 
         boolean value = extras.getBoolean(Constants.EXTRA_PREFERENCE_VALUE, false);
         boolean staged = PrefsBridge.stagePanelPreference(context.getApplicationContext(), arg, value);
-        boolean flushed = staged && PrefsBridge.flushPanelPreference(context.getApplicationContext(), arg);
+        if (staged) {
+            PrefsBridge.flushPanelPreference(context.getApplicationContext(), arg);
+        }
         result.putBoolean(Constants.EXTRA_PREFERENCE_ACCEPTED, staged);
         Log.d(TAG, "Panel preference " + arg + "=" + value
-                + (flushed ? " saved" : " queued"));
+                + (staged ? " staged" : " rejected"));
         return result;
     }
 

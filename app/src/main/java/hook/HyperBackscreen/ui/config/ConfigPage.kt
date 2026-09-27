@@ -21,14 +21,14 @@ internal fun ConfigPage(
     bottomBarBlur: Boolean,
     appLanguage: AppLanguage,
     checkUpdates: Boolean,
-    enableSwipePanel: Boolean,
+    enableAppCard: Boolean,
     launcherIconHidden: Boolean,
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
     onBottomBarBlurChange: (Boolean) -> Unit,
     onAppLanguageChange: (AppLanguage) -> Unit,
     onCheckUpdatesChange: (Boolean) -> Unit,
-    onEnableSwipePanelChange: (Boolean) -> Unit,
+    onEnableAppCardChange: (Boolean) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
@@ -49,6 +49,12 @@ internal fun ConfigPage(
             }
         )
         SwitchPreference(
+            checked = enableAppCard,
+            onCheckedChange = onEnableAppCardChange,
+            title = stringResource(R.string.config_enable_app_card_title),
+            summary = stringResource(R.string.config_enable_app_card_summary)
+        )
+        SwitchPreference(
             checked = launcherIconHidden,
             onCheckedChange = onLauncherIconHiddenChange,
             title = stringResource(R.string.config_hide_launcher_icon)
@@ -61,16 +67,6 @@ internal fun ConfigPage(
                 stringResource(R.string.config_check_updates_summary_on)
             } else {
                 stringResource(R.string.config_check_updates_summary_off)
-            }
-        )
-        SwitchPreference(
-            checked = enableSwipePanel,
-            onCheckedChange = onEnableSwipePanelChange,
-            title = stringResource(R.string.config_swipe_panel_title),
-            summary = if (enableSwipePanel) {
-                stringResource(R.string.config_swipe_panel_summary_on)
-            } else {
-                stringResource(R.string.config_swipe_panel_summary_off)
             }
         )
         WindowDropdownPreference(

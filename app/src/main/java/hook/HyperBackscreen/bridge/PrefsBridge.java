@@ -27,6 +27,8 @@ public final class PrefsBridge {
 
     public static final boolean DEFAULT_DISABLE_LONG_PRESS_EDIT = true;
     public static final boolean DEFAULT_REMOVE_WALLPAPER_LIMIT = true;
+    public static final boolean DEFAULT_ENABLE_APP_CARD = true;
+    public static final boolean DEFAULT_REMOVE_APP_CARD_LIMIT = true;
     public static final boolean DEFAULT_FIX_REAR_SCREEN_APPLY = false;
     private static final boolean DEFAULT_FLOATING_NAV_BAR = false;
     private static final boolean DEFAULT_LIQUID_GLASS = false;
@@ -34,7 +36,6 @@ public final class PrefsBridge {
     private static final boolean DEFAULT_BOTTOM_BAR_BLUR = true;
     /** 启动时自动检查 GitHub Release 是否有新版；默认开。 */
     private static final boolean DEFAULT_CHECK_UPDATES = true;
-    public static final boolean DEFAULT_ENABLE_SWIPE_PANEL = true;
     public static final boolean DEFAULT_ENABLE_PICKUP = true;
     public static final boolean DEFAULT_DISABLE_REAR_SCREEN_COVER = false;
     public static final boolean DEFAULT_DISABLE_DOUBLE_TAP_WAKE = false;
@@ -91,7 +92,7 @@ public final class PrefsBridge {
         return local(context).getBoolean(key, def);
     }
 
-    /** UI 侧写入：本地与远程双写，Hook 端下次读取即生效，无需重启。 */
+    /** UI 侧写入：本地与远程双写，并重建跨进程快照，Hook 端下次读取即生效，无需重启。 */
     private static void writeFromUi(@NonNull Context context, @NonNull String key, boolean value) {
         SharedPreferences localPrefs = local(context);
         SharedPreferences remote = remote();
@@ -183,6 +184,22 @@ public final class PrefsBridge {
         writeFromUi(context, Constants.KEY_REMOVE_WALLPAPER_LIMIT, enabled);
     }
 
+    public static boolean readEnableAppCardForUi(@NonNull Context context) {
+        return readForUi(context, Constants.KEY_ENABLE_APP_CARD, DEFAULT_ENABLE_APP_CARD);
+    }
+
+    public static void writeEnableAppCardFromUi(@NonNull Context context, boolean enabled) {
+        writeFromUi(context, Constants.KEY_ENABLE_APP_CARD, enabled);
+    }
+
+    public static boolean readRemoveAppCardLimitForUi(@NonNull Context context) {
+        return readForUi(context, Constants.KEY_REMOVE_APP_CARD_LIMIT, DEFAULT_REMOVE_APP_CARD_LIMIT);
+    }
+
+    public static void writeRemoveAppCardLimitFromUi(@NonNull Context context, boolean enabled) {
+        writeFromUi(context, Constants.KEY_REMOVE_APP_CARD_LIMIT, enabled);
+    }
+
     public static boolean readFixRearScreenApplyForUi(@NonNull Context context) {
         return readForUi(context, Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
     }
@@ -191,20 +208,12 @@ public final class PrefsBridge {
         writeFromUi(context, Constants.KEY_FIX_REAR_SCREEN_APPLY, enabled);
     }
 
-    public static boolean readEnableSwipePanelForUi(@NonNull Context context) {
-        return readForUi(context, Constants.KEY_ENABLE_SWIPE_PANEL, DEFAULT_ENABLE_SWIPE_PANEL);
-    }
-
     public static boolean readEnablePickupForUi(@NonNull Context context) {
         return readForUi(context, Constants.KEY_ENABLE_PICKUP, DEFAULT_ENABLE_PICKUP);
     }
 
     public static void writeEnablePickupFromUi(@NonNull Context context, boolean enabled) {
         writeFromUi(context, Constants.KEY_ENABLE_PICKUP, enabled);
-    }
-
-    public static void writeEnableSwipePanelFromUi(@NonNull Context context, boolean enabled) {
-        writeFromUi(context, Constants.KEY_ENABLE_SWIPE_PANEL, enabled);
     }
 
     public static boolean readDisableRearScreenCoverForUi(@NonNull Context context) {
@@ -265,7 +274,7 @@ public final class PrefsBridge {
                         .putString(Constants.KEY_PICKUP_ISLAND_SELECTION, value)
                         .remove(PENDING_UI_PREFIX + Constants.KEY_PICKUP_ISLAND_SELECTION)
                         .commit();
-            }
+                }
         } else {
             localPrefs.edit()
                     .putString(Constants.KEY_PICKUP_ISLAND_SELECTION, value)
@@ -370,12 +379,16 @@ public final class PrefsBridge {
         return readForHook(module, Constants.KEY_REMOVE_WALLPAPER_LIMIT, DEFAULT_REMOVE_WALLPAPER_LIMIT);
     }
 
-    public static boolean shouldFixRearScreenApply(@NonNull XposedModule module) {
-        return readForHook(module, Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
+    public static boolean shouldEnableAppCard(@NonNull XposedModule module) {
+        return readForHook(module, Constants.KEY_ENABLE_APP_CARD, DEFAULT_ENABLE_APP_CARD);
     }
 
-    public static boolean shouldEnableSwipePanel(@NonNull XposedModule module) {
-        return readForHook(module, Constants.KEY_ENABLE_SWIPE_PANEL, DEFAULT_ENABLE_SWIPE_PANEL);
+    public static boolean shouldRemoveAppCardLimit(@NonNull XposedModule module) {
+        return readForHook(module, Constants.KEY_REMOVE_APP_CARD_LIMIT, DEFAULT_REMOVE_APP_CARD_LIMIT);
+    }
+
+    public static boolean shouldFixRearScreenApply(@NonNull XposedModule module) {
+        return readForHook(module, Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
     }
 
     public static boolean shouldEnablePickup(@NonNull XposedModule module) {
@@ -448,6 +461,17 @@ public final class PrefsBridge {
         return requestPanelPreferenceWrite(context, Constants.KEY_REMOVE_WALLPAPER_LIMIT, enabled);
     }
 
+    public static boolean readRemoveAppCardLimitForRemote() {
+        SharedPreferences prefs = remotePrefsFromModule();
+        return prefs != null
+                ? prefs.getBoolean(Constants.KEY_REMOVE_APP_CARD_LIMIT, DEFAULT_REMOVE_APP_CARD_LIMIT)
+                : DEFAULT_REMOVE_APP_CARD_LIMIT;
+    }
+
+    public static boolean requestRemoveAppCardLimitWrite(@NonNull Context context, boolean enabled) {
+        return requestPanelPreferenceWrite(context, Constants.KEY_REMOVE_APP_CARD_LIMIT, enabled);
+    }
+
     private static boolean requestPanelPreferenceWrite(@NonNull Context context,
                                                        @NonNull String key,
                                                        boolean value) {
@@ -469,7 +493,8 @@ public final class PrefsBridge {
 
     static boolean isPanelWritableKey(@Nullable String key) {
         return Constants.KEY_DISABLE_LONG_PRESS_EDIT.equals(key)
-                || Constants.KEY_REMOVE_WALLPAPER_LIMIT.equals(key);
+                || Constants.KEY_REMOVE_WALLPAPER_LIMIT.equals(key)
+                || Constants.KEY_REMOVE_APP_CARD_LIMIT.equals(key);
     }
 
     static boolean stagePanelPreference(@NonNull Context context,
@@ -494,7 +519,8 @@ public final class PrefsBridge {
             boolean value = localPrefs.getBoolean(pendingKey, false);
             SharedPreferences remotePrefs = service.getRemotePreferences(Constants.PREF_GROUP);
             if (!remotePrefs.edit().putBoolean(key, value).commit()) return false;
-            return localPrefs.edit().putBoolean(key, value).remove(pendingKey).commit();
+            if (!localPrefs.edit().putBoolean(key, value).remove(pendingKey).commit()) return false;
+            return true;
         } catch (Throwable e) {
             Log.w(TAG, "Failed to flush panel preference " + key, e);
             return false;
@@ -508,10 +534,11 @@ public final class PrefsBridge {
             SharedPreferences remotePrefs = service.getRemotePreferences(Constants.PREF_GROUP);
             flushPanelPreference(context, Constants.KEY_DISABLE_LONG_PRESS_EDIT);
             flushPanelPreference(context, Constants.KEY_REMOVE_WALLPAPER_LIMIT);
+            flushPanelPreference(context, Constants.KEY_REMOVE_APP_CARD_LIMIT);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_LONG_PRESS_EDIT);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REMOVE_APP_CARD_LIMIT);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_FIX_REAR_SCREEN_APPLY);
-            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_SWIPE_PANEL);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_REAR_SCREEN_COVER);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_THEME_SETTINGS_SHORTCUT);
@@ -519,8 +546,8 @@ public final class PrefsBridge {
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_PICKUP_ISLAND_SELECTION);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT, DEFAULT_REMOVE_WALLPAPER_LIMIT);
+            syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_APP_CARD_LIMIT, DEFAULT_REMOVE_APP_CARD_LIMIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
-            syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_SWIPE_PANEL, DEFAULT_ENABLE_SWIPE_PANEL);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_PICKUP, DEFAULT_ENABLE_PICKUP);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_REAR_SCREEN_COVER, DEFAULT_DISABLE_REAR_SCREEN_COVER);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, DEFAULT_DISABLE_DOUBLE_TAP_WAKE);
@@ -535,6 +562,7 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_PICKUP_ISLAND_SELECTION,
                     DEFAULT_PICKUP_ISLAND_SELECTION);
+            // 对齐完成后重建快照，保证被 Hook 进程拿到的就是这份对齐结果。
         } catch (Throwable e) {
             Log.w(TAG, "Failed to sync prefs on service available", e);
         }

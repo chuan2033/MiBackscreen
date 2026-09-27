@@ -3,16 +3,16 @@ package hook.HyperBackscreen.hook;
 import android.app.Activity;
 import android.annotation.SuppressLint;
 import android.content.ComponentName;
+import android.content.ContentResolver;
 import android.content.Context;
+import android.content.ContextWrapper;
 import android.content.Intent;
 import android.graphics.drawable.Drawable;
-import android.graphics.Rect;
 import android.os.Bundle;
+import android.os.Parcel;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.Log;
-import android.util.TypedValue;
-import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -33,6 +33,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -40,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.function.Consumer;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -55,22 +57,28 @@ import io.github.libxposed.api.XposedModule;
 public class ModuleMain extends XposedModule {
     private static final long REAR_SELECTION_PENDING_TIMEOUT_MS = 15_000L;
     private static final long THEME_DATABASE_SYNC_DEDUP_WINDOW_MS = 2_000L;
+    private static final long AI_APP_INDEX_SYNC_DEDUP_WINDOW_MS = 2_000L;
     private static final long REAR_WAKE_DECISION_LOG_INTERVAL_MS = 5_000L;
     private static final long MAX_EDIT_CONFIG_BYTES = 512 * 1024L;
+    private static final long MAX_THEME_INDEX_BYTES = 2 * 1024 * 1024L;
     private volatile boolean systemHooksInstalled = false;
     private volatile boolean hooksInstalled = false;
     private volatile boolean themeStoreHooksInstalled = false;
     private volatile boolean pickupHooksInstalled = false;
-    private final Map<Activity, SwipeState> swipeStates = new WeakHashMap<>();
-    private final Set<Activity> exclusionApplied = Collections.newSetFromMap(new WeakHashMap<>());
+    private volatile boolean personalAssistantHooksInstalled = false;
     private final Set<Object> themeSettingsShortcutControllers =
+            Collections.newSetFromMap(new WeakHashMap<>());
+    private final Set<Object> themeAiShortcutControllers =
             Collections.newSetFromMap(new WeakHashMap<>());
     private final Map<View, PendingRearSelection> pendingRearSelections =
             Collections.synchronizedMap(new WeakHashMap<>());
     @Nullable
     private volatile Integer lastThemeDatabaseSyncedWidgetId;
     private volatile long lastThemeDatabaseSyncedAtElapsed;
+    private volatile long lastAiAppIndexSyncedAtElapsed;
     private volatile long lastRearWakeDecisionLoggedAtElapsed;
+    /** insertAppWidget 交易期间置位，供应用卡列表 getter 判断是否需要封顶 size。 */
+    private static final ThreadLocal<Boolean> APP_CARD_INSERT_ACTIVE = new ThreadLocal<>();
 
     @Override
     public void onModuleLoaded(@NonNull ModuleLoadedParam param) {
@@ -104,6 +112,22 @@ public class ModuleMain extends XposedModule {
             return;
         }
 
+        if (Constants.PERSONAL_ASSISTANT_PACKAGE.equals(packageName)) {
+            if (personalAssistantHooksInstalled) return;
+            synchronized (this) {
+                if (personalAssistantHooksInstalled) return;
+                try {
+                    installPersonalAssistantStoreHooks(param.getClassLoader());
+                    personalAssistantHooksInstalled = true;
+                    log(Log.INFO, Constants.LOG_TAG, "Personal assistant hooks installed");
+                } catch (Throwable throwable) {
+                    log(Log.ERROR, Constants.LOG_TAG,
+                            "Failed to install personal assistant hooks", throwable);
+                }
+            }
+            return;
+        }
+
         if (Constants.SYSTEM_PACKAGE.equals(packageName)) {
             installSystemHooksOnce(param.getClassLoader());
             return;
@@ -116,7 +140,10 @@ public class ModuleMain extends XposedModule {
                 try {
                     SwipePanelHost.setLoadedModuleApkPath(getModuleApplicationInfo().sourceDir);
                     installLongPressHooks(param.getClassLoader());
-                    installSwipePanelHook(param.getClassLoader());
+                    installSubscreenAppWidgetGateHooks(param.getClassLoader());
+                    installAppCardLimitHook(param.getClassLoader());
+                    installModuleEntryClickHook(param.getClassLoader());
+                    installQuickPanelDispatchHook(param.getClassLoader());
                     installRearScreenSelectionSyncHook(param.getClassLoader());
                     hooksInstalled = true;
                     log(Log.INFO, Constants.LOG_TAG, "Hooks installed for " + Constants.TARGET_PACKAGE);
@@ -133,8 +160,13 @@ public class ModuleMain extends XposedModule {
                 if (themeStoreHooksInstalled) return;
                 try {
                     installWallpaperLimitHook(param.getClassLoader());
+                    installThemeDeviceIdentityHooks(param.getClassLoader());
+                    installThemeNetworkDeviceSpoofHook(param.getClassLoader());
+                    installThemeLegacyDownloadHook(param.getClassLoader());
                     installRearScreenApplyFixHook(param.getClassLoader());
                     installThemeSettingsSelectionSyncHook(param.getClassLoader());
+                    installThemeAiAppIndexSyncHooks(param.getClassLoader());
+                    installThemeSettingsAiVisibilityHooks(param.getClassLoader());
                     installThemeSettingsShortcutHook(param.getClassLoader());
                     themeStoreHooksInstalled = true;
                     log(Log.INFO, Constants.LOG_TAG, "Theme store hooks installed");
@@ -144,6 +176,131 @@ public class ModuleMain extends XposedModule {
             }
         }
 
+    }
+
+    private void installPersonalAssistantStoreHooks(@NonNull ClassLoader classLoader) {
+        Class<?> commonParamsClass = findClass(
+                Constants.PERSONAL_ASSISTANT_COMMON_PARAMS_CLASS,
+                classLoader);
+        if (commonParamsClass == null) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Personal assistant hook target missing: "
+                            + Constants.PERSONAL_ASSISTANT_COMMON_PARAMS_CLASS);
+            return;
+        }
+
+        hookMethodIfPresent(
+                commonParamsClass,
+                Constants.PERSONAL_ASSISTANT_ENVIRONMENT_SIGNAL_METHOD,
+                new Class[]{Context.class, String.class},
+                Constants.PERSONAL_ASSISTANT_COMMON_PARAMS_CLASS + "#"
+                        + Constants.PERSONAL_ASSISTANT_ENVIRONMENT_SIGNAL_METHOD,
+                chain -> {
+                    Object result = chain.proceed();
+                    if (result instanceof JSONObject environmentSignal) {
+                        environmentSignal.put("phoneDevice",
+                                Constants.PERSONAL_ASSISTANT_REAR_DEVICE);
+                        environmentSignal.put("phoneModel",
+                                Constants.PERSONAL_ASSISTANT_REAR_MODEL);
+                    }
+                    return result;
+                }
+        );
+
+        Class<?> repositoryClass = findClass(
+                Constants.PERSONAL_ASSISTANT_STORE_REPOSITORY_CLASS,
+                classLoader);
+        Class<?> responseClass = findClass(
+                Constants.PERSONAL_ASSISTANT_STORE_RESPONSE_CLASS,
+                classLoader);
+        if (repositoryClass != null && responseClass != null) {
+            hookMethodIfPresent(
+                    repositoryClass,
+                    Constants.PERSONAL_ASSISTANT_STORE_CONVERT_METHOD,
+                    new Class[]{repositoryClass, responseClass},
+                    Constants.PERSONAL_ASSISTANT_STORE_REPOSITORY_CLASS + "#"
+                            + Constants.PERSONAL_ASSISTANT_STORE_CONVERT_METHOD,
+                    chain -> {
+                        Object result = chain.proceed();
+                        logBackScreenStoreData("cloud", result);
+                        return result;
+                    }
+            );
+        } else {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Personal assistant store repository hook target missing");
+        }
+
+        Class<?> presetParserClass = findClass(
+                Constants.PERSONAL_ASSISTANT_PRESET_PARSER_CLASS,
+                classLoader);
+        if (presetParserClass != null) {
+            hookMethodIfPresent(
+                    presetParserClass,
+                    Constants.PERSONAL_ASSISTANT_PRESET_PARSE_METHOD,
+                    new Class[]{},
+                    Constants.PERSONAL_ASSISTANT_PRESET_PARSER_CLASS + "#"
+                            + Constants.PERSONAL_ASSISTANT_PRESET_PARSE_METHOD,
+                    chain -> {
+                        Object result = chain.proceed();
+                        logBackScreenStoreData("preset", result);
+                        return result;
+                    }
+            );
+        }
+    }
+
+    private void logBackScreenStoreData(@NonNull String source, @Nullable Object value) {
+        if (!(value instanceof List<?> categories)) {
+            log(Log.DEBUG, Constants.LOG_TAG,
+                    "BackScreenStore " + source + ": result is " + value);
+            return;
+        }
+        int itemCount = 0;
+        StringBuilder names = new StringBuilder();
+        int categoryLimit = Math.min(categories.size(), 8);
+        for (int i = 0; i < categoryLimit; i++) {
+            Object category = categories.get(i);
+            String title = String.valueOf(invokeNoArg(category, "getCategoryTitle"));
+            Object itemsValue = invokeNoArg(category, "getItems");
+            if (!(itemsValue instanceof List<?> items)) {
+                continue;
+            }
+            itemCount += items.size();
+            if (names.length() > 0) names.append(" | ");
+            names.append(title).append(": ");
+            int itemLimit = Math.min(items.size(), 8);
+            for (int j = 0; j < itemLimit; j++) {
+                if (j > 0) names.append(", ");
+                names.append(invokeNoArg(items.get(j), "getAppName"));
+            }
+            if (items.size() > itemLimit) {
+                names.append("...");
+            }
+        }
+        for (int i = categoryLimit; i < categories.size(); i++) {
+            Object itemsValue = invokeNoArg(categories.get(i), "getItems");
+            if (itemsValue instanceof List<?> items) {
+                itemCount += items.size();
+            }
+        }
+        log(Log.INFO, Constants.LOG_TAG,
+                "BackScreenStore " + source
+                        + ": categories=" + categories.size()
+                        + ", items=" + itemCount
+                        + ", names=[" + names + "]");
+    }
+
+    @Nullable
+    private static Object invokeNoArg(@Nullable Object target, @NonNull String methodName) {
+        if (target == null) return null;
+        try {
+            Method method = target.getClass().getMethod(methodName);
+            method.setAccessible(true);
+            return method.invoke(target);
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     private void installSystemHooksOnce(@NonNull ClassLoader classLoader) {
@@ -260,10 +417,7 @@ public class ModuleMain extends XposedModule {
     }
 
     private void installLongPressHooks(@NonNull ClassLoader classLoader) {
-        Class<?> gestureClass = findFirstClass(
-                classLoader,
-                Constants.HOOK_CLASS_LONG_PRESS_OS4,
-                Constants.HOOK_CLASS_LONG_PRESS_NEW);
+        Class<?> gestureClass = findLongPressGestureClass(classLoader);
         if (gestureClass != null) {
             hookLongPressMethod(gestureClass, Constants.HOOK_METHOD_GATE_NEW, new Class[]{MotionEvent.class}, false);
             hookLongPressMethod(gestureClass, Constants.HOOK_METHOD_LONG_PRESS_TOUCH_NEW, new Class[]{MotionEvent.class}, null);
@@ -281,88 +435,306 @@ public class ModuleMain extends XposedModule {
         if (gestureClass == null && legacyGestureClass == null) {
             log(Log.WARN, Constants.LOG_TAG,
                     "Long press hook targets missing: "
+                            + Constants.HOOK_CLASS_LONG_PRESS_18PRO + ", "
                             + Constants.HOOK_CLASS_LONG_PRESS_OS4 + ", "
                             + Constants.HOOK_CLASS_LONG_PRESS_NEW + ", "
                             + Constants.HOOK_CLASS);
         }
     }
 
-    private void installSwipePanelHook(@NonNull ClassLoader classLoader) {
-        Class<?> launcherClass = findClass(Constants.HOOK_CLASS_SUBSCREEN_LAUNCHER, classLoader);
-        if (launcherClass == null) {
-            log(Log.WARN, Constants.LOG_TAG, "Swipe panel hook target missing: " + Constants.HOOK_CLASS_SUBSCREEN_LAUNCHER);
+    /**
+     * 长按手势类的混淆名逐版本重排（Z1.v → k2.s → U1.C）。只按名字取类，会在名字被
+     * 让给别的类时静默装到错误目标上，所以逐个候选校验三个 hook 方法是否齐全。
+     */
+    @Nullable
+    private static Class<?> findLongPressGestureClass(@NonNull ClassLoader classLoader) {
+        String[] classNames = {
+                Constants.HOOK_CLASS_LONG_PRESS_18PRO,
+                Constants.HOOK_CLASS_LONG_PRESS_OS4,
+                Constants.HOOK_CLASS_LONG_PRESS_NEW
+        };
+        for (String className : classNames) {
+            Class<?> candidate = findClass(className, classLoader);
+            if (candidate == null) continue;
+            if (findDeclaredMethod(candidate, Constants.HOOK_METHOD_GATE_NEW, MotionEvent.class) == null) continue;
+            if (findDeclaredMethod(candidate, Constants.HOOK_METHOD_LONG_PRESS_TOUCH_NEW, MotionEvent.class) == null) continue;
+            if (findDeclaredMethod(candidate, Constants.HOOK_METHOD_RUN) == null) continue;
+            return candidate;
+        }
+        return null;
+    }
+    private void installSubscreenAppWidgetGateHooks(@NonNull ClassLoader classLoader) {
+        hookBooleanTrueIfPresent(
+                classLoader,
+                Constants.SUBSCREEN_DEVICE_CONFIG_CLASS,
+                Constants.SUBSCREEN_DEVICE_CONFIG_APP_WIDGET_METHOD);
+
+        Class<?> guideSettingsClass = findClass(Constants.SUBSCREEN_GUIDE_SETTINGS_CLASS, classLoader);
+        if (guideSettingsClass != null) {
+            hookMethodIfPresent(
+                    guideSettingsClass,
+                    Constants.SUBSCREEN_GUIDE_HIDDEN_METHOD,
+                    new Class[]{String.class},
+                    Constants.SUBSCREEN_GUIDE_SETTINGS_CLASS + "#"
+                            + Constants.SUBSCREEN_GUIDE_HIDDEN_METHOD,
+                    chain -> {
+                        Object key = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                        if (Constants.SUBSCREEN_APP_CARD_GUIDE_KEY.equals(key)) {
+                            return false;
+                        }
+                        return chain.proceed();
+                    }
+            );
+        } else {
+            log(Log.DEBUG, Constants.LOG_TAG,
+                    "App widget guide hook target missing: "
+                            + Constants.SUBSCREEN_GUIDE_SETTINGS_CLASS);
+        }
+
+        hookSubscreenAppWidgetSecureSetting();
+        hookSubscreenLauncherPanelGesture(classLoader);
+    }
+
+    /**
+     * 背屏应用卡上限由 SubScreenService 的 Binder 在 insertAppWidget 交易里用 15 判定，超限回 -2。
+     * 列表 getter 返回内部列表的副本，因此只在这次交易期间把副本的 size 封顶到 14：判定放行后
+     * 新增项与保存都作用在同一副本上，落盘数据完整。
+     */
+    private void installAppCardLimitHook(@NonNull ClassLoader classLoader) {
+        Class<?> binderClass = findClass(Constants.SUBSCREEN_SERVICE_BINDER_CLASS, classLoader);
+        Class<?> listManagerClass = findClass(Constants.SUBSCREEN_APP_LIST_MANAGER_CLASS, classLoader);
+        if (binderClass == null || listManagerClass == null) {
+            log(Log.WARN, Constants.LOG_TAG, "App card limit targets missing: "
+                    + Constants.SUBSCREEN_SERVICE_BINDER_CLASS + ", "
+                    + Constants.SUBSCREEN_APP_LIST_MANAGER_CLASS);
             return;
         }
-        // 在背屏主 Activity 的 dispatchTouchEvent 中做观察者式手势检测：
-        // 不替换任何监听器、不消费事件，识别"底部边缘上滑"后把面板挂到本进程窗口上。
+
         hookMethodIfPresent(
-                launcherClass,
-                "dispatchTouchEvent",
-                new Class[]{MotionEvent.class},
-                Constants.HOOK_CLASS_SUBSCREEN_LAUNCHER + "#dispatchTouchEvent",
+                findDeclaredMethod(binderClass, Constants.SUBSCREEN_ON_TRANSACT_METHOD,
+                        int.class, Parcel.class, Parcel.class, int.class),
+                Constants.SUBSCREEN_SERVICE_BINDER_CLASS + "#" + Constants.SUBSCREEN_ON_TRANSACT_METHOD,
                 chain -> {
-                    try {
-                        MotionEvent e = (MotionEvent) chain.getArgs().get(0);
-                        if (e != null && chain.getThisObject() instanceof Activity) {
-                            Activity activity = (Activity) chain.getThisObject();
-                            if (SwipePanelHost.isOpeningDrag()) {
-                                handleSwipeGesture(activity, e);
-                                return true;
-                            }
-                            if (SwipePanelHost.isShowing()) {
-                                // Send events straight to DecorView so our overlay still receives taps and
-                                // downward-dismiss gestures, while bypassing the launcher's own gesture manager.
-                                return activity.getWindow().superDispatchTouchEvent(e);
-                            }
-                            if (handleSwipeGesture(activity, e)) return true;
-                        }
-                    } catch (Throwable ignored) {
-                        // 绝不影响原事件分发
+                    Object transaction = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                    if (!(transaction instanceof Integer)
+                            || (Integer) transaction != Constants.SUBSCREEN_INSERT_APP_WIDGET_TRANSACTION) {
+                        return chain.proceed();
                     }
-                    return chain.proceed();
-                }
-        );
-        // 面板打开时拦截返回键关闭（背屏系统 Activity 不会把焦点给浮层，View 的 OnKeyListener 收不到返回键）
-        hookMethodIfPresent(
-                findMethod(launcherClass, "dispatchKeyEvent", new Class[]{KeyEvent.class}),
-                Constants.HOOK_CLASS_SUBSCREEN_LAUNCHER + "#dispatchKeyEvent",
-                chain -> {
+                    APP_CARD_INSERT_ACTIVE.set(Boolean.TRUE);
                     try {
-                        KeyEvent e = (KeyEvent) chain.getArgs().get(0);
-                        if (e != null && e.getAction() == KeyEvent.ACTION_UP
-                                && e.getKeyCode() == KeyEvent.KEYCODE_BACK
-                                && SwipePanelHost.isShowing()) {
-                            SwipePanelHost.dismiss();
-                            return true;
-                        }
-                    } catch (Throwable ignored) {
-                        // 不影响原分发
+                        return chain.proceed();
+                    } finally {
+                        APP_CARD_INSERT_ACTIVE.remove();
                     }
-                    return chain.proceed();
                 }
         );
 
-        // 手势排除区必须在触摸开始前设置；等 ACTION_DOWN 才设置已经来不及影响当前手势。
         hookMethodIfPresent(
-                findMethod(launcherClass, "onWindowFocusChanged", new Class[]{boolean.class}),
-                Constants.HOOK_CLASS_SUBSCREEN_LAUNCHER + "#onWindowFocusChanged",
+                findDeclaredMethod(listManagerClass, Constants.SUBSCREEN_APP_LIST_GETTER_METHOD),
+                Constants.SUBSCREEN_APP_LIST_MANAGER_CLASS + "#"
+                        + Constants.SUBSCREEN_APP_LIST_GETTER_METHOD,
                 chain -> {
-                    Object result = chain.proceed();
-                    try {
-                        Object hasFocus = chain.getArgs().get(0);
-                        if (Boolean.TRUE.equals(hasFocus) && chain.getThisObject() instanceof Activity) {
-                            Activity activity = (Activity) chain.getThisObject();
-                            activity.getWindow().getDecorView().post(() -> ensureGestureExclusion(activity));
-                        } else if (chain.getThisObject() instanceof Activity) {
-                            resetSwipeState((Activity) chain.getThisObject());
-                        }
-                    } catch (Throwable ignored) {
-                        // 不影响宿主焦点回调
+                    Object list = chain.proceed();
+                    if (!(list instanceof ArrayList)) return list;
+                    ArrayList<?> items = (ArrayList<?>) list;
+                    if (Boolean.TRUE.equals(APP_CARD_INSERT_ACTIVE.get())
+                            && PrefsBridge.shouldEnableAppCard(this)
+                            && PrefsBridge.shouldRemoveAppCardLimit(this)
+                            && items.size() >= Constants.SUBSCREEN_APP_CARD_LIMIT) {
+                        return new SizeCappedList(items, Constants.SUBSCREEN_APP_CARD_LIMIT - 1);
                     }
-                    return result;
+                    if (!PrefsBridge.shouldEnableAppCard(this)) return list;
+                    List<Object> withEntry = PanelAppCard.withModuleEntry(classLoader, items);
+                    if (withEntry == null) return list;
+                    log(Log.INFO, Constants.LOG_TAG,
+                            "Module panel entry inserted, size = " + withEntry.size());
+                    return withEntry;
                 }
         );
-        log(Log.INFO, Constants.LOG_TAG, "Swipe panel gesture hook installed");
+
+        // 背屏上滑面板通过这条分发链取数据，条目要在分发副本里补上。
+        hookMethodIfPresent(
+                findDeclaredMethod(listManagerClass,
+                        Constants.SUBSCREEN_APP_LIST_DISPATCH_METHOD, Consumer.class),
+                Constants.SUBSCREEN_APP_LIST_MANAGER_CLASS + "#"
+                        + Constants.SUBSCREEN_APP_LIST_DISPATCH_METHOD,
+                chain -> {
+                    Object consumer = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                    if (!(consumer instanceof Consumer)) return chain.proceed();
+                    if (!PrefsBridge.shouldEnableAppCard(this)) return chain.proceed();
+                    List<Object> args = new ArrayList<>(chain.getArgs());
+                    args.set(0, PanelAppCard.wrapDispatchConsumer(
+                            classLoader, (Consumer<?>) consumer));
+                    return chain.proceed(args.toArray());
+                }
+        );
+
+        // 保存路径按 size() 索引遍历，封顶副本要先还原成普通列表，否则尾部条目会被截掉。
+        hookMethodIfPresent(
+                findDeclaredMethodWithFirstParam(
+                        listManagerClass,
+                        Constants.SUBSCREEN_APP_LIST_SAVE_METHOD,
+                        ArrayList.class),
+                Constants.SUBSCREEN_APP_LIST_MANAGER_CLASS + "#"
+                        + Constants.SUBSCREEN_APP_LIST_SAVE_METHOD,
+                chain -> {
+                    Object list = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                    if (!(list instanceof ArrayList)) return chain.proceed();
+                    List<Object> stripped = PanelAppCard.withoutModuleEntry(
+                            classLoader, (List<?>) list);
+                    if (stripped == null && !(list instanceof SizeCappedList)) {
+                        return chain.proceed();
+                    }
+                    List<Object> args = new ArrayList<>(chain.getArgs());
+                    args.set(0, stripped != null
+                            ? stripped
+                            : new ArrayList<>((SizeCappedList) list));
+                    return chain.proceed(args.toArray());
+                }
+        );
+
+        log(Log.INFO, Constants.LOG_TAG, "App card limit hook installed");
+    }
+
+    /**
+     * 模块卡片的点击。
+     *
+     * 宿主 {@code e2.l.onClick} 对 {@code k != 3} 的条目直接 {@code startActivity(item.m)}，
+     * 那会把模块设置页开到主屏上；这里改成在背屏当前窗口里展开快捷面板，和原来的上滑面板
+     * 是同一套 UI，只是入口换成卡片。
+     */
+    private void installModuleEntryClickHook(@NonNull ClassLoader classLoader) {
+        Class<?> holderClass = findClass(Constants.SUBSCREEN_LAUNCHER_HOLDER_CLASS, classLoader);
+        if (holderClass == null) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Module entry click target missing: " + Constants.SUBSCREEN_LAUNCHER_HOLDER_CLASS);
+            return;
+        }
+        Method clickMethod = findDeclaredMethod(
+                holderClass, Constants.SUBSCREEN_LAUNCHER_HOLDER_CLICK_METHOD, View.class);
+        if (clickMethod == null) {
+            log(Log.WARN, Constants.LOG_TAG, "Module entry click method missing: "
+                    + Constants.SUBSCREEN_LAUNCHER_HOLDER_CLASS);
+            return;
+        }
+        hookMethodIfPresent(
+                clickMethod,
+                Constants.SUBSCREEN_LAUNCHER_HOLDER_CLASS + "#"
+                        + Constants.SUBSCREEN_LAUNCHER_HOLDER_CLICK_METHOD,
+                chain -> {
+                    Object item = getFieldValue(chain.getThisObject(),
+                            Constants.SUBSCREEN_LAUNCHER_HOLDER_ITEM_FIELD);
+                    if (!PanelAppCard.isModuleEntry(classLoader, item)) return chain.proceed();
+                    if (!PrefsBridge.shouldEnableAppCard(this)) return null;
+                    Object clicked = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                    Activity activity = resolveHostActivity(clicked);
+                    if (activity == null) return chain.proceed();
+                    if (SwipePanelHost.shouldSuppressModuleCardClick()) {
+                        log(Log.DEBUG, Constants.LOG_TAG,
+                                "Quick panel card click ignored after launcher swipe");
+                        return null;
+                    }
+                    SwipePanelHost.show(activity, clicked instanceof View ? (View) clicked : null);
+                    log(Log.INFO, Constants.LOG_TAG, "Quick panel opened from card entry");
+                    return null;
+                }
+        );
+        log(Log.INFO, Constants.LOG_TAG, "Module entry click hook installed");
+    }
+
+    private void installQuickPanelDispatchHook(@NonNull ClassLoader classLoader) {
+        Class<?> launcherClass = findClass(Constants.SUBSCREEN_LAUNCHER_ACTIVITY_CLASS, classLoader);
+        if (launcherClass == null) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Quick panel dispatch target missing: "
+                            + Constants.SUBSCREEN_LAUNCHER_ACTIVITY_CLASS);
+            return;
+        }
+        hookMethodIfPresent(
+                findDeclaredMethod(launcherClass, "dispatchTouchEvent", MotionEvent.class),
+                Constants.SUBSCREEN_LAUNCHER_ACTIVITY_CLASS + "#dispatchTouchEvent",
+                chain -> {
+                    Object event = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                    if (event instanceof MotionEvent) {
+                        Object host = chain.getThisObject();
+                        SwipePanelHost.trackLauncherTouch(
+                                (MotionEvent) event,
+                                host instanceof Context ? (Context) host : null);
+                        if (SwipePanelHost.handleLauncherGesture((MotionEvent) event)) {
+                            return true;
+                        }
+                    }
+                    return chain.proceed();
+                }
+        );
+    }
+
+    /** 背屏面板挂在宿主 Activity 的窗口上，所以要从点击到的 View 反查 Activity。 */
+    @Nullable
+    private static Activity resolveHostActivity(@Nullable Object view) {
+        if (!(view instanceof View)) return null;
+        Context context = ((View) view).getContext();
+        while (context instanceof ContextWrapper) {
+            if (context instanceof Activity) return (Activity) context;
+            context = ((ContextWrapper) context).getBaseContext();
+        }
+        return null;
+    }
+
+    private void hookSubscreenAppWidgetSecureSetting() {
+        hookMethodIfPresent(
+                findDeclaredMethod(Settings.Secure.class, "getInt",
+                        ContentResolver.class, String.class, int.class),
+                "Settings.Secure#getInt(ContentResolver,String,int)",
+                chain -> AppWidgetFeatureGate.isSubscreenAppWidgetSecureKey(
+                        chain.getArgs().size() > 1 ? chain.getArgs().get(1) : null)
+                        ? 1
+                        : chain.proceed()
+        );
+        hookMethodIfPresent(
+                findDeclaredMethod(Settings.Secure.class, "getInt",
+                        ContentResolver.class, String.class),
+                "Settings.Secure#getInt(ContentResolver,String)",
+                chain -> AppWidgetFeatureGate.isSubscreenAppWidgetSecureKey(
+                        chain.getArgs().size() > 1 ? chain.getArgs().get(1) : null)
+                        ? 1
+                        : chain.proceed()
+        );
+    }
+
+    private void hookSubscreenLauncherPanelGesture(@NonNull ClassLoader classLoader) {
+        Class<?> gestureClass = findClass(
+                Constants.SUBSCREEN_LAUNCHER_PANEL_GESTURE_CLASS, classLoader);
+        if (gestureClass == null) {
+            log(Log.DEBUG, Constants.LOG_TAG,
+                    "App widget gesture hook target missing: "
+                            + Constants.SUBSCREEN_LAUNCHER_PANEL_GESTURE_CLASS);
+            return;
+        }
+        Method gestureMethod = findDeclaredMethod(
+                gestureClass,
+                Constants.SUBSCREEN_LAUNCHER_PANEL_GESTURE_METHOD,
+                MotionEvent.class);
+        final boolean gestureReturnsBoolean = gestureMethod != null
+                && (gestureMethod.getReturnType() == boolean.class
+                || gestureMethod.getReturnType() == Boolean.class);
+        hookMethodIfPresent(
+                gestureMethod,
+                Constants.SUBSCREEN_LAUNCHER_PANEL_GESTURE_CLASS + "#"
+                        + Constants.SUBSCREEN_LAUNCHER_PANEL_GESTURE_METHOD,
+                chain -> {
+                    Object event = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                    if (event instanceof MotionEvent
+                            && SwipePanelHost.handleLauncherGesture((MotionEvent) event)) {
+                        return gestureReturnsBoolean ? true : null;
+                    }
+                    setFieldValue(
+                            chain.getThisObject(),
+                            Constants.SUBSCREEN_LAUNCHER_PANEL_WIDGET_ENABLED_FIELD,
+                            true);
+                    return chain.proceed();
+                }
+        );
     }
 
     /**
@@ -379,11 +751,14 @@ public class ModuleMain extends XposedModule {
         }
 
         hookMethodIfPresent(
-                mainPanelClass,
-                Constants.HOOK_METHOD_REQUEST_EXIT_EDIT,
-                new Class[]{boolean.class},
-                Constants.HOOK_CLASS_MAIN_PANEL + "#"
-                        + Constants.HOOK_METHOD_REQUEST_EXIT_EDIT,
+                findFirstDeclaredMethod(
+                        mainPanelClass,
+                        new Class[]{boolean.class},
+                        Constants.HOOK_METHOD_REQUEST_EXIT_EDIT_18PRO,
+                        Constants.HOOK_METHOD_REQUEST_EXIT_EDIT),
+                Constants.HOOK_CLASS_MAIN_PANEL + "#["
+                        + Constants.HOOK_METHOD_REQUEST_EXIT_EDIT_18PRO + ", "
+                        + Constants.HOOK_METHOD_REQUEST_EXIT_EDIT + "]",
                 chain -> {
                     View panel = chain.getThisObject() instanceof View
                             ? (View) chain.getThisObject()
@@ -412,11 +787,14 @@ public class ModuleMain extends XposedModule {
         );
 
         hookMethodIfPresent(
-                mainPanelClass,
-                Constants.HOOK_METHOD_SAVE_USER_SELECTION,
-                new Class[]{},
-                Constants.HOOK_CLASS_MAIN_PANEL + "#"
-                        + Constants.HOOK_METHOD_SAVE_USER_SELECTION,
+                findFirstDeclaredMethod(
+                        mainPanelClass,
+                        new Class[]{},
+                        Constants.HOOK_METHOD_SAVE_USER_SELECTION_18PRO,
+                        Constants.HOOK_METHOD_SAVE_USER_SELECTION),
+                Constants.HOOK_CLASS_MAIN_PANEL + "#["
+                        + Constants.HOOK_METHOD_SAVE_USER_SELECTION_18PRO + ", "
+                        + Constants.HOOK_METHOD_SAVE_USER_SELECTION + "]",
                 chain -> {
                     Object result = chain.proceed();
                     if (PrefsBridge.shouldFixRearScreenApply(this)
@@ -592,171 +970,6 @@ public class ModuleMain extends XposedModule {
         }
     }
 
-    /**
-     * 识别并接管"底部边缘上滑"：超过阈值后，面板顶部持续跟随手指；松手时再根据
-     * 拖动距离和末端速度决定展开或退回。每个 Activity 维护独立手势状态。
-     */
-    private boolean handleSwipeGesture(@NonNull Activity activity, @NonNull MotionEvent e) {
-        SwipeState st = swipeStates.get(activity);
-        if (st == null) {
-            st = new SwipeState();
-            swipeStates.put(activity, st);
-        }
-        boolean wasDragging = st.draggingPanel;
-        if (!activity.hasWindowFocus()
-                || isHostPanelShowing(activity)
-                || !PrefsBridge.shouldEnableSwipePanel(this)
-                || e.getPointerCount() != 1) {
-            if (wasDragging) SwipePanelHost.finishOpeningDrag(false, 0f);
-            st.reset();
-            return wasDragging;
-        }
-        float threshold = TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP,
-                Constants.GESTURE_SWIPE_UP_DP,
-                activity.getResources().getDisplayMetrics());
-        int action = e.getActionMasked();
-        if (action == MotionEvent.ACTION_DOWN) {
-            st.downTime = e.getDownTime();
-            st.startX = e.getRawX();
-            st.startY = e.getRawY();
-            st.lastY = st.startY;
-            st.lastEventTime = e.getEventTime();
-            st.velocityY = 0f;
-            int decorHeight = activity.getWindow().getDecorView().getHeight();
-            st.armed = decorHeight > 0
-                    && e.getRawY() > decorHeight * Constants.GESTURE_BOTTOM_EDGE_RATIO;
-            st.draggingPanel = false;
-            return false;
-        } else if (action == MotionEvent.ACTION_MOVE) {
-            if (!st.armed || st.downTime != e.getDownTime()) {
-                if (st.draggingPanel) SwipePanelHost.finishOpeningDrag(false, 0f);
-                st.reset();
-                return wasDragging;
-            }
-            if (st.draggingPanel) {
-                updateSwipeVelocity(st, e);
-                SwipePanelHost.updateOpeningDrag(e.getRawY());
-                return true;
-            }
-            if (st.armed) {
-                float dy = st.startY - e.getRawY();
-                float dx = Math.abs(e.getRawX() - st.startX);
-                if (dy > threshold && dy > dx * 1.15f) {
-                    long now = SystemClock.uptimeMillis();
-                    if (now - st.lastTrigger > Constants.GESTURE_TRIGGER_COOLDOWN_MS) {
-                        st.lastTrigger = now;
-                        st.draggingPanel = true;
-                        updateSwipeVelocity(st, e);
-                        SwipePanelHost.beginOpeningDrag(activity, e.getRawY());
-                        cancelHostTouchTarget(activity, e);
-                        Log.d(Constants.LOG_TAG, "Swipe-up drag started");
-                        return true;
-                    }
-                }
-            }
-            return false;
-        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-            if (st.draggingPanel) {
-                updateSwipeVelocity(st, e);
-                SwipePanelHost.updateOpeningDrag(e.getRawY());
-                int height = activity.getWindow().getDecorView().getHeight();
-                float distance = st.startY - e.getRawY();
-                float minDistance = Math.max(threshold * 2f, height * 0.22f);
-                float minFlingVelocity = Math.max(
-                        threshold * 6f,
-                        ViewConfiguration.get(activity).getScaledMinimumFlingVelocity() * 4f);
-                boolean open = distance >= minDistance
-                        || (action == MotionEvent.ACTION_UP && st.velocityY <= -minFlingVelocity);
-                float velocityY = st.velocityY;
-                SwipePanelHost.finishOpeningDrag(open, velocityY);
-                Log.d(Constants.LOG_TAG, "Swipe-up drag finished: open=" + open
-                        + ", distance=" + distance + ", velocityY=" + velocityY);
-                String diagnostic = "swipe drag finished: open=" + open
-                        + ", distance=" + Math.round(distance)
-                        + ", velocityY=" + Math.round(velocityY);
-                activity.getWindow().getDecorView().post(
-                        () -> DiagnosticLogStore.recordRemote(activity, diagnostic));
-                st.reset();
-                return true;
-            }
-            st.reset();
-            return false;
-        }
-        return wasDragging;
-    }
-
-    private static void updateSwipeVelocity(@NonNull SwipeState st, @NonNull MotionEvent e) {
-        long dt = e.getEventTime() - st.lastEventTime;
-        if (dt > 0L) {
-            float instant = (e.getRawY() - st.lastY) * 1000f / dt;
-            st.velocityY = st.velocityY == 0f ? instant : st.velocityY * 0.35f + instant * 0.65f;
-        }
-        st.lastY = e.getRawY();
-        st.lastEventTime = e.getEventTime();
-    }
-
-    private static void cancelHostTouchTarget(@NonNull Activity activity, @NonNull MotionEvent source) {
-        MotionEvent cancel = MotionEvent.obtain(source);
-        try {
-            cancel.setAction(MotionEvent.ACTION_CANCEL);
-            activity.getWindow().superDispatchTouchEvent(cancel);
-        } finally {
-            cancel.recycle();
-        }
-    }
-
-    private void resetSwipeState(@NonNull Activity activity) {
-        SwipeState state = swipeStates.get(activity);
-        if (state != null) state.reset();
-    }
-
-    /** Do not open our panel while Xiaomi's notification/service-assistant panel is visible. */
-    @SuppressLint("DiscouragedApi")
-    private boolean isHostPanelShowing(@NonNull Activity activity) {
-        try {
-            int notificationId = activity.getResources().getIdentifier(
-                    "notification_panel", "id", Constants.TARGET_PACKAGE);
-            View notificationPanel = notificationId != 0 ? activity.findViewById(notificationId) : null;
-            if (notificationPanel != null
-                    && notificationPanel.getVisibility() == View.VISIBLE
-                    && notificationPanel.getAlpha() > 0.01f) {
-                return true;
-            }
-
-            int assistantId = activity.getResources().getIdentifier(
-                    "smart_assistant_panel", "id", Constants.TARGET_PACKAGE);
-            View assistantPanel = assistantId != 0 ? activity.findViewById(assistantId) : null;
-            if (assistantPanel != null
-                    && assistantPanel.getVisibility() == View.VISIBLE
-                    && assistantPanel.getTranslationY() > -activity.getWindow().getDecorView().getHeight() + 1) {
-                return true;
-            }
-        } catch (Throwable ignored) {
-            // A future host version may rename these views; session validation still prevents stale events.
-        }
-        return false;
-    }
-
-    /**
-     * 把背屏底部边缘区域从系统手势中排除，避免上滑被系统导航抢走
-     * （系统导航响应该手势时副屏会闪一下黑，与我们的面板撞车）。仅设置一次。
-     */
-    private void ensureGestureExclusion(@NonNull Activity activity) {
-        if (exclusionApplied.contains(activity)) return;
-        try {
-            View decor = activity.getWindow().getDecorView();
-            if (decor.getWidth() <= 0 || decor.getHeight() <= 0) return;
-            int top = Math.max(0, (int) (decor.getHeight() * Constants.GESTURE_BOTTOM_EDGE_RATIO));
-            Rect rect = new Rect(0, top, decor.getWidth(), decor.getHeight());
-            decor.setSystemGestureExclusionRects(Collections.singletonList(rect));
-            exclusionApplied.add(activity);
-            log(Log.DEBUG, Constants.LOG_TAG, "Bottom-edge gesture exclusion set");
-        } catch (Throwable ignored) {
-            // 部分 ROM 不支持，忽略
-        }
-    }
-
     private static Intent moduleSettingsIntent() {
         Intent intent = new Intent(Intent.ACTION_MAIN);
         intent.setComponent(new ComponentName(
@@ -766,27 +979,11 @@ public class ModuleMain extends XposedModule {
         return intent;
     }
 
-    private static final class SwipeState {
-        float startX;
-        float startY;
-        float lastY;
-        float velocityY;
-        long downTime;
-        long lastEventTime;
-        boolean armed;
-        boolean draggingPanel;
-        long lastTrigger;
-
-        void reset() {
-            startX = 0f;
-            startY = 0f;
-            lastY = 0f;
-            velocityY = 0f;
-            downTime = 0L;
-            lastEventTime = 0L;
-            armed = false;
-            draggingPanel = false;
-        }
+    private static Intent themeManagerIntent(@NonNull String className) {
+        Intent intent = new Intent(Intent.ACTION_MAIN);
+        intent.setComponent(new ComponentName(Constants.THEME_STORE_PACKAGE, className));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        return intent;
     }
 
     private void installWallpaperLimitHook(@NonNull ClassLoader classLoader) {
@@ -798,12 +995,14 @@ public class ModuleMain extends XposedModule {
         Method applyCheckMethod = findFirstDeclaredMethod(
                 viewModelClass,
                 new Class[]{List.class},
+                Constants.THEME_APPLY_CHECK_METHOD_18PRO,
                 Constants.THEME_APPLY_CHECK_METHOD_OS4,
                 Constants.THEME_APPLY_CHECK_METHOD);
         if (applyCheckMethod == null) {
             log(Log.WARN, Constants.LOG_TAG,
                     "Hook targets missing: " + Constants.THEME_REAR_VIEWMODEL_CLASS
-                            + "#[" + Constants.THEME_APPLY_CHECK_METHOD_OS4
+                            + "#[" + Constants.THEME_APPLY_CHECK_METHOD_18PRO
+                            + ", " + Constants.THEME_APPLY_CHECK_METHOD_OS4
                             + ", " + Constants.THEME_APPLY_CHECK_METHOD + "]");
             return;
         }
@@ -817,6 +1016,131 @@ public class ModuleMain extends XposedModule {
                     return chain.proceed();
                 }
         );
+    }
+
+    private void installThemeDeviceIdentityHooks(@NonNull ClassLoader classLoader) {
+        hookBooleanTrueIfPresent(
+                classLoader,
+                Constants.THEME_DEVICE_UTILS_CLASS,
+                "a");
+        hookStringReturnIfPresent(
+                classLoader,
+                Constants.THEME_DEVICE_UTILS_CLASS,
+                "y",
+                Constants.THEME_REAR_DEVICE);
+        hookStringReturnIfPresent(
+                classLoader,
+                Constants.THEME_DEVICE_UTILS_CLASS,
+                "cdj",
+                Constants.THEME_REAR_MODEL);
+        hookStringReturnIfPresent(
+                classLoader,
+                Constants.THEME_DEVICE_UTILS_CLASS,
+                "z",
+                Constants.THEME_REAR_VERSION);
+        hookStringReturnIfPresent(
+                classLoader,
+                Constants.THEME_ONLINE_SERVICE_CLASS,
+                "fnq8",
+                Constants.THEME_REAR_VERSION);
+    }
+
+    private void installThemeNetworkDeviceSpoofHook(@NonNull ClassLoader classLoader) {
+        Class<?> interceptorClass = findClass(Constants.THEME_PARAM_INTERCEPTOR_CLASS, classLoader);
+        Class<?> requestClass = findClass(Constants.THEME_NETWORK_REQUEST_CLASS, classLoader);
+        if (interceptorClass == null || requestClass == null) {
+            log(Log.WARN, Constants.LOG_TAG, "Theme network spoof target missing");
+            return;
+        }
+
+        hookMethodIfPresent(
+                findDeclaredMethod(
+                        interceptorClass,
+                        Constants.THEME_NETWORK_REWRITE_METHOD,
+                        requestClass,
+                        java.util.LinkedHashMap.class,
+                        String.class),
+                Constants.THEME_PARAM_INTERCEPTOR_CLASS + "#"
+                        + Constants.THEME_NETWORK_REWRITE_METHOD,
+                chain -> {
+                    Object request = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                    Object params = chain.getArgs().size() > 1 ? chain.getArgs().get(1) : null;
+                    if (shouldSpoofThemeAiAppRequest(request) && params instanceof Map<?, ?> rawMap) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, String> map = (Map<String, String>) rawMap;
+                        map.put("device", Constants.THEME_REAR_DEVICE);
+                        map.put("model", Constants.THEME_REAR_MODEL);
+                        map.put("version", Constants.THEME_REAR_VERSION);
+                        map.put("isSupportRearScreen", "true");
+                        log(Log.DEBUG, Constants.LOG_TAG,
+                                "Spoofed Theme AI app request as " + Constants.THEME_REAR_DEVICE);
+                    }
+                    return chain.proceed();
+                }
+        );
+    }
+
+    private boolean shouldSpoofThemeAiAppRequest(@Nullable Object request) {
+        Object url = callMethodQuietly(request, "cdj");
+        String raw = String.valueOf(url);
+        return raw.contains(Constants.THEME_AI_APP_PAGE_PATH)
+                || raw.contains(Constants.THEME_AI_APP_SUBJECT_PATH)
+                || raw.contains(Constants.THEME_AI_APP_DETAIL_PATH);
+    }
+
+    private void installThemeLegacyDownloadHook(@NonNull ClassLoader classLoader) {
+        Class<?> networkHelperClass = findClass(Constants.THEME_NETWORK_HELPER_CLASS, classLoader);
+        Class<?> requestUrlClass = findClass(Constants.THEME_REQUEST_URL_CLASS, classLoader);
+        if (networkHelperClass == null || requestUrlClass == null) {
+            log(Log.WARN, Constants.LOG_TAG, "Theme legacy download hook target missing");
+            return;
+        }
+        hookMethodIfPresent(
+                networkHelperClass,
+                "f7l8",
+                new Class[]{requestUrlClass},
+                Constants.THEME_NETWORK_HELPER_CLASS + "#f7l8",
+                chain -> {
+                    Object requestUrl = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                    if (isThemeRearDownloadRequest(requestUrl)) {
+                        addThemeRearDownloadParams(requestUrl);
+                        log(Log.DEBUG, Constants.LOG_TAG,
+                                "Theme AI app download request: "
+                                        + summarizeThemeDownloadRequest(requestUrl));
+                    }
+                    Object result = chain.proceed();
+                    if (isThemeRearDownloadRequest(requestUrl)) {
+                        log(Log.DEBUG, Constants.LOG_TAG,
+                                "Theme AI app download response length="
+                                        + (result instanceof String ? ((String) result).length() : -1));
+                    }
+                    return result;
+                }
+        );
+    }
+
+    private boolean isThemeRearDownloadRequest(@Nullable Object requestUrl) {
+        Object baseUrl = callMethodQuietly(requestUrl, "getBaseUrl");
+        return String.valueOf(baseUrl).contains(Constants.THEME_DOWNLOAD_PATH);
+    }
+
+    private void addThemeRearDownloadParams(@Nullable Object requestUrl) {
+        callMethodQuietly(requestUrl, "addParameter", "device", Constants.THEME_REAR_DEVICE);
+        callMethodQuietly(requestUrl, "addParameter", "model", Constants.THEME_REAR_MODEL);
+        callMethodQuietly(requestUrl, "addParameter", "version", Constants.THEME_REAR_VERSION);
+        callMethodQuietly(requestUrl, "addParameter", "isSupportRearScreen", "true");
+    }
+
+    @NonNull
+    private String summarizeThemeDownloadRequest(@Nullable Object requestUrl) {
+        String baseUrl = String.valueOf(callMethodQuietly(requestUrl, "getBaseUrl"));
+        return "baseUrl=" + baseUrl
+                + ", category=" + String.valueOf(callMethodQuietly(requestUrl, "getParameter", "category"))
+                + ", device=" + String.valueOf(callMethodQuietly(requestUrl, "getParameter", "device"))
+                + ", model=" + String.valueOf(callMethodQuietly(requestUrl, "getParameter", "model"))
+                + ", version=" + String.valueOf(callMethodQuietly(requestUrl, "getParameter", "version"))
+                + ", isSupportRearScreen="
+                + String.valueOf(callMethodQuietly(requestUrl, "getParameter", "isSupportRearScreen"));
     }
 
     private void installRearScreenApplyFixHook(@NonNull ClassLoader classLoader) {
@@ -879,13 +1203,15 @@ public class ModuleMain extends XposedModule {
                 Constants.THEME_ENTRY_CONFIG_COMPANION_CLASS + "#k",
                 chain -> {
                     Object result = chain.proceed();
-                    if (!PrefsBridge.shouldShowThemeSettingsShortcut(this)) {
+                    boolean showModuleShortcut = PrefsBridge.shouldShowThemeSettingsShortcut(this);
+                    Intent aiIntent = resolveRearScreenAiIntent(classLoader);
+                    if (!showModuleShortcut && aiIntent == null) {
                         return result;
                     }
                     Object context = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
                     if (context instanceof Context) {
                         return injectThemeSettingsShortcutList(
-                                result, (Context) context, classLoader);
+                                result, (Context) context, classLoader, showModuleShortcut, aiIntent);
                     }
                     return result;
                 }
@@ -916,50 +1242,144 @@ public class ModuleMain extends XposedModule {
                             && themeSettingsShortcutControllers.contains(data.get(position))) {
                         Object holder = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
                         bindThemeSettingsShortcutRow(holder);
+                    } else if (data != null && position >= 0 && position < data.size()
+                            && themeAiShortcutControllers.contains(data.get(position))) {
+                        Object holder = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                        bindThemeAiShortcutRow(holder);
                     }
                     return result;
                 }
         );
     }
 
+    private void installThemeSettingsAiVisibilityHooks(@NonNull ClassLoader classLoader) {
+        hookBooleanTrueIfPresent(
+                classLoader,
+                Constants.THEME_REAR_SCREEN_SETTING_MODULE_COMPANION_CLASS,
+                "k");
+        hookBooleanTrueIfPresent(
+                classLoader,
+                Constants.THEME_REAR_SCREEN_AI_APP_CONTROLLER_CLASS,
+                "k");
+    }
+
+    private void hookBooleanTrueIfPresent(
+            @NonNull ClassLoader classLoader,
+            @NonNull String className,
+            @NonNull String methodName
+    ) {
+        Class<?> targetClass = findClass(className, classLoader);
+        if (targetClass == null) {
+            log(Log.DEBUG, Constants.LOG_TAG, "AI entry hook target missing: " + className);
+            return;
+        }
+        hookMethodIfPresent(
+                targetClass,
+                methodName,
+                new Class[]{},
+                className + "#" + methodName,
+                chain -> true
+        );
+    }
+
+    private void hookStringReturnIfPresent(
+            @NonNull ClassLoader classLoader,
+            @NonNull String className,
+            @NonNull String methodName,
+            @NonNull String value
+    ) {
+        Class<?> targetClass = findClass(className, classLoader);
+        if (targetClass == null) {
+            log(Log.DEBUG, Constants.LOG_TAG, "String hook target missing: " + className);
+            return;
+        }
+        hookMethodIfPresent(
+                targetClass,
+                methodName,
+                new Class[]{},
+                className + "#" + methodName,
+                chain -> value
+        );
+    }
+
     private Object injectThemeSettingsShortcutList(
             @Nullable Object result,
             @NonNull Context context,
-            @NonNull ClassLoader classLoader
+            @NonNull ClassLoader classLoader,
+            boolean showModuleShortcut,
+            @Nullable Intent aiIntent
     ) {
         if (!(result instanceof List<?> rawList)) return result;
-        for (Object item : rawList) {
-            if (themeSettingsShortcutControllers.contains(item)) return result;
-        }
+        boolean hasModuleShortcut = containsTrackedController(rawList, themeSettingsShortcutControllers);
+        boolean hasAiShortcut = containsTrackedController(rawList, themeAiShortcutControllers)
+                || containsControllerKey(rawList, "ai_app_entry");
+        boolean shouldInsertModule = showModuleShortcut && !hasModuleShortcut;
+        boolean shouldInsertAi = aiIntent != null && !hasAiShortcut;
+        if (!shouldInsertModule && !shouldInsertAi) return result;
 
         List<String> keys = new ArrayList<>();
         for (Object item : rawList) {
             Object key = callNoArgMethodQuietly(item, "g");
             if (key instanceof String) keys.add((String) key);
         }
-        int insertionIndex = SettingsEntryPlacement.insertionIndexAfterAnchor(keys);
-        if (insertionIndex < 0) {
+        List<Integer> insertionIndexes = SettingsEntryPlacement.insertionIndexesAfterAnchor(
+                keys, (shouldInsertAi ? 1 : 0) + (shouldInsertModule ? 1 : 0));
+        if (insertionIndexes.isEmpty()) {
             log(Log.WARN, Constants.LOG_TAG,
                     "Theme settings shortcut anchor missing in rear screen page");
             return result;
         }
 
-        Object shortcut = createThemeSettingsShortcutController(context, classLoader);
-        if (shortcut == null) return result;
-
         ArrayList<Object> copy = new ArrayList<>(rawList);
-        copy.add(Math.min(insertionIndex, copy.size()), shortcut);
-        themeSettingsShortcutControllers.add(shortcut);
-        log(Log.INFO, Constants.LOG_TAG,
-                "MiBackscreen theme settings entry inserted after "
-                        + keys.get(insertionIndex - 1));
+        int nextSlot = 0;
+        if (shouldInsertAi) {
+            Object shortcut = createThemeSettingsShortcutController(
+                    context, classLoader, "AI 背屏", aiIntent);
+            if (shortcut != null) {
+                copy.add(Math.min(insertionIndexes.get(nextSlot++), copy.size()), shortcut);
+                themeAiShortcutControllers.add(shortcut);
+                log(Log.INFO, Constants.LOG_TAG, "AI rear screen entry inserted");
+            }
+        }
+        if (shouldInsertModule) {
+            Object shortcut = createThemeSettingsShortcutController(
+                    context, classLoader, "MiBackscreen", moduleSettingsIntent());
+            if (shortcut != null) {
+                int insertionIndex = insertionIndexes.get(nextSlot);
+                copy.add(Math.min(insertionIndex, copy.size()), shortcut);
+                themeSettingsShortcutControllers.add(shortcut);
+                log(Log.INFO, Constants.LOG_TAG,
+                        "MiBackscreen theme settings entry inserted after "
+                                + keys.get(insertionIndexes.get(0) - 1));
+            }
+        }
         return copy;
+    }
+
+    private boolean containsTrackedController(
+            @NonNull List<?> list,
+            @NonNull Set<Object> trackedControllers
+    ) {
+        for (Object item : list) {
+            if (trackedControllers.contains(item)) return true;
+        }
+        return false;
+    }
+
+    private boolean containsControllerKey(@NonNull List<?> list, @NonNull String expectedKey) {
+        for (Object item : list) {
+            Object key = callNoArgMethodQuietly(item, "g");
+            if (expectedKey.equals(key)) return true;
+        }
+        return false;
     }
 
     @Nullable
     private Object createThemeSettingsShortcutController(
             @NonNull Context context,
-            @NonNull ClassLoader classLoader
+            @NonNull ClassLoader classLoader,
+            @NonNull String title,
+            @NonNull Intent intent
     ) {
         try {
             Class<?> controllerClass = findClass(
@@ -969,8 +1389,26 @@ public class ModuleMain extends XposedModule {
             Constructor<?> constructor = controllerClass.getDeclaredConstructor(Context.class);
             constructor.setAccessible(true);
             Object controller = constructor.newInstance(context);
-            setFieldValue(controller, Constants.THEME_BASE_CONTROLLER_TITLE_FIELD, "MiBackscreen");
-            setFieldValue(controller, Constants.THEME_USER_GUIDE_INTENT_FIELD, moduleSettingsIntent());
+            boolean fieldsReady = setFirstFieldValue(
+                    controller,
+                    new String[]{
+                            Constants.THEME_BASE_CONTROLLER_TITLE_FIELD_18PRO,
+                            Constants.THEME_BASE_CONTROLLER_TITLE_FIELD
+                    },
+                    title)
+                    && setFirstFieldValue(
+                    controller,
+                    new String[]{
+                            Constants.THEME_USER_GUIDE_INTENT_FIELD_18PRO,
+                            Constants.THEME_USER_GUIDE_INTENT_FIELD
+                    },
+                    intent);
+            if (!fieldsReady) {
+                log(Log.WARN, Constants.LOG_TAG,
+                        "Theme settings shortcut fields missing: "
+                                + Constants.THEME_USER_GUIDE_CONTROLLER_CLASS);
+                return null;
+            }
             return controller;
         } catch (Throwable e) {
             log(Log.WARN, Constants.LOG_TAG,
@@ -980,8 +1418,20 @@ public class ModuleMain extends XposedModule {
     }
 
     @Nullable
+    private Intent resolveRearScreenAiIntent(@NonNull ClassLoader classLoader) {
+        Class<?> targetClass = findFirstClass(
+                classLoader,
+                Constants.THEME_REAR_SCREEN_AI_APP_ACTIVITY,
+                Constants.THEME_AI_REAR_SCREEN_LIST_ACTIVITY);
+        return targetClass == null ? null : themeManagerIntent(targetClass.getName());
+    }
+
+    @Nullable
     private List<?> getThemeSettingsAdapterData(@Nullable Object adapter) {
-        Object data = getFieldValue(adapter, Constants.THEME_REAR_SETTING_ADAPTER_DATA_FIELD);
+        Object data = getFieldValue(adapter, Constants.THEME_REAR_SETTING_ADAPTER_DATA_FIELD_18PRO);
+        if (!isThemeSettingsControllerList(data)) {
+            data = getFieldValue(adapter, Constants.THEME_REAR_SETTING_ADAPTER_DATA_FIELD);
+        }
         if (isThemeSettingsControllerList(data)) return (List<?>) data;
 
         if (adapter == null) return null;
@@ -1053,6 +1503,32 @@ public class ModuleMain extends XposedModule {
         });
     }
 
+    @SuppressLint("DiscouragedApi")
+    private void bindThemeAiShortcutRow(@Nullable Object holder) {
+        Object itemViewValue = getFieldValue(holder, "itemView");
+        if (!(itemViewValue instanceof View row)) return;
+        Context context = row.getContext();
+        int titleId = context.getResources().getIdentifier(
+                "title", "id", Constants.THEME_STORE_PACKAGE);
+        if (titleId != 0) {
+            View titleView = row.findViewById(titleId);
+            if (titleView instanceof TextView) {
+                ((TextView) titleView).setText("AI 背屏");
+            }
+        }
+        row.setOnClickListener(v -> {
+            try {
+                Intent intent = resolveRearScreenAiIntent(v.getContext().getClassLoader());
+                if (intent != null) {
+                    v.getContext().startActivity(intent);
+                }
+            } catch (Throwable e) {
+                log(Log.WARN, Constants.LOG_TAG,
+                        "AI rear screen entry launch failed", e);
+            }
+        });
+    }
+
     /**
      * 设置页的顶部预览来自主题商店数据库（按 position 降序），并不直接采用
      * theme_rear_widget 的 changed 标记。背屏中心完成切换后已经把当前 widget id
@@ -1072,8 +1548,10 @@ public class ModuleMain extends XposedModule {
                 new Class[]{Bundle.class},
                 Constants.THEME_REAR_SETTING_ACTIVITY + "#onCreate",
                 chain -> {
+                    syncAiGeneratedAppCardsToSubscreenIndex();
                     if (PrefsBridge.shouldFixRearScreenApply(this)) {
                         grantRearScreenRuntimeAccess();
+                        repairAiMateSnapshots();
                         if (chain.getThisObject() instanceof Activity activity) {
                             runThemeDatabaseSelectionSync(activity, classLoader);
                         }
@@ -1088,12 +1566,46 @@ public class ModuleMain extends XposedModule {
                 new Class[]{},
                 Constants.THEME_REAR_SETTING_ACTIVITY + "#onResume",
                 chain -> {
+                    syncAiGeneratedAppCardsToSubscreenIndex();
                     if (PrefsBridge.shouldFixRearScreenApply(this)) {
                         grantRearScreenRuntimeAccess();
+                        repairAiMateSnapshots();
                         if (chain.getThisObject() instanceof Activity activity) {
                             runThemeDatabaseSelectionSync(activity, classLoader);
                         }
                     }
+                    return chain.proceed();
+                }
+        );
+    }
+
+    private void installThemeAiAppIndexSyncHooks(@NonNull ClassLoader classLoader) {
+        Class<?> activityClass = findFirstClass(
+                classLoader,
+                Constants.THEME_REAR_SCREEN_AI_APP_ACTIVITY,
+                Constants.THEME_AI_REAR_SCREEN_LIST_ACTIVITY);
+        if (activityClass == null) {
+            log(Log.DEBUG, Constants.LOG_TAG, "Theme AI app index sync target missing");
+            return;
+        }
+
+        hookMethodIfPresent(
+                activityClass,
+                "onCreate",
+                new Class[]{Bundle.class},
+                activityClass.getName() + "#onCreate",
+                chain -> {
+                    syncAiGeneratedAppCardsToSubscreenIndex();
+                    return chain.proceed();
+                }
+        );
+        hookMethodIfPresent(
+                activityClass,
+                "onResume",
+                new Class[]{},
+                activityClass.getName() + "#onResume",
+                chain -> {
+                    syncAiGeneratedAppCardsToSubscreenIndex();
                     return chain.proceed();
                 }
         );
@@ -1171,9 +1683,8 @@ public class ModuleMain extends XposedModule {
                     ? callMethod(companion, Constants.THEME_REAR_DATA_MANAGER_GET_INSTANCE_METHOD)
                     : null;
             if (manager == null) return false;
-            Object listValue = callMethod(
-                    manager, Constants.THEME_REAR_DATA_MANAGER_GET_LIST_METHOD);
-            if (!(listValue instanceof List<?> items) || items.isEmpty()) return false;
+            List<?> items = callRearListGetter(manager);
+            if (items == null) return false;
 
             Object selectedItem = null;
             int selectedPosition = Integer.MIN_VALUE;
@@ -1210,6 +1721,215 @@ public class ModuleMain extends XposedModule {
         }
     }
 
+    private void syncAiGeneratedAppCardsToSubscreenIndex() {
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastAiAppIndexSyncedAtElapsed < AI_APP_INDEX_SYNC_DEDUP_WINDOW_MS) {
+            return;
+        }
+        lastAiAppIndexSyncedAtElapsed = now;
+        Thread syncThread = new Thread(
+                this::syncAiGeneratedAppCardsToSubscreenIndexNow,
+                "MiBackscreen-AiAppIndexSync");
+        syncThread.setDaemon(true);
+        syncThread.start();
+    }
+
+    private void syncAiGeneratedAppCardsToSubscreenIndexNow() {
+        File runtimeFile = new File(Constants.THEME_AI_APP_RUNTIME_FILE);
+        File appInfoFile = new File(Constants.SUBSCREEN_APP_INFO_FILE);
+        if (!runtimeFile.isFile()) {
+            return;
+        }
+        try {
+            JSONArray runtimeItems = new JSONArray(readUtf8(runtimeFile, MAX_THEME_INDEX_BYTES));
+            JSONArray appInfoItems = appInfoFile.isFile()
+                    ? new JSONArray(readUtf8(appInfoFile, MAX_THEME_INDEX_BYTES))
+                    : new JSONArray();
+
+            LinkedHashSet<String> existingIds = new LinkedHashSet<>();
+            for (int i = 0; i < appInfoItems.length(); i++) {
+                JSONObject item = appInfoItems.optJSONObject(i);
+                if (item == null) continue;
+                String resId = item.optString("resId", "");
+                if (!isEmpty(resId)) {
+                    existingIds.add(resId);
+                }
+            }
+
+            int added = 0;
+            for (int i = 0; i < runtimeItems.length(); i++) {
+                JSONObject aiItem = runtimeItems.optJSONObject(i);
+                if (aiItem == null) continue;
+                String productId = aiItem.optString("productId", "");
+                if (isEmpty(productId) || existingIds.contains(productId)) {
+                    continue;
+                }
+                JSONObject appInfoItem = createSubscreenAiAppInfo(aiItem);
+                if (appInfoItem == null) {
+                    continue;
+                }
+                appInfoItems.put(appInfoItem);
+                existingIds.add(productId);
+                added++;
+            }
+
+            if (added <= 0) {
+                grantAiAppIndexAccess(runtimeFile, appInfoFile, appInfoItems);
+                return;
+            }
+
+            backupFileOnce(appInfoFile);
+            writeJsonArray(appInfoFile, appInfoItems);
+            grantAiAppIndexAccess(runtimeFile, appInfoFile, appInfoItems);
+            log(Log.INFO, Constants.LOG_TAG,
+                    "Synced AI app cards to SubScreenCenter index: added=" + added
+                            + ", total=" + appInfoItems.length());
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "syncAiGeneratedAppCardsToSubscreenIndex failed", e);
+        }
+    }
+
+    @Nullable
+    private JSONObject createSubscreenAiAppInfo(@NonNull JSONObject aiItem) {
+        String productId = aiItem.optString("productId", "");
+        String resLocalPath = aiItem.optString("resLocalPath", "");
+        if (isEmpty(productId) || isEmpty(resLocalPath)) {
+            return null;
+        }
+        String appName = aiItem.optString("resName", productId);
+        String appIconPath = aiItem.optString("appPicPath", "");
+        String previewPath = aiItem.optString("previewImagePath", "");
+        try {
+            JSONObject item = new JSONObject();
+            item.put("resId", productId);
+            item.put("appName", isEmpty(appName) ? productId : appName);
+            item.put("mtzPath", resLocalPath);
+            if (!isEmpty(appIconPath)) {
+                item.put("appIconPath", appIconPath);
+            }
+            if (!isEmpty(previewPath)) {
+                item.put("previewLightPath", previewPath);
+                item.put("previewDarkPath", previewPath);
+            }
+            item.put("isGame", aiItem.optBoolean("isGame", false));
+            item.put("isPreset", false);
+            item.put("appCardType", 2);
+            return item;
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "createSubscreenAiAppInfo failed: productId=" + productId, e);
+            return null;
+        }
+    }
+
+    private void grantAiAppIndexAccess(
+            @NonNull File runtimeFile,
+            @NonNull File appInfoFile,
+            @NonNull JSONArray appInfoItems
+    ) {
+        grantThemeResourceAssetAccess(runtimeFile);
+        grantThemeResourceAssetAccess(appInfoFile);
+        File aiRoot = new File(Constants.THEME_MAGIC_AI_APP_DIR);
+        grantThemeResourceAssetAccess(aiRoot);
+        for (int i = 0; i < appInfoItems.length(); i++) {
+            JSONObject item = appInfoItems.optJSONObject(i);
+            if (item == null || item.optInt("appCardType", 0) != 2) continue;
+            grantThemeResourceAssetAccess(new File(item.optString("mtzPath", "")));
+            grantThemeResourceAssetAccess(new File(item.optString("appIconPath", "")));
+            grantThemeResourceAssetAccess(new File(item.optString("previewLightPath", "")));
+            grantThemeResourceAssetAccess(new File(item.optString("previewDarkPath", "")));
+        }
+    }
+
+    private void backupFileOnce(@NonNull File file) {
+        if (!file.isFile()) {
+            return;
+        }
+        File backup = new File(file.getAbsolutePath() + ".mibackscreen.bak");
+        if (backup.exists()) {
+            return;
+        }
+        if (safeCopy(file, backup)) {
+            grantThemeResourceAssetAccess(backup);
+        }
+    }
+
+    private void writeJsonArray(@NonNull File file, @NonNull JSONArray array) throws IOException {
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new IOException("Failed to create parent directory: " + parent.getAbsolutePath());
+        }
+        File tmp = new File(file.getAbsolutePath() + ".mibackscreen.tmp");
+        byte[] bytes = array.toString().getBytes(StandardCharsets.UTF_8);
+        try (FileOutputStream out = new FileOutputStream(tmp, false)) {
+            out.write(bytes);
+            out.getFD().sync();
+        }
+        grantThemeResourceAssetAccess(tmp);
+        if (!tmp.renameTo(file)) {
+            //noinspection ResultOfMethodCallIgnored
+            tmp.delete();
+            throw new IOException("Failed to replace file: " + file.getAbsolutePath());
+        }
+    }
+
+    private void repairAiMateSnapshots() {
+        repairAiMateSnapshot(
+                Constants.AI_MATE_PEEKO_RES_ID,
+                Constants.AI_MATE_PEEKO_PREVIEW_PATH);
+        repairAiMateSnapshot(
+                Constants.AI_MATE_LUMI_RES_ID,
+                Constants.AI_MATE_LUMI_PREVIEW_PATH);
+    }
+
+    private void repairAiMateSnapshot(
+            @NonNull String resId,
+            @NonNull String previewPath
+    ) {
+        try {
+            File preview = new File(previewPath);
+            if (!preview.isFile() || preview.length() <= 0L) {
+                return;
+            }
+            File root = new File(Constants.THEME_MAGIC_REAR_SCREEN_DIR);
+            File[] runtimeDirs = root.listFiles((dir, name) -> name != null && name.startsWith(resId + "_"));
+            if (runtimeDirs == null || runtimeDirs.length == 0) {
+                return;
+            }
+            for (File runtimeDir : runtimeDirs) {
+                if (runtimeDir == null || !runtimeDir.isDirectory()) continue;
+                File snapshot = new File(runtimeDir, "rearScreenScreenshot");
+                if (!shouldRepairAiMateSnapshot(snapshot)) {
+                    continue;
+                }
+                if (snapshot.isFile()) {
+                    File backup = new File(runtimeDir, "rearScreenScreenshot.mibackscreen.bak");
+                    if (!backup.exists()) {
+                        safeCopy(snapshot, backup);
+                    }
+                }
+                File tmp = new File(runtimeDir, "rearScreenScreenshot.mibackscreen.tmp");
+                if (safeCopy(preview, tmp) && tmp.renameTo(snapshot)) {
+                    grantThemeResourceAssetAccess(snapshot);
+                    log(Log.INFO, Constants.LOG_TAG,
+                            "AI mate snapshot repaired: resId=" + resId);
+                } else {
+                    //noinspection ResultOfMethodCallIgnored
+                    tmp.delete();
+                }
+            }
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "repairAiMateSnapshot failed: resId=" + resId, e);
+        }
+    }
+
+    private static boolean shouldRepairAiMateSnapshot(@NonNull File snapshot) {
+        return !snapshot.isFile()
+                || snapshot.length() <= 0L
+                || snapshot.length() < Constants.AI_MATE_BLANK_SNAPSHOT_MAX_BYTES;
+    }
+
     /**
      * 主题商店重新应用已经存在于“我的背屏”中的壁纸时，只会更新 changed 标记，
      * 不会把该项的 position 移到列表首位。背屏服务能识别 changed，但系统设置页直接
@@ -1241,9 +1961,8 @@ public class ModuleMain extends XposedModule {
                     companion, Constants.THEME_REAR_DATA_MANAGER_GET_INSTANCE_METHOD);
             if (manager == null) return;
 
-            Object value = callMethod(
-                    manager, Constants.THEME_REAR_DATA_MANAGER_GET_LIST_METHOD);
-            if (!(value instanceof List<?> items) || items.isEmpty()) return;
+            List<?> items = callRearListGetter(manager);
+            if (items == null) return;
 
             String targetResId = (String) callMethod(bean, "getResId");
             String targetApplyId = (String) callMethod(bean, "getApplyId");
@@ -1726,6 +2445,10 @@ public class ModuleMain extends XposedModule {
     }
 
     private static String readUtf8(@NonNull File file) throws IOException {
+        return readUtf8(file, MAX_EDIT_CONFIG_BYTES);
+    }
+
+    private static String readUtf8(@NonNull File file, long maxChars) throws IOException {
         StringBuilder content = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
@@ -1733,8 +2456,8 @@ public class ModuleMain extends XposedModule {
             int count;
             while ((count = reader.read(buffer)) != -1) {
                 content.append(buffer, 0, count);
-                if (content.length() > MAX_EDIT_CONFIG_BYTES) {
-                    throw new IOException("editConfig exceeds size limit");
+                if (content.length() > maxChars) {
+                    throw new IOException("JSON exceeds size limit");
                 }
             }
         }
@@ -1954,6 +2677,40 @@ public class ModuleMain extends XposedModule {
         return null;
     }
 
+    /** 混淆字段名逐版本重排，按候选顺序写入第一个真实存在的字段。 */
+    private static boolean setFirstFieldValue(
+            @Nullable Object target,
+            @NonNull String[] fieldNames,
+            @NonNull Object value
+    ) {
+        for (String fieldName : fieldNames) {
+            if (setFieldValue(target, fieldName, value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 「我的背屏」列表取值方法逐版本改名，按候选顺序取第一个返回非空列表的方法。
+     */
+    @Nullable
+    private static List<?> callRearListGetter(@Nullable Object manager) {
+        if (manager == null) return null;
+        String[] methodNames = {
+                Constants.THEME_REAR_DATA_MANAGER_GET_LIST_METHOD_18PRO,
+                Constants.THEME_REAR_DATA_MANAGER_GET_LIST_METHOD_FALLBACK,
+                Constants.THEME_REAR_DATA_MANAGER_GET_LIST_METHOD
+        };
+        for (String methodName : methodNames) {
+            Object value = callMethodQuietly(manager, methodName);
+            if (value instanceof List<?> items && !items.isEmpty()) {
+                return items;
+            }
+        }
+        return null;
+    }
+
     private static Object callMethod(Object target, String method, Object... args) throws Throwable {
         Class<?>[] paramTypes = new Class[args.length];
         for (int i = 0; i < args.length; i++) {
@@ -2115,6 +2872,25 @@ public class ModuleMain extends XposedModule {
     }
 
     @Nullable
+    private static Method findDeclaredMethodWithFirstParam(
+            @NonNull Class<?> targetClass,
+            @NonNull String methodName,
+            @NonNull Class<?> firstParameterType
+    ) {
+        for (Method method : targetClass.getDeclaredMethods()) {
+            Class<?>[] parameterTypes = method.getParameterTypes();
+            if (parameterTypes.length == 0
+                    || !parameterTypes[0].equals(firstParameterType)
+                    || !method.getName().equals(methodName)) {
+                continue;
+            }
+            method.setAccessible(true);
+            return method;
+        }
+        return null;
+    }
+
+    @Nullable
     private static Method findDeclaredMethod(
             @NonNull Class<?> targetClass,
             @NonNull String methodName,
@@ -2126,6 +2902,21 @@ public class ModuleMain extends XposedModule {
             return method;
         } catch (NoSuchMethodException e) {
             return null;
+        }
+    }
+
+    /** 内容取自真实列表，仅把 size() 封顶：用于绕过服务端容量判定，同时充当保存路径的还原标记。 */
+    private static final class SizeCappedList extends ArrayList<Object> {
+        private final int cappedSize;
+
+        SizeCappedList(@NonNull Collection<?> source, int cappedSize) {
+            super(source);
+            this.cappedSize = cappedSize;
+        }
+
+        @Override
+        public int size() {
+            return Math.min(super.size(), cappedSize);
         }
     }
 

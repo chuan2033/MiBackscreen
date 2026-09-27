@@ -37,8 +37,8 @@ android {
         applicationId "hook.HyperBackscreen"
         minSdk 36
         targetSdk 36
-        versionCode 9
-        versionName "1.1.4"
+        versionCode 10
+        versionName "1.2.0"
     }
 
     buildTypes {
@@ -75,10 +75,10 @@ android {
 
 dependencies {
     implementation 'androidx.activity:activity-compose:1.13.0'
-    implementation 'top.yukonga.miuix.kmp:miuix-ui-android:0.9.4-rc01'
-    implementation 'top.yukonga.miuix.kmp:miuix-preference-android:0.9.4-rc01'
-    implementation 'top.yukonga.miuix.kmp:miuix-icons-android:0.9.4-rc01'
-    implementation 'top.yukonga.miuix.kmp:miuix-blur-android:0.9.4-rc01'
+    implementation 'top.yukonga.miuix.kmp:miuix-ui-android:0.9.4'
+    implementation 'top.yukonga.miuix.kmp:miuix-preference-android:0.9.4'
+    implementation 'top.yukonga.miuix.kmp:miuix-icons-android:0.9.4'
+    implementation 'top.yukonga.miuix.kmp:miuix-blur-android:0.9.4'
     compileOnly 'io.github.libxposed:api:102.0.0'
     implementation files('libs/interface-102.0.0.jar', 'libs/service-102.0.0.jar')
     testImplementation 'junit:junit:4.13.2'

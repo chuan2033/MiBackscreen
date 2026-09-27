@@ -15,6 +15,7 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 internal fun FunctionPage(
     disableLongPress: Boolean,
     removeWallpaperLimit: Boolean,
+    removeAppCardLimit: Boolean,
     fixRearScreenApply: Boolean,
     disableRearScreenCover: Boolean,
     disableDoubleTapWake: Boolean,
@@ -22,6 +23,7 @@ internal fun FunctionPage(
     enablePickup: Boolean,
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
+    onRemoveAppCardLimitChange: (Boolean) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onDisableDoubleTapWakeChange: (Boolean) -> Unit,
@@ -40,6 +42,12 @@ internal fun FunctionPage(
             onCheckedChange = onRemoveWallpaperLimitChange,
             title = stringResource(R.string.home_remove_wallpaper_limit_title),
             summary = stringResource(R.string.home_remove_wallpaper_limit_summary)
+        )
+        SwitchPreference(
+            checked = removeAppCardLimit,
+            onCheckedChange = onRemoveAppCardLimitChange,
+            title = stringResource(R.string.home_remove_app_card_limit_title),
+            summary = stringResource(R.string.home_remove_app_card_limit_summary)
         )
         SwitchPreference(
             checked = fixRearScreenApply,

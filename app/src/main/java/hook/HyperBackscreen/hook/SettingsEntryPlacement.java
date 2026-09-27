@@ -1,6 +1,8 @@
 package hook.HyperBackscreen.hook;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Collections;
 
 final class SettingsEntryPlacement {
     private SettingsEntryPlacement() {
@@ -17,5 +19,15 @@ final class SettingsEntryPlacement {
         String anchorKey = chooseAnchorKey(keys);
         if (anchorKey == null) return -1;
         return keys.indexOf(anchorKey) + 1;
+    }
+
+    static List<Integer> insertionIndexesAfterAnchor(List<String> keys, int count) {
+        int firstIndex = insertionIndexAfterAnchor(keys);
+        if (firstIndex < 0 || count <= 0) return Collections.emptyList();
+        ArrayList<Integer> indexes = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            indexes.add(firstIndex + i);
+        }
+        return indexes;
     }
 }
