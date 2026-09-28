@@ -1,0 +1,17 @@
+gradle.beforeProject { project ->
+    if (project.path == ':app') {
+        project.plugins.withId('com.android.application') {
+            def fixtures = new File(project.rootDir, 'tools/feedback-validation')
+            project.layout.buildDirectory.set(new File('D:/Codex/MiBackscreenHuancun/evidence/feedback13/isolated-build'))
+            project.tasks.configureEach { task ->
+                if (task.name == 'compileDebugKotlin') task.source(new File(fixtures, 'FeedbackValidation.kt'))
+            }
+            project.androidComponents.finalizeDsl { android ->
+                android.defaultConfig.applicationId = 'hook.HyperBackscreen.feedbacktest'
+                android.packaging.resources.excludes.add('META-INF/xposed/**')
+                android.packaging.resources.merges.removeAll { it.startsWith('META-INF/xposed') }
+                android.sourceSets.debug.manifest.srcFile(new File(fixtures, 'AndroidManifest.xml'))
+            }
+        }
+    }
+}

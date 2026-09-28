@@ -26,7 +26,7 @@ public final class HomeNavigationPolicy {
     }
 
     public static int floatingBottomBarItemMinWidthDp() {
-        return 96;
+        return 80;
     }
 
     public static int mainContentBottomSpacerDp() {

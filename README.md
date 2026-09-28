@@ -22,7 +22,7 @@
 
 - 解除背屏壁纸 15 张上限，并修复主题商店壁纸应用失败与状态同步。
 - 拦截背屏保护提示，支持按应用禁用背屏双击唤醒。
-- 在背屏中心注入上滑快捷面板。
+- 在官方上滑应用卡列表中注入 MiBackscreen 入口，点击打开快捷面板。
 - 识别小爱记忆岛中的多个快递取件码，支持按驿站分类并选择显示在灵动岛卡片上。
 
 ## 主要功能
@@ -51,6 +51,7 @@
 | `com.xiaomi.subscreencenter` | 长按拦截、快捷面板                     |
 | `com.android.thememanager`   | 壁纸数量限制、壁纸应用修复、设置页入口 |
 | `com.miui.voiceassist`       | 取件码识别、灵动岛卡片点击与刷新       |
+| `com.miui.personalassistant` | 独立分支的背屏应用卡商店适配 |
 
 最低 Android 版本为 API 36。
 
@@ -66,7 +67,7 @@
 - 妙享背屏页快捷入口依赖主题商店 `com.rearScreen.RearScreenSettingActivity`、`EntryConfig` 和 `user_guide` / `serve_assistant` 这些 controller key。
 - 权限目录字段必须经过绝对路径校验；不要重新把非路径字符串 `qp5l=incallshow` 当作目录。
 - 快捷面板依赖 `SubScreenLauncher`、`notification_panel` 和 `smart_assistant_panel`。
-- 系统手势排除区占底部 30%，新增原厂手势时需要重新评估冲突。
+- 面板打开期间的系统手势排除区占底部 22%，新增原厂手势时需要重新评估冲突。
 - `textureBlur` 不能放入同一个 `layerBackdrop` 采样子树，否则可能形成采样环并触发 native crash。
 
 ## 安装
@@ -81,17 +82,17 @@ App 内强制停止作用域进程的功能需要 root。
 
 ## 使用说明
 
-- 背屏上滑手势：单指从屏幕高度 70% 以下起手，向上位移超过 `32dp` 打开面板；向下拖动或点关闭按钮退出，返回键到达 `SubScreenLauncher` 也会关闭。
-- 按应用禁用双击唤醒时，会同时读取系统记录的前台包名和运行任务中的候选 Activity 包名，覆盖游戏启动后短暂跳转到 SDK/登录页导致前台包名变化的场景。
+- 上滑打开官方应用卡列表，点击 MiBackscreen 卡片进入快捷面板；底部上滑关闭，关闭后恢复宿主手势。
+- 按应用禁用双击唤醒时，会同时读取系统记录的前台包名和当前主屏任务中的候选 Activity 包名（不包含历史后台任务），覆盖游戏启动后短暂跳转到 SDK/登录页导致前台包名变化的场景。
 - 反馈日志应在复现问题后立即生成，生成前不要重新应用壁纸或重启背屏中心、主题商店。
 
 ## 快捷面板
 
 ### 手势
 
-- 单指从屏幕高度 70% 以下起手。
-- 向上位移超过 `32dp` 时打开面板。
-- 向下拖动或点击右上角关闭按钮退出。
+- 沿用官方上滑手势打开应用卡列表。
+- 点击 MiBackscreen 卡片打开快捷面板。
+- 从面板底部上滑关闭，系统手势排除区恢复为打开前的值。
 
 ## 取件码
 
@@ -101,6 +102,10 @@ App 内强制停止作用域进程的功能需要 root。
 - 模块 App「功能」页提供「取件码增强」总开关，默认开启；关闭后完全走原生逻辑，无需重启小爱作用域。
 
 ## 从源码构建
+
+当前 `feat/18pro-max-rear-screen` 是独立开发分支，包含新版宿主应用卡片及快捷面板适配，不合入以 `48921ad` 为基线的 main。快捷面板入口为官方上滑应用卡列表中的 MiBackscreen 卡片。本轮设备信息、上游调查、修复及验证结果见 [本地验证记录](docs/validation-2026-09-27.md)。
+
+本地测试只需 debug。若要让 debug 使用指定密钥签名，在不提交的 `local.properties` 中设置 `RELEASE_STORE_FILE`、`RELEASE_KEY_ALIAS`、`RELEASE_STORE_PASSWORD`、`RELEASE_KEY_PASSWORD`；也支持同名环境变量。debug 保持不混淆及调试日志，仅更换签名。指定密钥配置不完整时会报错，不会回退到默认 debug 签名。
 
 要求：
 

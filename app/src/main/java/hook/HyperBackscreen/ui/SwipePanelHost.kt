@@ -30,6 +30,9 @@ import hook.HyperBackscreen.R
 import hook.HyperBackscreen.bridge.PrefsBridge
 import hook.HyperBackscreen.bridge.DiagnosticLogStore
 import hook.HyperBackscreen.common.Constants
+import hook.HyperBackscreen.common.BackgroundTasks
+import android.os.Handler
+import android.os.Looper
 import java.lang.ref.WeakReference
 import kotlin.math.abs
 import kotlin.math.max
@@ -43,6 +46,7 @@ import kotlin.math.min
  * 则在该尺寸副屏上强制从 x=298px 开始。
  */
 object SwipePanelHost {
+    private val mainHandler = Handler(Looper.getMainLooper())
     private const val TAG = Constants.LOG_TAG
     private const val KNOWN_BACKSCREEN_SAFE_LEFT_PX = 298
     private const val DISMISS_ANIMATION_MS = 340L
@@ -70,6 +74,9 @@ object SwipePanelHost {
     private var panel: SwipeDismissCard? = null
     private var originRect: FloatArray? = null
     private var hostActivity = WeakReference<Activity>(null)
+    private var exclusionView = WeakReference<View>(null)
+    private var originalExclusions: List<Rect>? = null
+    private val visiblePanelBounds = Rect()
     private var dismissing = false
     private var openingDrag = false
     private var dragAttachPending = false
@@ -327,7 +334,10 @@ object SwipePanelHost {
             override fun onViewAttachedToWindow(v: View) = Unit
 
             override fun onViewDetachedFromWindow(v: View) {
-                if (container === v) clearReferences()
+                if (container === v) {
+                    clearGestureExclusion(exclusionView.get())
+                    clearReferences()
+                }
             }
         })
 
@@ -379,7 +389,8 @@ object SwipePanelHost {
         val launcherContainer = findHostLauncherContainer(view) ?: return null
         var current = launcherContainer.parent
         while (current is View) {
-            if (current.javaClass.name == "U1.C0118n") return current
+            // C0118n is JADX's Windows filename alias; the runtime DEX name is U1.n.
+            if (current.javaClass.name == "U1.n") return current
             current = current.parent
         }
         return null
@@ -421,9 +432,14 @@ object SwipePanelHost {
     private fun applyGestureExclusion(decor: View) {
         try {
             if (decor.width <= 0 || decor.height <= 0) return
+            if (exclusionView.get() !== decor) {
+                clearGestureExclusion(exclusionView.get())
+                exclusionView = WeakReference(decor)
+                originalExclusions = decor.systemGestureExclusionRects.map { Rect(it) }
+            }
             val top = (decor.height * BOTTOM_SWIPE_REGION_RATIO).toInt()
             decor.setSystemGestureExclusionRects(
-                listOf(Rect(0, top, decor.width, decor.height)),
+                originalExclusions.orEmpty() + Rect(0, top, decor.width, decor.height),
             )
         } catch (ignored: Throwable) {
             // 部分 ROM 不支持，忽略
@@ -432,9 +448,14 @@ object SwipePanelHost {
 
     private fun clearGestureExclusion(view: View?) {
         try {
-            view?.setSystemGestureExclusionRects(emptyList())
+            if (view != null && exclusionView.get() === view) {
+                view.systemGestureExclusionRects = originalExclusions.orEmpty()
+            }
         } catch (ignored: Throwable) {
             // 部分 ROM 不支持，忽略
+        } finally {
+            exclusionView.clear()
+            originalExclusions = null
         }
     }
 
@@ -572,8 +593,16 @@ object SwipePanelHost {
     }
 
     @JvmStatic
-    fun isShowing(): Boolean =
-        container?.visibility == View.VISIBLE && container?.parent != null && !dismissing
+    fun isShowing(): Boolean {
+        val root = container ?: return false
+        return !dismissing && root.isShown && root.isAttachedToWindow &&
+            root.getGlobalVisibleRect(visiblePanelBounds)
+    }
+
+    @JvmStatic
+    fun release(activity: Activity) {
+        if (hostActivity.get() === activity) removePanel(container)
+    }
 
     @JvmStatic
     fun trackLauncherTouch(event: MotionEvent?, context: Context?) {
@@ -895,26 +924,40 @@ object SwipePanelHost {
         }
 
         var reverting = false
+        var saving = false
         toggle.isChecked = initial
         toggle.setOnCheckedChangeListener { checked ->
-            if (reverting) return@setOnCheckedChangeListener
-            val saved = try {
-                onChange(checked)
-            } catch (t: Throwable) {
-                Log.e(TAG, "Failed to persist panel switch: $title", t)
-                false
+            if (reverting || saving) return@setOnCheckedChangeListener
+            saving = true
+            toggle.isEnabled = false
+            row.isEnabled = false
+            fun complete(saved: Boolean) {
+                saving = false
+                toggle.isEnabled = true
+                row.isEnabled = true
+                if (saved) {
+                    summary.text = if (checked) summaryOn else summaryOff
+                    Log.d(TAG, "Panel switch saved: $title=$checked")
+                } else {
+                    reverting = true
+                    toggle.isChecked = !checked
+                    reverting = false
+                    summary.text = saveFailed
+                    Log.w(TAG, "Panel switch write rejected: $title")
+                }
             }
-            if (saved) {
-                summary.text = if (checked) summaryOn else summaryOff
-                Log.d(TAG, "Panel switch saved: $title=$checked")
-                DiagnosticLogStore.recordRemote(activity, "panel switch saved: $title=$checked")
-            } else {
-                reverting = true
-                toggle.isChecked = !checked
-                reverting = false
-                summary.text = saveFailed
-                Log.w(TAG, "Panel switch write rejected: $title")
-                DiagnosticLogStore.recordRemote(activity, "panel switch rejected: $title")
+            try {
+                BackgroundTasks.execute {
+                    val saved = try { onChange(checked) } catch (t: Throwable) {
+                        Log.e(TAG, "Failed to persist panel switch: $title", t)
+                        false
+                    }
+                    mainHandler.post { complete(saved) }
+                    DiagnosticLogStore.recordRemote(activity.applicationContext,
+                        "panel switch applied=$saved: $title=$checked")
+                }
+            } catch (t: java.util.concurrent.RejectedExecutionException) {
+                complete(false)
             }
         }
 

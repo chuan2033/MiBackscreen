@@ -1,6 +1,5 @@
 package hook.HyperBackscreen.ui.about
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -76,8 +75,6 @@ internal fun LicensePage(onBack: () -> Unit) {
         drawRect(surfaceColor)
         drawContent()
     }
-
-    BackHandler(onBack = onBack)
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),

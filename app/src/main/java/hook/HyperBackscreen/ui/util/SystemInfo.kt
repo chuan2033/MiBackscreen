@@ -19,11 +19,15 @@ internal fun currentSystemVersion(): String {
 }
 
 internal fun currentHyperOSVersion(): String {
-    val osName = getSystemProperty("ro.mi.os.version.name")
-    if (!osName.isNullOrBlank()) {
-        return osName
-    }
-    return "MIUI"
+    // version.name is only the major release (e.g. OS4.0); keep the full ROM build.
+    val version = getSystemProperty("ro.mi.os.version.incremental")
+        ?: Build.VERSION.INCREMENTAL?.takeIf { it.matches(Regex("(?:OS|V)\\d.*")) }
+        ?: getSystemProperty("ro.mi.os.version.name")
+        ?: "MIUI"
+    val extension = getSystemProperty("ro.mi.xms.version.incremental")?.trim()?.trimStart('.')
+    return if (version.startsWith("OS") && !extension.isNullOrBlank() &&
+        !version.endsWith(".$extension")
+    ) "$version.$extension" else version
 }
 
 internal fun currentPackageVersion(context: Context, packageName: String): String {

@@ -14,6 +14,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 /**
  * 顶栏的渐进式毛玻璃容器。必须挂在 layerBackdrop 内容子树之外，
  * 否则 backdrop 采样成环会导致 native crash。
+ * 使用官方完整渐进管线；按用户指定的 HyperMusicCover 参数常驻显示，不随滚动淡入。
  */
 @Composable
 internal fun BlurredBar(
@@ -21,19 +22,21 @@ internal fun BlurredBar(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    Box(
-        modifier = modifier.progressiveTextureBlur(
-            backdrop = backdrop,
-            shape = RectangleShape,
-            gradient = ProgressiveBlur.Top.copy(curve = 6f),
-            blurRadius = 18f,
-            colors = BlurDefaults.blurColors(
-                blendColors = listOf(
-                    BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(0.42f))
+    val colors = BlurDefaults.blurColors(
+        blendColors = listOf(BlendColorEntry(MiuixTheme.colorScheme.surface.copy(0.3f)))
+    )
+    Box(modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .progressiveTextureBlur(
+                    backdrop = backdrop,
+                    shape = RectangleShape,
+                    blurRadius = 15f,
+                    gradient = ProgressiveBlur.Top.copy(curve = 10f),
+                    colors = colors,
                 )
-            )
         )
-    ) {
         content()
     }
 }

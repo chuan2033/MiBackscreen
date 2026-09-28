@@ -23,8 +23,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.HashSet;
+import java.util.Set;
 
-import hook.HyperBackscreen.R;
 import hook.HyperBackscreen.common.Constants;
 
 /**
@@ -36,6 +38,7 @@ import hook.HyperBackscreen.common.Constants;
  * {@code startActivity(m)}，所以造一个指向模块的条目即可，点击分派完全走宿主自己的逻辑。
  */
 public final class PanelAppCard {
+    private static final Set<String> preparedImages = new HashSet<>();
 
     private static final String ICON_FILE = "mibackscreen_app_icon.png";
     private static final String PREVIEW_LIGHT_FILE = "mibackscreen_preview.png";
@@ -79,34 +82,16 @@ public final class PanelAppCard {
             @NonNull Consumer<?> delegate
     ) {
         return list -> {
-            appendToDispatchCopy(classLoader, list);
-            asObjectConsumer(delegate).accept(list);
+            List<Object> enhanced = list instanceof List
+                    ? withModuleEntry(classLoader, (List<?>) list) : null;
+            asObjectConsumer(delegate).accept(enhanced != null ? enhanced : list);
         };
-    }
-
-    private static void appendToDispatchCopy(@NonNull ClassLoader classLoader, @Nullable Object list) {
-        if (!(list instanceof ArrayList)) return;
-        ArrayList<?> entries = (ArrayList<?>) list;
-        try {
-            Class<?> entryClass = loadClass(classLoader, Constants.SUBSCREEN_LAUNCHER_ENTRY_CLASS);
-            if (containsModuleEntry(entries, entryClass)) return;
-            Object entry = createEntry(entryClass, hostContext());
-            if (entry == null) return;
-            addEntry(entries, entry);
-        } catch (Throwable e) {
-            Log.w(Constants.LOG_TAG, "Module panel entry dispatch failed", e);
-        }
     }
 
     @SuppressWarnings("unchecked")
     @NonNull
     private static Consumer<Object> asObjectConsumer(@NonNull Consumer<?> delegate) {
         return (Consumer<Object>) delegate;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static void addEntry(@NonNull ArrayList<?> entries, @NonNull Object entry) {
-        ((ArrayList<Object>) entries).add(0, entry);
     }
 
     /** 保存路径用：剔除模块条目，避免它被写回 appInfo.json；没剔除到返回 null。 */
@@ -164,11 +149,11 @@ public final class PanelAppCard {
             constructor.setAccessible(true);
             Object entry = constructor.newInstance();
             String label = moduleLabel(context);
-            String icon = exportImage(context, ICON_FILE, renderSquare(context));
+            String icon = exportImage(context, ICON_FILE, () -> renderSquare(context));
             String previewLight = exportImage(context, PREVIEW_LIGHT_FILE,
-                    renderPreview(context, Constants.SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_LIGHT_BACKGROUND));
+                    () -> renderPreview(context, Constants.SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_LIGHT_BACKGROUND));
             String previewDark = exportImage(context, PREVIEW_DARK_FILE,
-                    renderPreview(context, Constants.SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_DARK_BACKGROUND));
+                    () -> renderPreview(context, Constants.SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_DARK_BACKGROUND));
             if (icon == null || previewLight == null || previewDark == null) return null;
 
             writeField(entry, Constants.SUBSCREEN_LAUNCHER_ENTRY_NAME_FIELD, label);
@@ -196,20 +181,26 @@ public final class PanelAppCard {
 
     /** 渲染成 PNG 落到宿主 cache 目录（同进程同 uid），再把绝对路径交给面板的 Glide。 */
     @Nullable
-    private static String exportImage(
+    private static synchronized String exportImage(
             @NonNull Context context,
             @NonNull String name,
-            @Nullable Bitmap bitmap
+            @NonNull Supplier<Bitmap> render
     ) {
-        if (bitmap == null) return null;
         File target = new File(context.getCacheDir(), name);
+        if (preparedImages.contains(name) && target.isFile() && target.length() > 0) {
+            return target.getAbsolutePath();
+        }
+        Bitmap bitmap = render.get();
+        if (bitmap == null) return null;
         try (FileOutputStream out = new FileOutputStream(target)) {
-            return bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-                    ? target.getAbsolutePath()
-                    : null;
+            if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) return null;
+            preparedImages.add(name);
+            return target.getAbsolutePath();
         } catch (Throwable e) {
             Log.w(Constants.LOG_TAG, "Module panel image export failed: " + name, e);
             return null;
+        } finally {
+            bitmap.recycle();
         }
     }
 
@@ -250,7 +241,8 @@ public final class PanelAppCard {
     private static Drawable modulePanelIcon(@NonNull Context context) {
         try {
             Context moduleContext = context.createPackageContext(Constants.MODULE_PACKAGE, 0);
-            return moduleContext.getResources().getDrawable(R.drawable.panel_icon, null);
+            int id = moduleContext.getResources().getIdentifier("panel_icon", "drawable", Constants.MODULE_PACKAGE);
+            return id == 0 ? null : moduleContext.getResources().getDrawable(id, null);
         } catch (Throwable e) {
             Log.w(Constants.LOG_TAG, "Module panel icon unavailable", e);
             return null;
@@ -307,14 +299,11 @@ public final class PanelAppCard {
                 : Class.forName(name);
     }
 
-    private static void writeField(@NonNull Object target, @NonNull String name, @NonNull Object value) {
-        try {
+    private static void writeField(@NonNull Object target, @NonNull String name, @NonNull Object value)
+            throws ReflectiveOperationException {
             Field field = target.getClass().getDeclaredField(name);
             field.setAccessible(true);
             field.set(target, value);
-        } catch (Throwable e) {
-            Log.w(Constants.LOG_TAG, "Module panel entry field missing: " + name, e);
-        }
     }
 
     @Nullable

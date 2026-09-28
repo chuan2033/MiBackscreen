@@ -1,7 +1,9 @@
 package hook.HyperBackscreen.ui
 
 import android.graphics.Color
-import android.widget.Toast
+import androidx.compose.runtime.CompositionLocalProvider
+import hook.HyperBackscreen.ui.components.LocalUiFeedback
+import hook.HyperBackscreen.ui.components.rememberUiFeedback
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
@@ -55,6 +57,9 @@ private val FORCE_STOP_PACKAGE_PATTERN = Regex("(?:system|[A-Za-z0-9_]+(\\.[A-Za
 internal fun RearScreenApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val feedback = rememberUiFeedback()
+    val retryLabel = stringResource(R.string.common_retry)
+    val saveFailed = stringResource(R.string.settings_save_failed)
     val restartSuccess = stringResource(R.string.restart_success)
     val restartFailed = stringResource(R.string.restart_failed)
     fun refreshScopes(vararg packageNames: String) {
@@ -62,11 +67,8 @@ internal fun RearScreenApp() {
             val ok = withContext(Dispatchers.IO) {
                 packageNames.distinct().all { forceStopPackage(it) }
             }
-            Toast.makeText(
-                context,
-                if (ok) restartSuccess else restartFailed,
-                Toast.LENGTH_SHORT
-            ).show()
+            if (ok) feedback.show(restartSuccess)
+            else feedback.show(restartFailed, retryLabel) { refreshScopes(*packageNames) }
         }
     }
 
@@ -218,6 +220,7 @@ internal fun RearScreenApp() {
     }
 
     MiuixTheme(colors = appColors) {
+      CompositionLocalProvider(LocalUiFeedback provides feedback) {
         HomeScreen(
             disableLongPress = disableLongPress,
             removeWallpaperLimit = removeWallpaperLimit,
@@ -298,18 +301,14 @@ internal fun RearScreenApp() {
             onLauncherIconHiddenChange = { newValue ->
                 if (LauncherIconController.setHidden(context, newValue)) {
                     launcherIconHidden = newValue
+                } else {
+                    feedback.show(saveFailed, retryLabel) {
+                        if (LauncherIconController.setHidden(context, newValue)) launcherIconHidden = newValue
+                        else feedback.show(saveFailed)
+                    }
                 }
             },
-            onForceStopPackage = { packageName ->
-                scope.launch {
-                    val ok = withContext(Dispatchers.IO) { forceStopPackage(packageName) }
-                    Toast.makeText(
-                        context,
-                        if (ok) restartSuccess else restartFailed,
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            },
+            onForceStopPackage = { packageName -> refreshScopes(packageName) },
             themeMode = themeMode,
             onThemeModeChange = { newMode ->
                 ThemePrefs.setThemeMode(context, newMode)
@@ -323,6 +322,7 @@ internal fun RearScreenApp() {
             }
         )
 
+      }
         UpdateDialog(
             update = pendingUpdate,
             onDownload = {

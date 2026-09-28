@@ -1,5 +1,7 @@
 # MiBackscreen
 
+Development on `feat/18pro-max-rear-screen` stays separate from main (baseline `48921ad`). This branch opens the quick panel from the MiBackscreen entry in the host's swipe-up app-card list. See the [local validation record](docs/validation-2026-09-27.md) for verified host versions, fixes and test coverage. Device testing uses debug builds only. Both build types can share a signing key configured through `RELEASE_STORE_FILE`, `RELEASE_KEY_ALIAS`, `RELEASE_STORE_PASSWORD` and `RELEASE_KEY_PASSWORD` in ignored `local.properties` or environment variables; debug remains unminified with diagnostic logs. An explicitly configured but incomplete key fails the build instead of silently using another certificate.
+
 [中文](README.md) · [项目主页](https://github.com/chuan2033/MiBackscreen)
 
 A Xiaomi rear-screen (backscreen) LSPosed module built on the Modern Xposed API 102. It completes wallpaper management, backscreens protection, and a quick settings panel for HyperOS rear screens.
@@ -69,7 +71,7 @@ Minimum Android version is API 36.
 - Permission directory fields must pass absolute-path validation; do not treat the non-path string `qp5l=incallshow` as a directory again.
 - The quick panel depends on `SubScreenLauncher`, `notification_panel`, and `smart_assistant_panel`.
 - `298px` is the fixed fallback for the current target device; other rear screens prefer `DisplayCutout`.
-- The system gesture exclusion zone occupies the bottom 30%; re-evaluate conflicts when adding new stock gestures.
+- While the panel is open, its system gesture exclusion zone occupies the bottom 22%; re-evaluate conflicts when adding new stock gestures.
 - `textureBlur` must not be placed in the same `layerBackdrop` sampling subtree, otherwise a sampling loop may form and trigger a native crash.
 - Frosted glass and liquid glass increase GPU overhead.
 
@@ -85,7 +87,7 @@ Force-stopping a scope process from within the app requires root.
 
 ## Usage
 
-- Rear-screen swipe-up gesture: start with one finger below 70% of the screen height, swipe up more than `32dp` to open the panel; swipe down or tap the close button to exit, and a back-key event reaching `SubScreenLauncher` also closes it.
+- Use the stock swipe-up gesture to open the app-card list, then tap MiBackscreen. Swipe up from the bottom of the quick panel to close it and return to the stock list.
 - When disabling double-tap-to-wake per app, the system-recorded foreground package name and the candidate Activity package name from the running tasks are both read, covering the scenario where a game briefly jumps to an SDK/login page after launch and the foreground package name changes.
 - Generate the feedback log immediately after reproducing the issue; do not re-apply wallpapers or restart the rear-screen center / theme store beforehand.
 
@@ -99,12 +101,12 @@ Force-stopping a scope process from within the app requires root.
 
 ### Gesture
 
-- Start with one finger below 70% of the screen height.
-- Swipe up more than `32dp` to open the panel.
-- Swipe down or tap the close button at the top right to exit.
+- Swipe up to open the stock app-card list.
+- Tap the MiBackscreen entry.
+- Swipe up from the bottom of the panel to close it.
 - A back-key event reaching `SubScreenLauncher` also closes the panel.
 
-The bottom 30% is set as a system gesture exclusion zone. While the panel is shown, touch events are sent directly to the window content via `Window.superDispatchTouchEvent()`, bypassing Xiaomi Launcher's gesture handling. When the native `notification_panel` or `smart_assistant_panel` is visible, the quick panel is not triggered.
+The bottom 22% is temporarily added to the system gesture exclusion region while the panel is visible. Closing the panel or pausing/destroying its host restores the original region; an invisible panel does not intercept gestures.
 
 ### Layout constraints
 

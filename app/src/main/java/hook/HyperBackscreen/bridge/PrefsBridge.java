@@ -42,7 +42,6 @@ public final class PrefsBridge {
     public static final String DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES = "";
     public static final boolean DEFAULT_THEME_SETTINGS_SHORTCUT = true;
     public static final String DEFAULT_PICKUP_ISLAND_SELECTION = "";
-    private static final String KEY_PICKUP_OPEN_TOKENS = "pickup_open_tokens";
 
     private PrefsBridge() {
     }
@@ -255,6 +254,12 @@ public final class PrefsBridge {
     /** 取件码页在模块进程写，Hook 在小爱进程读，必须走远程偏好。 */
     @NonNull
     public static String readPickupIslandSelectionForUi(@NonNull Context context) {
+        SharedPreferences localPrefs = local(context);
+        String pendingKey = PENDING_UI_PREFIX + Constants.KEY_PICKUP_ISLAND_SELECTION;
+        if (localPrefs.contains(pendingKey)) {
+            String pending = localPrefs.getString(pendingKey, DEFAULT_PICKUP_ISLAND_SELECTION);
+            return pending == null ? DEFAULT_PICKUP_ISLAND_SELECTION : pending;
+        }
         return readStringForUi(
                 context,
                 Constants.KEY_PICKUP_ISLAND_SELECTION,
@@ -263,6 +268,20 @@ public final class PrefsBridge {
 
     @SuppressLint("ApplySharedPref")
     public static void writePickupIslandSelectionFromUi(@NonNull Context context, @NonNull String value) {
+        tryWritePickupIslandSelectionFromUi(context, value);
+    }
+
+    /** UI feedback needs the actual commit result, not an optimistic checkmark. */
+    @SuppressLint("ApplySharedPref")
+    public static boolean tryWritePickupIslandSelectionFromUi(@NonNull Context context, @NonNull String value) {
+        return savePickupIslandSelectionFromUi(context, value) != PickupSaveResult.FAILED;
+    }
+
+    public enum PickupSaveResult { SYNCED, PENDING, FAILED }
+
+    /** Return the destination used by this write; checking service availability afterwards is racy. */
+    @SuppressLint("ApplySharedPref")
+    public static PickupSaveResult savePickupIslandSelectionFromUi(@NonNull Context context, @NonNull String value) {
         SharedPreferences localPrefs = local(context);
         SharedPreferences remote = remote();
         if (remote != null) {
@@ -274,12 +293,13 @@ public final class PrefsBridge {
                         .putString(Constants.KEY_PICKUP_ISLAND_SELECTION, value)
                         .remove(PENDING_UI_PREFIX + Constants.KEY_PICKUP_ISLAND_SELECTION)
                         .commit();
-                }
+            }
+            return committed ? PickupSaveResult.SYNCED : PickupSaveResult.FAILED;
         } else {
-            localPrefs.edit()
+            return localPrefs.edit()
                     .putString(Constants.KEY_PICKUP_ISLAND_SELECTION, value)
                     .putString(PENDING_UI_PREFIX + Constants.KEY_PICKUP_ISLAND_SELECTION, value)
-                    .commit();
+                    .commit() ? PickupSaveResult.PENDING : PickupSaveResult.FAILED;
         }
     }
 
@@ -289,53 +309,6 @@ public final class PrefsBridge {
                 module,
                 Constants.KEY_PICKUP_ISLAND_SELECTION,
                 DEFAULT_PICKUP_ISLAND_SELECTION);
-    }
-
-    /** Hook 进程登记由 PendingIntent 携带的随机令牌，页面进程用同一份远程偏好校验。 */
-    public static void writePickupOpenTokenForHook(@NonNull XposedModule module,
-                                                   @NonNull String identity,
-                                                   @NonNull String token) {
-        if (!identity.matches("[0-9a-f]{64}") || !token.matches("[0-9a-f]{32}")) return;
-        try {
-            SharedPreferences prefs = module.getRemotePreferences(Constants.PREF_GROUP);
-            List<String> records = new ArrayList<>();
-            String stored = prefs.getString(KEY_PICKUP_OPEN_TOKENS, "");
-            if (stored != null) {
-                for (String record : stored.split("\\n")) {
-                    if (record.startsWith(identity + "|") || record.isEmpty()) continue;
-                    if (record.matches("[0-9a-f]{64}\\|[0-9a-f]{32}")) records.add(record);
-                }
-            }
-            records.add(identity + "|" + token);
-            while (records.size() > 16) records.remove(0);
-            prefs.edit().putString(KEY_PICKUP_OPEN_TOKENS, String.join("\n", records)).commit();
-        } catch (Throwable error) {
-            Log.w(TAG, "Failed to store pickup open token", error);
-        }
-    }
-
-    public static boolean isPickupOpenTokenValid(@NonNull Context context,
-                                                 @NonNull String identity,
-                                                 @NonNull String token) {
-        return Boolean.TRUE.equals(validatePickupOpenToken(context, identity, token));
-    }
-
-    /**
-     * 校验取件码页面令牌：true 表示有效，false 表示明确无效，null 表示远程偏好服务暂未就绪。
-     * 页面启动可能早于 XposedService 绑定，不能把这种暂时不可用误判成没有取件码。
-     */
-    @Nullable
-    public static Boolean validatePickupOpenToken(@NonNull Context context,
-                                                  @NonNull String identity,
-                                                  @NonNull String token) {
-        if (!identity.matches("[0-9a-f]{64}") || !token.matches("[0-9a-f]{32}")) return false;
-        SharedPreferences prefs = remote();
-        if (prefs == null) {
-            Log.w(TAG, "Pickup token validation deferred: remote preferences unavailable");
-            return null;
-        }
-        String stored = prefs.getString(KEY_PICKUP_OPEN_TOKENS, "");
-        return stored != null && stored.contains(identity + "|" + token);
     }
 
     /** 纯 UI 外观项，Hook 端不消费，只存本地。 */
@@ -497,14 +470,23 @@ public final class PrefsBridge {
                 || Constants.KEY_REMOVE_APP_CARD_LIMIT.equals(key);
     }
 
-    static boolean stagePanelPreference(@NonNull Context context,
+    static boolean applyPanelPreference(@NonNull Context context,
                                         @NonNull String key,
                                         boolean value) {
         if (!isPanelWritableKey(key)) return false;
-        return local(context).edit()
-                .putBoolean(key, value)
-                .putBoolean(PENDING_PANEL_PREFIX + key, value)
-                .commit();
+        // Reject an unavailable service without leaving a queued write behind a reverted switch.
+        XposedService service = ModuleApp.awaitReadyService();
+        if (service == null) return false;
+        try {
+            SharedPreferences prefs = service.getRemotePreferences(Constants.PREF_GROUP);
+            if (!prefs.edit().putBoolean(key, value).commit()) return false;
+            local(context).edit().putBoolean(key, value).remove(PENDING_PANEL_PREFIX + key)
+                    .remove(PENDING_UI_PREFIX + key).apply();
+            return true;
+        } catch (Throwable error) {
+            Log.w(TAG, "Failed to apply panel preference " + key, error);
+            return false;
+        }
     }
 
     static boolean flushPanelPreference(@NonNull Context context,
@@ -536,6 +518,8 @@ public final class PrefsBridge {
             flushPanelPreference(context, Constants.KEY_REMOVE_WALLPAPER_LIMIT);
             flushPanelPreference(context, Constants.KEY_REMOVE_APP_CARD_LIMIT);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_LONG_PRESS_EDIT);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_PICKUP);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_APP_CARD);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REMOVE_APP_CARD_LIMIT);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_FIX_REAR_SCREEN_APPLY);
@@ -549,6 +533,7 @@ public final class PrefsBridge {
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_APP_CARD_LIMIT, DEFAULT_REMOVE_APP_CARD_LIMIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_PICKUP, DEFAULT_ENABLE_PICKUP);
+            syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_APP_CARD, DEFAULT_ENABLE_APP_CARD);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_REAR_SCREEN_COVER, DEFAULT_DISABLE_REAR_SCREEN_COVER);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, DEFAULT_DISABLE_DOUBLE_TAP_WAKE);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_THEME_SETTINGS_SHORTCUT, DEFAULT_THEME_SETTINGS_SHORTCUT);

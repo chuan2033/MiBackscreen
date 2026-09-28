@@ -5,7 +5,6 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.common.PackageListCodec
-import hook.HyperBackscreen.ui.components.AnimatedPreferenceVisibility
 import hook.HyperBackscreen.ui.components.CardBlock
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
@@ -18,7 +17,6 @@ internal fun FunctionPage(
     removeAppCardLimit: Boolean,
     fixRearScreenApply: Boolean,
     disableRearScreenCover: Boolean,
-    disableDoubleTapWake: Boolean,
     doubleTapWakeDisabledPackages: String,
     enablePickup: Boolean,
     onDisableLongPressChange: (Boolean) -> Unit,
@@ -26,7 +24,6 @@ internal fun FunctionPage(
     onRemoveAppCardLimitChange: (Boolean) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
-    onDisableDoubleTapWakeChange: (Boolean) -> Unit,
     onEnablePickupChange: (Boolean) -> Unit,
     onAddDisabledAppsClick: () -> Unit
 ) {
@@ -61,28 +58,16 @@ internal fun FunctionPage(
             title = stringResource(R.string.config_disable_rear_cover_title),
             summary = stringResource(R.string.config_disable_rear_cover_summary)
         )
-        SwitchPreference(
-            checked = disableDoubleTapWake,
-            onCheckedChange = onDisableDoubleTapWakeChange,
+        val disabledPackageCount = PackageListCodec.parse(doubleTapWakeDisabledPackages).size
+        ArrowPreference(
             title = stringResource(R.string.config_disable_double_tap_wake_title),
-            summary = stringResource(R.string.config_disable_double_tap_wake_summary)
+            summary = pluralStringResource(
+                R.plurals.config_disabled_apps_count,
+                disabledPackageCount,
+                disabledPackageCount
+            ),
+            onClick = onAddDisabledAppsClick
         )
-        AnimatedPreferenceVisibility(visible = disableDoubleTapWake) {
-            val disabledPackageCount = PackageListCodec.parse(doubleTapWakeDisabledPackages).size
-            ArrowPreference(
-                title = stringResource(R.string.config_add_apps_title),
-                summary = if (disabledPackageCount == 0) {
-                    stringResource(R.string.config_disabled_apps_empty)
-                } else {
-                    pluralStringResource(
-                        R.plurals.config_disabled_apps_count,
-                        disabledPackageCount,
-                        disabledPackageCount
-                    )
-                },
-                onClick = onAddDisabledAppsClick
-            )
-        }
         SwitchPreference(
             checked = enablePickup,
             onCheckedChange = onEnablePickupChange,

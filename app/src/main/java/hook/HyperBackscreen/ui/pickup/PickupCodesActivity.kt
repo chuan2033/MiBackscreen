@@ -20,6 +20,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.viewmodel.compose.viewModel
+import hook.HyperBackscreen.ui.components.rememberUiFeedback
+import top.yukonga.miuix.kmp.basic.SnackbarHost
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -63,14 +68,6 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
-private data class PickupGroup(val station: String, val codes: List<String>) {
-    val identity: String get() = PickupCodes.displayIdentity(codes, station)
-}
-
-private data class PickupPayload(val groups: List<PickupGroup> = emptyList()) {
-    val codeCount: Int get() = groups.sumOf { it.codes.size }
-}
-
 class PickupCodesActivity : ComponentActivity() {
     private var payload by mutableStateOf(PickupPayload())
     private var sessionId = ""
@@ -80,6 +77,17 @@ class PickupCodesActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         readPayload(intent)
+        if (savedInstanceState != null) {
+            val groups = savedInstanceState.getBundle("pickup_groups")
+            if (groups != null) {
+                payload = PickupPayload((0 until groups.getInt("count")).map { index ->
+                    PickupGroup(groups.getString("station_$index").orEmpty(),
+                        groups.getStringArrayList("codes_$index").orEmpty())
+                })
+                sessionId = savedInstanceState.getString("pickup_session").orEmpty()
+                pageToken = savedInstanceState.getString("pickup_page_token").orEmpty()
+            }
+        }
         registerConfirmedReceiver()
         setContent {
             val themeMode = remember { ThemePrefs.getThemeMode(this) }
@@ -105,6 +113,19 @@ class PickupCodesActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         notifyPageOpened()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBundle("pickup_groups", Bundle().apply {
+            putInt("count", payload.groups.size)
+            payload.groups.forEachIndexed { index, group ->
+                putString("station_$index", group.station)
+                putStringArrayList("codes_$index", ArrayList(group.codes))
+            }
+        })
+        outState.putString("pickup_session", sessionId)
+        outState.putString("pickup_page_token", pageToken)
+        super.onSaveInstanceState(outState)
     }
 
     private fun registerConfirmedReceiver() {
@@ -230,31 +251,36 @@ private fun PickupCodesPage(payload: PickupPayload, onBack: () -> Unit) {
     val context = LocalContext.current
     val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
     val surfaceColor = MiuixTheme.colorScheme.surface
-    val initialSelections = remember(payload) {
-        val storedSelection = PrefsBridge.readPickupIslandSelectionForUi(context)
-        payload.groups.associate { group ->
-            group.identity to initialVisibleCodes(group, group.identity, storedSelection)
-        }
-    }
-    var selectedByGroup by remember(payload) { mutableStateOf(initialSelections) }
+    val factory = remember(context.applicationContext) { PickupSelectionViewModel.Factory(context) }
+    val selectionModel: PickupSelectionViewModel = viewModel(factory = factory)
+    val selectionState by selectionModel.state.collectAsState()
+    LaunchedEffect(payload) { selectionModel.bind(payload) }
+    val selectedByGroup = selectionState.selections
+    val saving = selectionState.busy || selectionState.payload != payload
     val allSelected = payload.codeCount > 0 && payload.groups.all { group ->
         selectedByGroup[group.identity].orEmpty().containsAll(group.codes)
     }
 
+    val feedback = rememberUiFeedback()
+    val retryLabel = stringResource(R.string.common_retry)
+    val saveFailed = stringResource(R.string.settings_save_failed)
+    val pendingMessage = stringResource(R.string.pickup_saved_pending)
+    val refreshFailed = stringResource(R.string.pickup_refresh_failed)
+
     fun applySelections(nextSelections: Map<String, Set<String>>) {
-        var updatedStored = PrefsBridge.readPickupIslandSelectionForUi(context)
-        payload.groups.forEach { group ->
-            val selected = nextSelections[group.identity].orEmpty()
-            updatedStored = PickupCodes.upsertIslandSelection(
-                updatedStored,
-                group.identity,
-                group.codes.filter(selected::contains),
-                selected.size >= group.codes.size
-            )
+        selectionModel.save(payload, nextSelections)
+    }
+    LaunchedEffect(payload, selectionState.busy, selectionState.result, selectionState.loadFailed) {
+        feedback.dismiss()
+        if (selectionState.payload == payload && !saving) {
+            when {
+                selectionState.loadFailed || selectionState.result == PickupSaveResult.Failed ->
+                    feedback.show(saveFailed, retryLabel) { selectionModel.retry(payload) }
+                selectionState.result == PickupSaveResult.Pending -> feedback.show(pendingMessage)
+                selectionState.result == PickupSaveResult.RefreshFailed ->
+                    feedback.show(refreshFailed, retryLabel) { selectionModel.retry(payload) }
+            }
         }
-        selectedByGroup = nextSelections
-        PrefsBridge.writePickupIslandSelectionFromUi(context, updatedStored)
-        requestIslandRefresh(context)
     }
 
     fun setAllSelected(checked: Boolean) {
@@ -272,6 +298,7 @@ private fun PickupCodesPage(payload: PickupPayload, onBack: () -> Unit) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MiuixTheme.colorScheme.surface,
+        snackbarHost = { SnackbarHost(state = feedback.host) },
         topBar = {
             BlurredBar(backdrop) {
                 TopAppBar(
@@ -291,7 +318,8 @@ private fun PickupCodesPage(payload: PickupPayload, onBack: () -> Unit) {
                     actions = {
                         if (payload.codeCount > 0) {
                             TextButton(
-                                text = stringResource(
+                                enabled = !saving && !selectionState.loadFailed,
+                                text = if (saving) stringResource(R.string.settings_saving) else stringResource(
                                     if (allSelected) R.string.pickup_deselect_all
                                     else R.string.pickup_select_all
                                 ),
@@ -333,6 +361,7 @@ private fun PickupCodesPage(payload: PickupPayload, onBack: () -> Unit) {
                     item(key = group.identity) {
                         PickupGroupBlock(
                             group = group,
+                            enabled = !saving && !selectionState.loadFailed,
                             visibleCodes = selectedByGroup[group.identity].orEmpty(),
                             onVisibleCodesChange = { next ->
                                 applySelections(selectedByGroup + (group.identity to next))
@@ -351,6 +380,7 @@ private fun PickupCodesPage(payload: PickupPayload, onBack: () -> Unit) {
 @Composable
 private fun PickupGroupBlock(
     group: PickupGroup,
+    enabled: Boolean,
     visibleCodes: Set<String>,
     onVisibleCodesChange: (Set<String>) -> Unit
 ) {
@@ -373,6 +403,7 @@ private fun PickupGroupBlock(
                 val checked = visibleCodes.contains(code)
                 CheckboxPreference(
                     title = code,
+                    enabled = enabled,
                     checked = checked,
                     checkboxLocation = CheckboxLocation.End,
                     onCheckedChange = { next ->
@@ -381,32 +412,5 @@ private fun PickupGroupBlock(
                 )
             }
         }
-    }
-}
-
-private fun initialVisibleCodes(
-    group: PickupGroup,
-    stationIdentity: String,
-    stored: String
-): Set<String> {
-    val stationSelection = PickupCodes.selectionForIdentity(stored, stationIdentity)
-    if (stationSelection.isNotEmpty()) {
-        return PickupCodes.applyIslandSelection(group.codes, stationIdentity, stationSelection).toSet()
-    }
-    // 兼容旧版按完整码串保存的记录。
-    val legacyIdentity = PickupCodes.identity(group.codes, group.station)
-    return PickupCodes.applyIslandSelection(
-        group.codes,
-        legacyIdentity,
-        PickupCodes.selectionForIdentity(stored, legacyIdentity)
-    ).toSet()
-}
-
-private fun requestIslandRefresh(context: Context) {
-    try {
-        context.sendBroadcast(
-            Intent(Constants.ACTION_REFRESH_PICKUP_ISLAND).setPackage(Constants.VOICE_ASSIST_PACKAGE)
-        )
-    } catch (_: RuntimeException) {
     }
 }

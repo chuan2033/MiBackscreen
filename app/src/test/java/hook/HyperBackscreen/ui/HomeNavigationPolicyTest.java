@@ -35,8 +35,8 @@ public class HomeNavigationPolicyTest {
     }
 
     @Test
-    public void floatingBottomBarItemsStayWideEnoughForTabs() throws Exception {
-        assertTrue(layoutDp("floatingBottomBarItemMinWidthDp") >= 96);
+    public void floatingBottomBarUsesCompactTabWidth() throws Exception {
+        assertEquals(80, layoutDp("floatingBottomBarItemMinWidthDp"));
     }
 
     @Test

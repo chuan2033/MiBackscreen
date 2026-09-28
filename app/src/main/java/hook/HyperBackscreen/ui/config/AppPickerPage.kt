@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.widget.ImageView
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -59,6 +58,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.preference.CheckboxLocation
 import top.yukonga.miuix.kmp.preference.CheckboxPreference
+import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
@@ -72,6 +72,8 @@ private data class InstalledAppItem(
 
 @Composable
 internal fun AppPickerPage(
+    disableDoubleTapWake: Boolean,
+    onDisableDoubleTapWakeChange: (Boolean) -> Unit,
     selectedPackages: String,
     onSelectedPackagesChange: (String) -> Unit,
     onBack: () -> Unit
@@ -105,8 +107,6 @@ internal fun AppPickerPage(
             AppPickerFilter.matches(it.label, it.packageName, query)
         }
     }
-
-    BackHandler(onBack = onBack)
 
     LaunchedEffect(context) {
         loading = true
@@ -151,6 +151,15 @@ internal fun AppPickerPage(
                     top = paddingValues.calculateTopPadding()
                 )
             ) {
+                item(key = "double_tap_wake_switch") {
+                    CardBlock(pressFeedbackType = PressFeedbackType.None) {
+                        SwitchPreference(
+                            checked = disableDoubleTapWake,
+                            onCheckedChange = onDisableDoubleTapWakeChange,
+                            title = stringResource(R.string.app_picker_disable_double_tap_wake_title)
+                        )
+                    }
+                }
                 item {
                     Spacer(Modifier.height(12.dp))
                     InputField(

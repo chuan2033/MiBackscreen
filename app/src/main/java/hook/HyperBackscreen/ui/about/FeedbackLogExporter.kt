@@ -45,31 +45,37 @@ internal object FeedbackLogExporter {
         val report: String,
     )
 
-    fun create(context: Context): File? {
+    fun create(context: Context, onProgress: (Int, Int) -> Unit = { _, _ -> }): File? {
+        var staging: File? = null
+        var partial: File? = null
         return try {
             val appContext = context.applicationContext
             val directory = File(appContext.cacheDir, "feedback")
             if (!directory.exists() && !directory.mkdirs()) return null
             directory.listFiles()
-                ?.filter { it.isFile && it.name.startsWith("MiBackscreen-feedback-") }
+                ?.filter { it.isFile && it.name.startsWith("MiBackscreen-feedback-")
+                    && it.lastModified() < System.currentTimeMillis() - TimeUnit.DAYS.toMillis(1) }
                 ?.forEach { it.delete() }
 
-            val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+            val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()) + "-${System.nanoTime()}"
             val output = File(directory, "MiBackscreen-feedback-$timestamp.zip")
+            val partialOutput = File(directory, "MiBackscreen-feedback-$timestamp.partial").also { partial = it }
             val databaseDirectory = File(directory, "database-$timestamp")
-            val lsposedLog = collectLsposedLog()
-            val logcat = collectLogcat()
-            val rearScreenState = collectRearScreenState()
-            val rearScreenFiles = collectRearScreenFiles()
-            val rearScreenResourceReport = collectRearScreenResourceReport()
-            val themeManagerFiles = collectThemeManagerFiles()
-            val systemDiagnostics = collectSystemDiagnostics()
-            val hostLog = collectSubScreenCenterLog()
-            val databaseSnapshot = collectDatabaseSnapshot(databaseDirectory)
+            staging = databaseDirectory
+            onProgress(0, 10)
+            val lsposedLog = collectLsposedLog().also { onProgress(1, 10) }
+            val logcat = collectLogcat().also { onProgress(2, 10) }
+            val rearScreenState = collectRearScreenState().also { onProgress(3, 10) }
+            val rearScreenFiles = collectRearScreenFiles().also { onProgress(4, 10) }
+            val rearScreenResourceReport = collectRearScreenResourceReport().also { onProgress(5, 10) }
+            val themeManagerFiles = collectThemeManagerFiles().also { onProgress(6, 10) }
+            val systemDiagnostics = collectSystemDiagnostics().also { onProgress(7, 10) }
+            val hostLog = collectSubScreenCenterLog().also { onProgress(8, 10) }
+            val databaseSnapshot = collectDatabaseSnapshot(databaseDirectory).also { onProgress(9, 10) }
             val pickupState = buildPickupState(appContext, lsposedLog, logcat)
 
             try {
-                ZipOutputStream(FileOutputStream(output)).use { zip ->
+                ZipOutputStream(FileOutputStream(partialOutput)).use { zip ->
                     zip.addText("feedback-info.txt", buildFeedbackInfo())
                     zip.addText("device.txt", buildDeviceReport(appContext))
                     zip.addText("config.txt", buildConfigReport(appContext))
@@ -93,10 +99,17 @@ internal object FeedbackLogExporter {
             } finally {
                 databaseDirectory.deleteRecursively()
             }
+            check(partialOutput.renameTo(output)) { "Unable to finish feedback archive" }
             DiagnosticLogStore.appendLocal(appContext, "feedback archive created: ${output.name}")
+            onProgress(10, 10)
             output
-        } catch (_: Throwable) {
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
             null
+        } finally {
+            partial?.delete()
+            staging?.deleteRecursively()
         }
     }
 
@@ -109,6 +122,7 @@ internal object FeedbackLogExporter {
     }
 
     fun share(context: Context, file: File) {
+        check(file.isFile && file.length() > 0L) { "Feedback archive is missing or empty" }
         val uri = FileProvider.getUriForFile(
             context,
             "${context.packageName}.files",
@@ -427,12 +441,14 @@ internal object FeedbackLogExporter {
 
     private fun runRootCommand(command: String, maxOutputBytes: Int): String {
         val readerExecutor = Executors.newSingleThreadExecutor()
+        var activeProcess: Process? = null
         return try {
             // Android 的应用数据隔离会让普通 su 继承应用挂载命名空间，看不到主题商店数据库。
             // KernelSU/Magisk 的 -M 会切到全局挂载命名空间，同时仍保留 root 权限。
             val process = ProcessBuilder("su", "-M", "-c", command)
                 .redirectErrorStream(true)
                 .start()
+            activeProcess = process
             val outputFuture = readerExecutor.submit<ByteArray> {
                 process.inputStream.use { input ->
                     val output = TailBuffer(maxOutputBytes)
@@ -460,6 +476,7 @@ internal object FeedbackLogExporter {
         } catch (error: Throwable) {
             "Collection failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}\n"
         } finally {
+            activeProcess?.destroyForcibly()
             readerExecutor.shutdownNow()
         }
     }

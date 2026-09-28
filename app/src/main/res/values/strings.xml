@@ -26,7 +26,6 @@
     <!-- Home Page -->
     <string name="home_log_title">Log</string>
     <string name="log_summary">Requires root access</string>
-    <string name="log_generating">Generating log</string>
     <string name="log_failed">Failed to generate log</string>
     <string name="log_share_title">Share log</string>
     <string name="home_disable_long_press_title">Disable rear screen long press to switch wallpaper</string>
@@ -81,16 +80,14 @@
     <string name="config_disable_rear_cover_title">Disable rear screen cover prompt</string>
     <string name="config_disable_rear_cover_summary">Block rear screen protection popup prompts</string>
     <string name="config_disable_double_tap_wake_title">Disable rear screen double-tap wake</string>
-    <string name="config_disable_double_tap_wake_summary">Disable rear screen double-tap wake when specified apps run in the foreground</string>
-    <string name="config_add_apps_title">Add Apps</string>
-    <string name="config_disabled_apps_empty">No apps selected</string>
+    <string name="app_picker_disable_double_tap_wake_title">Disable rear screen double-tap wake while selected apps are in the foreground</string>
     <plurals name="config_disabled_apps_count">
-        <item quantity="one">%1$d app selected</item>
-        <item quantity="other">%1$d apps selected</item>
+        <item quantity="one">%1$d app added</item>
+        <item quantity="other">%1$d apps added</item>
     </plurals>
     <string name="config_enable_pickup_title">Pickup code enhancement</string>
     <string name="config_enable_pickup_summary">Filter the codes shown on the card</string>
-    <string name="app_picker_title">Add Apps</string>
+    <string name="app_picker_title">Select apps</string>
     <string name="app_picker_search_hint">Search apps</string>
     <string name="app_picker_loading">Loading apps...</string>
     <string name="app_picker_empty">No matching apps</string>
@@ -138,4 +135,21 @@
     <string name="restart_theme_manager">Theme Store</string>
     <string name="restart_success">Restart command sent</string>
     <string name="restart_failed">Restart failed (root may be unavailable)</string>
+    <string name="common_retry">Retry</string>
+    <string name="common_share">Share</string>
+    <string name="log_progress">Generating log · Progress: %1$d/%2$d</string>
+    <string name="log_exporting">Exporting log</string>
+    <string name="log_export_complete">Log exported</string>
+    <string name="log_export_view">Log exported. Tap to view</string>
+    <string name="log_export_start">Export log</string>
+    <string name="log_stage_count">%1$d/%2$d</string>
+    <string name="log_close">Close</string>
+    <string name="log_share_failed">Could not open sharing. Tap to retry</string>
+    <string name="log_file_missing">Log file is unavailable. Generate it again</string>
+    <string name="pickup_refresh_failed">Saved, but could not request island refresh</string>
+    <string name="log_failed_retry">Failed to generate log. Tap to retry</string>
+    <string name="log_regenerate">Regenerate</string>
+    <string name="settings_save_failed">Could not save this setting</string>
+    <string name="pickup_saved_pending">Saved locally; waiting for the module service</string>
+    <string name="settings_saving">Saving…</string>
 </resources>

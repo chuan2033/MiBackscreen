@@ -1,6 +1,5 @@
 package hook.HyperBackscreen.ui.about
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -16,7 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,15 +55,13 @@ internal fun DonatePage(onBack: () -> Unit) {
         stringResource(R.string.about_donate_wechat),
         stringResource(R.string.about_donate_alipay)
     )
-    var selectedIndex by remember { mutableStateOf(0) }
+    var selectedIndex by rememberSaveable { mutableStateOf(0) }
     val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
     val surfaceColor = MiuixTheme.colorScheme.surface
     val backdrop = rememberLayerBackdrop {
         drawRect(surfaceColor)
         drawContent()
     }
-
-    BackHandler(onBack = onBack)
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),

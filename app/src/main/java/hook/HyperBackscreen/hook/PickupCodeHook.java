@@ -35,6 +35,8 @@ import java.util.UUID;
 import hook.HyperBackscreen.bridge.PrefsBridge;
 import hook.HyperBackscreen.common.Constants;
 import hook.HyperBackscreen.common.PickupCodes;
+import hook.HyperBackscreen.common.PickupSessions;
+import hook.HyperBackscreen.common.BackgroundTasks;
 import io.github.libxposed.api.XposedModule;
 
 final class PickupCodeHook {
@@ -48,14 +50,11 @@ final class PickupCodeHook {
             "com.xiaomi.voiceassistant.memory.island.MemorySceneActionReceiver";
     private static final String EXTRA_NOTIFICATION_ID = "notification_id";
     // 同一轮记忆岛通知通常在几百毫秒内连续提交；缩短窗口避免用户下一次记忆继承旧会话。
-    private static final long PICKUP_BATCH_GAP_MS = 2000L;
     private static final int MAX_CAPTURED_NOTIFICATIONS = 16;
     private static final Object SESSION_LOCK = new Object();
-    private static final Map<String, String> PICKUP_SESSIONS = new HashMap<>();
+    private static final PickupSessions PICKUP_SESSIONS = new PickupSessions();
     private static final Map<String, String> PICKUP_OPEN_TOKENS = new LinkedHashMap<>();
     private static final Map<String, String> CONFIRMED_PAGES = new LinkedHashMap<>();
-    private static long lastPickupBuildAt;
-    private static String currentPickupSession = "";
     private static volatile String activePageToken = "";
     private static BroadcastReceiver refreshReceiver;
     private static final Object LAST_NOTIFICATION_LOCK = new Object();
@@ -64,16 +63,21 @@ final class PickupCodeHook {
     private static XposedModule refreshModule;
     private static final ThreadLocal<Boolean> postingRefresh = ThreadLocal.withInitial(() -> false);
     private static final String ISLAND_PARAM = "miui.focus.param.custom";
+    private static final Object REFRESH_LOCK = new Object();
+    private static boolean refreshRunning;
+    private static boolean refreshRequested;
 
     private static final class CapturedNotification {
         final int id;
         final String tag;
         final String identity;
+        final Notification original;
 
-        CapturedNotification(int id, String tag, String identity) {
+        CapturedNotification(int id, String tag, String identity, Notification original) {
             this.id = id;
             this.tag = tag;
             this.identity = identity;
+            this.original = original;
         }
     }
 
@@ -176,12 +180,28 @@ final class PickupCodeHook {
     private static boolean hookNotification(XposedModule module, ClassLoader loader) {
         try {
             Class<?> notifications = Class.forName("android.app.NotificationManager", false, loader);
-            boolean plain = hookNotificationMethod(module,
-                    notifications.getDeclaredMethod("notify", int.class, Notification.class));
+            // notify(int, Notification) delegates here. Hooking both doubles RemoteViews actions.
             boolean tagged = hookNotificationMethod(module,
                     notifications.getDeclaredMethod("notify", String.class, int.class,
                             Notification.class));
-            if (!plain && !tagged) return false;
+            if (!tagged) return false;
+            module.hook(notifications.getDeclaredMethod("cancel", String.class, int.class))
+                    .setExceptionMode(XposedModule.ExceptionMode.PROTECTIVE)
+                    .intercept(chain -> {
+                        Object result = chain.proceed();
+                        synchronized (LAST_NOTIFICATION_LOCK) {
+                            pickupNotifications.remove(notificationKey((Integer) chain.getArgs().get(1),
+                                    (String) chain.getArgs().get(0)));
+                        }
+                        return result;
+                    });
+            module.hook(notifications.getDeclaredMethod("cancelAll"))
+                    .setExceptionMode(XposedModule.ExceptionMode.PROTECTIVE)
+                    .intercept(chain -> {
+                        Object result = chain.proceed();
+                        synchronized (LAST_NOTIFICATION_LOCK) { pickupNotifications.clear(); }
+                        return result;
+                    });
             module.log(Log.INFO, Constants.LOG_TAG, "Pickup notification refresh hook installed");
             return true;
         } catch (Throwable error) {
@@ -196,30 +216,40 @@ final class PickupCodeHook {
             module.hook(notify)
                     .setExceptionMode(XposedModule.ExceptionMode.PROTECTIVE)
                     .intercept(chain -> {
-                        if (!PrefsBridge.shouldEnablePickup(module)) {
+                        if (postingRefresh.get() || !PrefsBridge.shouldEnablePickup(module)) {
                             return chain.proceed();
                         }
                         List<Object> args = chain.getArgs();
                         int notificationIndex = args.size() - 1;
                         int idIndex = args.size() == 2 ? 0 : 1;
                         Notification notification = (Notification) args.get(notificationIndex);
-                        if (!postingRefresh.get() && pickupContext != null) {
+                        if (!isPickupNotification(notification)) {
+                            Object result = chain.proceed();
+                            synchronized (LAST_NOTIFICATION_LOCK) {
+                                pickupNotifications.remove(notificationKey((Integer) args.get(idIndex),
+                                        (String) args.get(0)));
+                            }
+                            return result;
+                        }
+                        Notification original = copyNotification(notification);
+                        Notification enhanced = copyNotification(original);
+                        if (pickupContext != null) {
                             try {
-                                patchNotification(notification, pickupContext, module);
+                                patchNotification(enhanced, pickupContext, module);
                             } catch (Throwable error) {
                                 module.log(Log.WARN, Constants.LOG_TAG,
                                         "Unable to update pickup notification", error);
                             }
                         }
-                        Object result = chain.proceed();
-                        if (!postingRefresh.get()) {
-                            try {
+                        java.util.ArrayList<Object> forwarded = new java.util.ArrayList<>(args);
+                        forwarded.set(notificationIndex, enhanced);
+                        Object result = chain.proceed(forwarded.toArray());
+                        try {
                                 capturePickupNotification((Integer) args.get(idIndex),
                                         args.size() == 3 ? (String) args.get(0) : null,
-                                        notification, module);
-                            } catch (Throwable error) {
-                                Log.w(Constants.LOG_TAG, "Unable to capture pickup notification", error);
-                            }
+                                        original, module);
+                        } catch (Throwable error) {
+                            Log.w(Constants.LOG_TAG, "Unable to capture pickup notification", error);
                         }
                         return result;
                     });
@@ -232,16 +262,16 @@ final class PickupCodeHook {
 
     private static void capturePickupNotification(int id, String tag, Notification notification,
                                                    XposedModule module) {
-        Bundle extras = notification.extras;
         if (!isPickupNotification(notification)) return;
         try {
             synchronized (LAST_NOTIFICATION_LOCK) {
+                pickupNotifications.remove(notificationKey(id, tag));
                 while (pickupNotifications.size() >= MAX_CAPTURED_NOTIFICATIONS) {
                     String oldest = pickupNotifications.keySet().iterator().next();
                     pickupNotifications.remove(oldest);
                 }
                 pickupNotifications.put(notificationKey(id, tag),
-                        new CapturedNotification(id, tag, identityForNotification(notification)));
+                        new CapturedNotification(id, tag, identityForNotification(notification), notification));
                 refreshModule = module;
             }
             Log.i(Constants.LOG_TAG, "Pickup notification captured for island refresh");
@@ -282,7 +312,8 @@ final class PickupCodeHook {
                             List<String> parsed = PickupCodes.parse(title);
                             String station = PickupCodes.station((String) args.get(3));
                             String identity = PickupCodes.identity(parsed, station);
-                            String session = sessionForIdentity(identity);
+                            String session = PICKUP_SESSIONS.forCard(identity,
+                                    android.os.SystemClock.uptimeMillis(), true);
                             String token = openToken(module, identity, session);
                             String codes = String.join(",", parsed);
                             Intent intent = new Intent(PickupCodes.ACTION_VIEW)
@@ -347,7 +378,7 @@ final class PickupCodeHook {
                     }
                     if (!Constants.ACTION_REFRESH_PICKUP_ISLAND.equals(intent.getAction())) return;
                     Log.i(Constants.LOG_TAG, "Pickup island refresh requested");
-                    refreshPickupNotifications(ctx);
+                    requestRefresh(ctx.getApplicationContext());
                 }
             };
             IntentFilter filter = new IntentFilter(Constants.ACTION_REFRESH_PICKUP_ISLAND);
@@ -357,6 +388,31 @@ final class PickupCodeHook {
         } catch (Throwable error) {
             refreshReceiver = null;
             Log.w(Constants.LOG_TAG, "Unable to register pickup island refresh receiver", error);
+        }
+    }
+
+    private static void requestRefresh(Context context) {
+        synchronized (REFRESH_LOCK) {
+            refreshRequested = true;
+            if (refreshRunning) return;
+            refreshRunning = true;
+        }
+        try {
+            BackgroundTasks.execute(() -> {
+                while (true) {
+                    synchronized (REFRESH_LOCK) {
+                        if (!refreshRequested) {
+                            refreshRunning = false;
+                            return;
+                        }
+                        refreshRequested = false;
+                    }
+                    refreshPickupNotifications(context);
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException error) {
+            synchronized (REFRESH_LOCK) { refreshRunning = false; }
+            Log.w(Constants.LOG_TAG, "Pickup refresh worker busy", error);
         }
     }
 
@@ -386,6 +442,7 @@ final class PickupCodeHook {
             captured = new HashMap<>(pickupNotifications);
             module = refreshModule;
         }
+        if (!PrefsBridge.shouldEnablePickup(module)) return;
 
         try {
             NotificationManager notifications =
@@ -407,15 +464,23 @@ final class PickupCodeHook {
                 StatusBarNotification current = active.get(entry.getKey());
                 if (current == null) {
                     synchronized (LAST_NOTIFICATION_LOCK) {
-                        pickupNotifications.remove(entry.getKey());
+                        pickupNotifications.remove(entry.getKey(), capturedNotification);
                     }
                     continue;
                 }
-                Notification snapshot = copyNotification(current.getNotification());
+                // Rebuild from the host's baseline, never append actions to our last repaint.
+                if (!capturedNotification.identity.equals(identityForNotification(current.getNotification()))) continue;
+                if (!android.text.TextUtils.equals(capturedNotification.original.extras.getCharSequence("android.title"),
+                        current.getNotification().extras.getCharSequence("android.title"))) continue;
+                Notification snapshot = copyNotification(capturedNotification.original);
                 if (!patchNotification(snapshot, context, module)) continue;
                 snapshot.flags |= Notification.FLAG_ONLY_ALERT_ONCE;
                 postingRefresh.set(true);
                 try {
+                    if (!PrefsBridge.shouldEnablePickup(module)) return;
+                    synchronized (LAST_NOTIFICATION_LOCK) {
+                        if (pickupNotifications.get(entry.getKey()) != capturedNotification) continue;
+                    }
                     notifications.notify(capturedNotification.tag, capturedNotification.id, snapshot);
                     Log.i(Constants.LOG_TAG, "Pickup island notification reposted: " + entry.getKey());
                 } finally {
@@ -479,7 +544,7 @@ final class PickupCodeHook {
     }
 
     private static String notificationKey(int id, String tag) {
-        return (tag == null ? "" : tag) + "\u0000" + id;
+        return (tag == null ? "N" : "S" + tag) + "\u0000" + id;
     }
 
     private static boolean isPickupNotification(Notification notification) {
@@ -626,7 +691,6 @@ final class PickupCodeHook {
                 while (PICKUP_OPEN_TOKENS.size() > MAX_CAPTURED_NOTIFICATIONS * 4) {
                     PICKUP_OPEN_TOKENS.remove(PICKUP_OPEN_TOKENS.keySet().iterator().next());
                 }
-                PrefsBridge.writePickupOpenTokenForHook(module, identity, token);
             }
             return token;
         }
@@ -637,20 +701,7 @@ final class PickupCodeHook {
      * 这样连续点击 A/B 岛仍能合并分类，但下一次记忆不会把旧码带回来。
      */
     private static String sessionForIdentity(String identity) {
-        synchronized (SESSION_LOCK) {
-            long now = android.os.SystemClock.uptimeMillis();
-            if (lastPickupBuildAt == 0 || now - lastPickupBuildAt > PICKUP_BATCH_GAP_MS) {
-                currentPickupSession = Long.toHexString(now);
-                PICKUP_SESSIONS.clear();
-            }
-            lastPickupBuildAt = now;
-            String session = PICKUP_SESSIONS.get(identity);
-            if (session == null) {
-                session = currentPickupSession;
-                PICKUP_SESSIONS.put(identity, session);
-            }
-            return session;
-        }
+        return PICKUP_SESSIONS.forCard(identity, android.os.SystemClock.uptimeMillis(), false);
     }
 
     private static String selectionForCard(XposedModule module, List<String> parsed, String station) {
@@ -732,8 +783,8 @@ final class PickupCodeHook {
         float actualWidth = 0;
         for (String row : rows) actualWidth = Math.max(actualWidth, actual.measureText(row));
         // The expanded host is narrower than the notification template; reserve its inset.
-        float available = width - 4 * context.getResources().getDisplayMetrics().density
-                - title.getCompoundPaddingLeft() - title.getCompoundPaddingRight();
+        float available = Math.max(1f, width - 4 * context.getResources().getDisplayMetrics().density
+                - title.getCompoundPaddingLeft() - title.getCompoundPaddingRight());
         float scaleX = actualWidth <= available ? 1f : available / actualWidth;
         views.setFloat(titleId, "setTextScaleX", scaleX);
         Log.d(Constants.LOG_TAG, "Pickup expanded title fit: width=" + available

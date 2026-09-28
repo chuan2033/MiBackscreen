@@ -1,6 +1,7 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.plugin.compose'
+    id 'org.jetbrains.kotlin.plugin.serialization'
 }
 
 def localProps = new Properties()
@@ -8,10 +9,14 @@ def localPropsFile = rootProject.file('local.properties')
 if (localPropsFile.isFile()) {
     localPropsFile.withInputStream { localProps.load(it) }
 }
-def releaseKeystoreFile = file('release-key.jks')
+def signingValue = { String key -> localProps[key] ?: System.getenv(key) }
+def releaseKeystoreFile = file(signingValue('RELEASE_STORE_FILE') ?: 'release-key.jks')
 def hasReleaseSigning = releaseKeystoreFile.isFile()
-        && localProps['RELEASE_STORE_PASSWORD']
-        && localProps['RELEASE_KEY_PASSWORD']
+        && signingValue('RELEASE_STORE_PASSWORD')
+        && signingValue('RELEASE_KEY_PASSWORD')
+if (signingValue('RELEASE_STORE_FILE') && !hasReleaseSigning) {
+    throw new GradleException('Configured signing key is unavailable or missing RELEASE_STORE_PASSWORD / RELEASE_KEY_PASSWORD')
+}
 
 kotlin {
     jvmToolchain(21)
@@ -26,9 +31,9 @@ android {
         if (hasReleaseSigning) {
             release {
                 storeFile releaseKeystoreFile
-                storePassword localProps['RELEASE_STORE_PASSWORD']
-                keyAlias 'hyperbackscreen'
-                keyPassword localProps['RELEASE_KEY_PASSWORD']
+                storePassword signingValue('RELEASE_STORE_PASSWORD')
+                keyAlias signingValue('RELEASE_KEY_ALIAS') ?: 'hyperbackscreen'
+                keyPassword signingValue('RELEASE_KEY_PASSWORD')
             }
         }
     }
@@ -53,6 +58,9 @@ android {
         debug {
             minifyEnabled false
             shrinkResources false
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
@@ -79,6 +87,9 @@ dependencies {
     implementation 'top.yukonga.miuix.kmp:miuix-preference-android:0.9.4'
     implementation 'top.yukonga.miuix.kmp:miuix-icons-android:0.9.4'
     implementation 'top.yukonga.miuix.kmp:miuix-blur-android:0.9.4'
+    implementation 'top.yukonga.miuix.kmp:miuix-nav-android:0.9.4'
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0'
     compileOnly 'io.github.libxposed:api:102.0.0'
     implementation files('libs/interface-102.0.0.jar', 'libs/service-102.0.0.jar')
     testImplementation 'junit:junit:4.13.2'

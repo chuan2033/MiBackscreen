@@ -1,6 +1,8 @@
 package hook.HyperBackscreen.hook;
 
 import android.app.Activity;
+import android.app.Application;
+import android.app.Instrumentation;
 import android.annotation.SuppressLint;
 import android.content.ComponentName;
 import android.content.ContentResolver;
@@ -41,20 +43,45 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.HashSet;
 import java.util.function.Consumer;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import hook.HyperBackscreen.bridge.PrefsBridge;
+import hook.HyperBackscreen.BuildConfig;
 import hook.HyperBackscreen.bridge.DiagnosticLogStore;
 import hook.HyperBackscreen.common.Constants;
+import hook.HyperBackscreen.common.BackgroundTasks;
 import hook.HyperBackscreen.common.RearScreenWakeMatcher;
 import hook.HyperBackscreen.common.ThemeResourceAccess;
 import hook.HyperBackscreen.ui.SwipePanelHost;
 import io.github.libxposed.api.XposedModule;
 
 public class ModuleMain extends XposedModule {
+    private final Set<Method> installedMethods = new HashSet<>();
+    private final AtomicReference<Integer> pendingSelection = new AtomicReference<>();
+    private final AtomicBoolean selectionSyncRunning = new AtomicBoolean();
+    private final AtomicBoolean aiIndexSyncRunning = new AtomicBoolean();
+    private final Set<String> pendingRepairs = new HashSet<>();
+    private final ScheduledThreadPoolExecutor repairExecutor = createRepairExecutor();
+
+    private static ScheduledThreadPoolExecutor createRepairExecutor() {
+        ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1, task -> {
+            Thread thread = new Thread(task, "MiBackscreen-Repair");
+            thread.setDaemon(true);
+            return thread;
+        });
+        executor.setKeepAliveTime(30, TimeUnit.SECONDS);
+        executor.allowCoreThreadTimeOut(true);
+        executor.setRemoveOnCancelPolicy(true);
+        return executor;
+    }
     private static final long REAR_SELECTION_PENDING_TIMEOUT_MS = 15_000L;
     private static final long THEME_DATABASE_SYNC_DEDUP_WINDOW_MS = 2_000L;
     private static final long AI_APP_INDEX_SYNC_DEDUP_WINDOW_MS = 2_000L;
@@ -102,6 +129,22 @@ public class ModuleMain extends XposedModule {
     @Override
     public void onPackageReady(@NonNull PackageReadyParam param) {
         String packageName = param.getPackageName();
+        if (BuildConfig.DEBUG && (Constants.TARGET_PACKAGE.equals(packageName)
+                || Constants.THEME_STORE_PACKAGE.equals(packageName)
+                || Constants.VOICE_ASSIST_PACKAGE.equals(packageName))) {
+            hookMethodIfPresent(findDeclaredMethod(Instrumentation.class, "callApplicationOnCreate", Application.class),
+                    "debug host probe", chain -> {
+                        Object result = chain.proceed();
+                        try {
+                            Class.forName("hook.HyperBackscreen.hook.DebugHostProbe")
+                                    .getMethod("register", Context.class, XposedModule.class, ClassLoader.class)
+                                    .invoke(null, chain.getArgs().get(0), this, param.getClassLoader());
+                        } catch (Throwable error) {
+                            log(Log.WARN, Constants.LOG_TAG, "Debug host probe unavailable", error);
+                        }
+                        return result;
+                    });
+        }
 
         if (Constants.VOICE_ASSIST_PACKAGE.equals(packageName)) {
             synchronized (this) {
@@ -164,6 +207,7 @@ public class ModuleMain extends XposedModule {
                     installThemeNetworkDeviceSpoofHook(param.getClassLoader());
                     installThemeLegacyDownloadHook(param.getClassLoader());
                     installRearScreenApplyFixHook(param.getClassLoader());
+                    installThemeFaceEnrollmentHook(param.getClassLoader());
                     installThemeSettingsSelectionSyncHook(param.getClassLoader());
                     installThemeAiAppIndexSyncHooks(param.getClassLoader());
                     installThemeSettingsAiVisibilityHooks(param.getClassLoader());
@@ -364,7 +408,8 @@ public class ModuleMain extends XposedModule {
                     if (groupIdValue instanceof Integer
                             && RearScreenWakeMatcher.isRearDoubleTapWake(
                                     (Integer) groupIdValue,
-                                    detailsValue)) {
+                                    detailsValue)
+                            && PrefsBridge.shouldDisableDoubleTapWake(this)) {
                         String[] packageNames = resolveForegroundPackages(chain.getThisObject());
                         boolean skipped = PrefsBridge.shouldSkipDoubleTapWakeForPackages(this, packageNames);
                         logRearWakeDecision((Integer) groupIdValue, detailsValue, packageNames, skipped);
@@ -379,7 +424,9 @@ public class ModuleMain extends XposedModule {
                 }
         );
 
-        boolean coverWakeHookInstalled = hookMethodIfPresent(
+        // On this ROM the power service delegates to the cover manager. Do not inspect
+        // the same wake twice; install the cover hook only when the primary target is absent.
+        boolean coverWakeHookInstalled = !powerWakeHookInstalled && hookMethodIfPresent(
                 coverManagerClass,
                 Constants.SYSTEM_IS_SCREEN_SKIPPED_WAKEUP_METHOD,
                 new Class[]{int.class, String.class, int.class},
@@ -391,7 +438,8 @@ public class ModuleMain extends XposedModule {
                     if (groupIdValue instanceof Integer
                             && RearScreenWakeMatcher.isRearDoubleTapWake(
                                     (Integer) groupIdValue,
-                                    detailsValue)) {
+                                    detailsValue)
+                            && PrefsBridge.shouldDisableDoubleTapWake(this)) {
                         String[] packageNames = resolveForegroundPackages(getFieldValue(
                                 chain.getThisObject(),
                                 Constants.SYSTEM_POWER_MANAGER_SERVICE_IMPL_FIELD));
@@ -543,12 +591,8 @@ public class ModuleMain extends XposedModule {
                             && items.size() >= Constants.SUBSCREEN_APP_CARD_LIMIT) {
                         return new SizeCappedList(items, Constants.SUBSCREEN_APP_CARD_LIMIT - 1);
                     }
-                    if (!PrefsBridge.shouldEnableAppCard(this)) return list;
-                    List<Object> withEntry = PanelAppCard.withModuleEntry(classLoader, items);
-                    if (withEntry == null) return list;
-                    log(Log.INFO, Constants.LOG_TAG,
-                            "Module panel entry inserted, size = " + withEntry.size());
-                    return withEntry;
+                    // c() also feeds Binder capacity checks and edits. UI-only entries belong in d().
+                    return list;
                 }
         );
 
@@ -649,6 +693,13 @@ public class ModuleMain extends XposedModule {
                     "Quick panel dispatch target missing: "
                             + Constants.SUBSCREEN_LAUNCHER_ACTIVITY_CLASS);
             return;
+        }
+        for (String lifecycle : new String[]{"onPause", "onDestroy"}) {
+            hookMethodIfPresent(findDeclaredMethod(launcherClass, lifecycle),
+                    Constants.SUBSCREEN_LAUNCHER_ACTIVITY_CLASS + "#" + lifecycle, chain -> {
+                        SwipePanelHost.release((Activity) chain.getThisObject());
+                        return chain.proceed();
+                    });
         }
         hookMethodIfPresent(
                 findDeclaredMethod(launcherClass, "dispatchTouchEvent", MotionEvent.class),
@@ -1143,6 +1194,26 @@ public class ModuleMain extends XposedModule {
                 + String.valueOf(callMethodQuietly(requestUrl, "getParameter", "isSupportRearScreen"));
     }
 
+    private void installThemeFaceEnrollmentHook(@NonNull ClassLoader classLoader) {
+        // Theme Manager 11.5.3.1: k(Context) is the enrollment-count query only.
+        // Keep the credential gate, enrollment UI, content audit and authentication intact.
+        Class<?> helper = findClass("com.rearScreen.helper.RearScreenBiometricHelper", classLoader);
+        if (helper == null) return;
+        Method method = findDeclaredMethod(helper, "k", Context.class);
+        if (method == null || method.getReturnType() != int.class
+                || !java.lang.reflect.Modifier.isStatic(method.getModifiers())) return;
+        hookMethodIfPresent(method, "RearScreenBiometricHelper#k", chain -> {
+            Object original = chain.proceed();
+            if (!(original instanceof Integer count) || count > 0
+                    || !PrefsBridge.shouldFixRearScreenApply(this)) return original;
+            if (chain.getArgs().isEmpty() || !(chain.getArgs().get(0) instanceof Context context)) {
+                return original;
+            }
+            int actual = ThemeFaceEnrollment.read(context);
+            return actual >= 0 ? actual : original;
+        });
+    }
+
     private void installRearScreenApplyFixHook(@NonNull ClassLoader classLoader) {
         Class<?> applyResultClass = findClass(Constants.THEME_APPLY_RESULT_CLASS, classLoader);
         if (applyResultClass == null) {
@@ -1623,29 +1694,30 @@ public class ModuleMain extends XposedModule {
             return;
         }
 
-        // Room 禁止主线程数据库访问。先在短任务中完成排序落库，再让页面创建或恢复，
-        // 尽量让 LiveData 第一次（或恢复后）渲染拿到当前背屏壁纸；慢路径转入后台，
-        // 避免主题商店页面被模块同步阻塞数秒。
-        Thread syncThread = new Thread(
-                () -> {
-                    if (syncThemeDatabaseToRearSelection(activity, classLoader, selectedId)) {
-                        lastThemeDatabaseSyncedWidgetId = selectedId;
-                        lastThemeDatabaseSyncedAtElapsed = SystemClock.elapsedRealtime();
-                    }
-                },
-                "MiBackscreen-RearSelectionSync");
-        syncThread.setDaemon(true);
-        syncThread.start();
+        pendingSelection.set(selectedId);
+        startSelectionSync(classLoader);
+    }
+
+    private void startSelectionSync(ClassLoader classLoader) {
+        if (!selectionSyncRunning.compareAndSet(false, true)) return;
         try {
-            syncThread.join(500L);
-            if (syncThread.isAlive()) {
-                log(Log.WARN, Constants.LOG_TAG,
-                        "Theme settings selection sync continuing in background");
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log(Log.WARN, Constants.LOG_TAG,
-                    "Theme settings selection sync interrupted", e);
+            BackgroundTasks.execute(() -> {
+                try {
+                    Integer next;
+                    while ((next = pendingSelection.getAndSet(null)) != null) {
+                        if (syncThemeDatabaseToRearSelection(classLoader, next)) {
+                            lastThemeDatabaseSyncedWidgetId = next;
+                            lastThemeDatabaseSyncedAtElapsed = SystemClock.elapsedRealtime();
+                        }
+                    }
+                } finally {
+                    selectionSyncRunning.set(false);
+                    if (pendingSelection.get() != null) startSelectionSync(classLoader);
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException error) {
+            selectionSyncRunning.set(false);
+            log(Log.WARN, Constants.LOG_TAG, "Selection sync worker busy", error);
         }
     }
 
@@ -1667,7 +1739,6 @@ public class ModuleMain extends XposedModule {
     }
 
     private boolean syncThemeDatabaseToRearSelection(
-            @NonNull Activity activity,
             @NonNull ClassLoader classLoader,
             int selectedId
     ) {
@@ -1723,15 +1794,21 @@ public class ModuleMain extends XposedModule {
 
     private void syncAiGeneratedAppCardsToSubscreenIndex() {
         long now = SystemClock.elapsedRealtime();
-        if (now - lastAiAppIndexSyncedAtElapsed < AI_APP_INDEX_SYNC_DEDUP_WINDOW_MS) {
-            return;
+        if (now - lastAiAppIndexSyncedAtElapsed < AI_APP_INDEX_SYNC_DEDUP_WINDOW_MS
+                || !aiIndexSyncRunning.compareAndSet(false, true)) return;
+        try {
+            BackgroundTasks.execute(() -> {
+                try {
+                    syncAiGeneratedAppCardsToSubscreenIndexNow();
+                    lastAiAppIndexSyncedAtElapsed = SystemClock.elapsedRealtime();
+                } finally {
+                    aiIndexSyncRunning.set(false);
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException error) {
+            aiIndexSyncRunning.set(false);
+            log(Log.WARN, Constants.LOG_TAG, "AI index sync worker busy", error);
         }
-        lastAiAppIndexSyncedAtElapsed = now;
-        Thread syncThread = new Thread(
-                this::syncAiGeneratedAppCardsToSubscreenIndexNow,
-                "MiBackscreen-AiAppIndexSync");
-        syncThread.setDaemon(true);
-        syncThread.start();
     }
 
     private void syncAiGeneratedAppCardsToSubscreenIndexNow() {
@@ -2150,25 +2227,37 @@ public class ModuleMain extends XposedModule {
     }
 
     private void scheduleThemeMagicAssetRepair(@NonNull ThemeMagicRepairTarget target) {
-        Thread repairThread = new Thread(
-                () -> {
-                    long[] delays = {0L, 300L, 1000L, 2500L};
-                    for (long delay : delays) {
-                        if (delay > 0L) {
-                            try {
-                                Thread.sleep(delay);
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                return;
-                            }
-                        }
-                        repairThemeMagicAssets(target);
-                        grantRearScreenRuntimeAccess();
-                    }
-                },
-                "MiBackscreen-ThemeMagicAssetRepair");
-        repairThread.setDaemon(true);
-        repairThread.start();
+        if (isEmpty(target.editConfigPath)) return;
+        synchronized (pendingRepairs) {
+            if (pendingRepairs.contains(target.editConfigPath)) return;
+            if (pendingRepairs.size() >= 16) {
+                log(Log.WARN, Constants.LOG_TAG, "Theme repair queue full");
+                return;
+            }
+            pendingRepairs.add(target.editConfigPath);
+        }
+        scheduleThemeRepairAttempt(target, 0);
+    }
+
+    private void scheduleThemeRepairAttempt(ThemeMagicRepairTarget target, int attempt) {
+        long[] delays = {0L, 300L, 1000L, 2500L};
+        repairExecutor.schedule(() -> {
+            boolean enabled = PrefsBridge.shouldFixRearScreenApply(this);
+            try {
+                if (enabled) {
+                    repairThemeMagicAssets(target);
+                    grantRearScreenRuntimeAccess();
+                }
+            } catch (Throwable error) {
+                log(Log.WARN, Constants.LOG_TAG, "Theme repair failed", error);
+            } finally {
+                if (enabled && attempt + 1 < delays.length) {
+                    scheduleThemeRepairAttempt(target, attempt + 1);
+                } else {
+                    synchronized (pendingRepairs) { pendingRepairs.remove(target.editConfigPath); }
+                }
+            }
+        }, delays[attempt], TimeUnit.MILLISECONDS);
     }
 
     private void repairThemeMagicAssets(@NonNull ThemeMagicRepairTarget target) {
@@ -2535,7 +2624,8 @@ public class ModuleMain extends XposedModule {
         Object activityTaskManager = getFieldValue(
                 powerManagerServiceImpl,
                 Constants.SYSTEM_ACTIVITY_TASK_MANAGER_FIELD);
-        Object tasks = callMethodQuietly(activityTaskManager, "getTasks", 3, false, false, 0);
+        // Only the current main-display task: older tasks are not foreground candidates.
+        Object tasks = callMethodQuietly(activityTaskManager, "getTasks", 1, false, false, 0);
         if (tasks instanceof List<?> list) {
             for (Object task : list) {
                 addComponentPackageName(packages, getFieldValue(
@@ -2812,7 +2902,7 @@ public class ModuleMain extends XposedModule {
         return hookMethodIfPresent(findDeclaredMethod(targetClass, methodName, parameterTypes), label, callback);
     }
 
-    private boolean hookMethodIfPresent(
+    private synchronized boolean hookMethodIfPresent(
             @Nullable Method method,
             @NonNull String label,
             @NonNull HookCallback callback
@@ -2821,10 +2911,12 @@ public class ModuleMain extends XposedModule {
             log(Log.WARN, Constants.LOG_TAG, "Hook target missing: " + label);
             return false;
         }
+        if (installedMethods.contains(method)) return true;
         try {
             hook(method)
                     .setExceptionMode(ExceptionMode.PROTECTIVE)
                     .intercept(callback::onHook);
+            installedMethods.add(method);
             log(Log.DEBUG, Constants.LOG_TAG, "Hook installed: " + label);
             return true;
         } catch (Throwable throwable) {
@@ -2902,21 +2994,6 @@ public class ModuleMain extends XposedModule {
             return method;
         } catch (NoSuchMethodException e) {
             return null;
-        }
-    }
-
-    /** 内容取自真实列表，仅把 size() 封顶：用于绕过服务端容量判定，同时充当保存路径的还原标记。 */
-    private static final class SizeCappedList extends ArrayList<Object> {
-        private final int cappedSize;
-
-        SizeCappedList(@NonNull Collection<?> source, int cappedSize) {
-            super(source);
-            this.cappedSize = cappedSize;
-        }
-
-        @Override
-        public int size() {
-            return Math.min(super.size(), cappedSize);
         }
     }
 
