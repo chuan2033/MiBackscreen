@@ -171,7 +171,9 @@ internal object FeedbackLogExporter {
     private fun buildConfigReport(context: Context): String = buildString {
         appendLine("disable_long_press_edit=${PrefsBridge.readDisableLongPressForUi(context)}")
         appendLine("remove_wallpaper_limit=${PrefsBridge.readRemoveWallpaperLimitForUi(context)}")
+        appendLine("enable_app_card=${PrefsBridge.readEnableAppCardForUi(context)}")
         appendLine("remove_app_card_limit=${PrefsBridge.readRemoveAppCardLimitForUi(context)}")
+        appendLine("enable_pickup=${PrefsBridge.readEnablePickupForUi(context)}")
         appendLine("fix_rear_screen_apply=${PrefsBridge.readFixRearScreenApplyForUi(context)}")
         appendLine("disable_rear_screen_cover=${PrefsBridge.readDisableRearScreenCoverForUi(context)}")
         appendLine("disable_double_tap_wake=${PrefsBridge.readDisableDoubleTapWakeForUi(context)}")
@@ -381,9 +383,6 @@ internal object FeedbackLogExporter {
             "rearScreen.db",
             "rearScreen.db-wal",
             "rearScreen.db-shm",
-            "rearScreenAiApp.db",
-            "rearScreenAiApp.db-wal",
-            "rearScreenAiApp.db-shm",
         )
         val stagedNames = databaseNames.flatMap { name ->
             listOf("credential-$name", "device-$name")

@@ -29,24 +29,6 @@ internal fun FunctionPage(
 ) {
     CardBlock(pressFeedbackType = PressFeedbackType.None) {
         SwitchPreference(
-            checked = disableLongPress,
-            onCheckedChange = onDisableLongPressChange,
-            title = stringResource(R.string.home_disable_long_press_title),
-            summary = stringResource(R.string.home_disable_long_press_summary)
-        )
-        SwitchPreference(
-            checked = removeWallpaperLimit,
-            onCheckedChange = onRemoveWallpaperLimitChange,
-            title = stringResource(R.string.home_remove_wallpaper_limit_title),
-            summary = stringResource(R.string.home_remove_wallpaper_limit_summary)
-        )
-        SwitchPreference(
-            checked = removeAppCardLimit,
-            onCheckedChange = onRemoveAppCardLimitChange,
-            title = stringResource(R.string.home_remove_app_card_limit_title),
-            summary = stringResource(R.string.home_remove_app_card_limit_summary)
-        )
-        SwitchPreference(
             checked = fixRearScreenApply,
             onCheckedChange = onFixRearScreenApplyChange,
             title = stringResource(R.string.home_fix_apply_title),
@@ -73,6 +55,21 @@ internal fun FunctionPage(
             onCheckedChange = onEnablePickupChange,
             title = stringResource(R.string.config_enable_pickup_title),
             summary = stringResource(R.string.config_enable_pickup_summary)
+        )
+        SwitchPreference(
+            checked = disableLongPress,
+            onCheckedChange = onDisableLongPressChange,
+            title = stringResource(R.string.home_disable_long_press_title)
+        )
+        SwitchPreference(
+            checked = removeWallpaperLimit,
+            onCheckedChange = onRemoveWallpaperLimitChange,
+            title = stringResource(R.string.home_remove_wallpaper_limit_title)
+        )
+        SwitchPreference(
+            checked = removeAppCardLimit,
+            onCheckedChange = onRemoveAppCardLimitChange,
+            title = stringResource(R.string.home_remove_app_card_limit_title)
         )
     }
 }

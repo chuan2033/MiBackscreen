@@ -586,7 +586,7 @@ final class PickupCodeHook {
             } catch (Throwable ignored) {
             }
         }
-        return "取件码";
+        return hook.HyperBackscreen.common.ModuleStrings.get(context, "pickup_title", "取件码", "Pickup codes");
     }
 
     private static boolean patchNotification(Notification notification, Context context,
@@ -603,7 +603,7 @@ final class PickupCodeHook {
             // The collapsed island is JSON-driven, independently of the expanded RemoteViews.
             JSONObject params = new JSONObject(extras.getString(ISLAND_PARAM));
             params.getJSONObject("param_island").getJSONObject("bigIslandArea")
-                    .getJSONObject("textInfo").put("title", PickupCodes.formatCollapsedText(visible));
+                    .getJSONObject("textInfo").put("title", PickupCodes.formatCollapsedText(visible, pickupCodeLabel()));
             params.put("updatable", true);
             extras.putString(ISLAND_PARAM, params.toString());
             patchRemoteView(extras, "miui.focus.rv", context, module,
@@ -730,7 +730,7 @@ final class PickupCodeHook {
     @SuppressLint("DiscouragedApi")
     private static float setPickupTitle(Context context, RemoteViews views, int titleId,
                                         String titleName, List<String> visible) {
-        String text = PickupCodes.formatIslandText(visible);
+        String text = PickupCodes.formatIslandText(visible, pickupCodeLabel());
         String[] rows = text.split("\n", -1);
         views.setTextViewText(titleId, text);
         views.setBoolean(titleId, "setSingleLine", rows.length == 1);
@@ -776,7 +776,7 @@ final class PickupCodeHook {
         int widthId = context.getResources().getIdentifier("memory_scene_focused_text_width",
                 "dimen", Constants.VOICE_ASSIST_PACKAGE);
         if (widthId == 0) return;
-        String[] rows = PickupCodes.formatIslandText(visible).split("\n", -1);
+        String[] rows = PickupCodes.formatIslandText(visible, pickupCodeLabel()).split("\n", -1);
         float width = context.getResources().getDimension(widthId);
         Paint actual = new Paint(title.getPaint());
         actual.setTextSize(textSize);

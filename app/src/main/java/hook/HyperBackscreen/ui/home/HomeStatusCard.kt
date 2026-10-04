@@ -79,8 +79,8 @@ internal fun HomeStatusCard(
         pressFeedbackType = PressFeedbackType.None,
         showIndication = false,
         holdDownState = false,
-        onClick = {},
-        onLongPress = {}
+        onClick = null,
+        onLongPress = null
     ) {
         Box(
             modifier = Modifier

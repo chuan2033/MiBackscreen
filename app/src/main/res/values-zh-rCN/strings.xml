@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="config_show_function_count_title">显示功能数量</string>
+    <string name="config_show_function_count_summary">在底部功能标签上显示已开启的功能数量</string>
+    <plurals name="enabled_function_count">
+        <item quantity="other">已开启 %1$d 项功能</item>
+    </plurals>
+    <string name="app_picker_load_failed">无法读取应用列表，已保留现有选择。请点击重试。</string>
+    <string name="app_picker_unavailable">系统未返回可见的已启用应用。可检查系统中的应用列表访问权限后重试，已有选择仍保留。</string>
+    <string name="app_picker_partial">部分已选应用当前不可用或未向此列表开放，仍可取消选择。</string>
+    <string name="ai_rear_screen_title">AI 背屏</string>
+    <string name="activity_open_failed">无法打开此页面，请确认相关应用已安装并启用后重试。</string>
     <string name="pickup_title">取件码</string>
     <plurals name="pickup_count">
         <item quantity="other">本次共识别到 %1$d 个取件码</item>
@@ -28,11 +38,8 @@
     <string name="log_failed">日志生成失败</string>
     <string name="log_share_title">分享日志</string>
     <string name="home_disable_long_press_title">禁用背屏长按切换壁纸</string>
-    <string name="home_disable_long_press_summary">拦截长按手势，避免误触进入编辑模式</string>
     <string name="home_remove_wallpaper_limit_title">移除背屏壁纸数量限制</string>
-    <string name="home_remove_wallpaper_limit_summary">去除15张壁纸上限</string>
     <string name="home_remove_app_card_limit_title">移除背屏应用卡数量限制</string>
-    <string name="home_remove_app_card_limit_summary">去除15个应用卡上限</string>
     <string name="home_fix_apply_title">修复背屏壁纸应用失败</string>
     <string name="home_fix_apply_summary">需搭配主题破解模块使用</string>
     <string name="home_status_activated">已激活</string>
@@ -101,11 +108,8 @@
     <string name="about_donate_title">捐赠</string>
     <string name="about_donate_qr_entry">如果你觉得项目有用，欢迎给予支持</string>
     <string name="about_donate_wechat">微信</string>
-    <string name="about_donate_wechat_summary">微信扫码支持</string>
     <string name="about_donate_alipay">支付宝</string>
-    <string name="about_donate_alipay_summary">支付宝扫码支持</string>
     <string name="about_donate_qr_description">捐赠二维码</string>
-    <string name="about_donate_scan_hint">扫码支持开发者</string>
 
     <!-- License Page -->
     <string name="license_title">开源许可</string>
@@ -128,11 +132,14 @@
     <string name="restart_title">重启作用域</string>
     <string name="restart_scope">重启作用域</string>
     <string name="restart_system">系统</string>
+    <string name="restart_device_success">重启请求已发送</string>
+    <string name="restart_device_failed">重启手机失败（可能未获取 root 权限）</string>
     <string name="restart_voice_assist">小爱</string>
     <string name="restart_backscreen">背屏</string>
     <string name="restart_theme_manager">主题商店</string>
-    <string name="restart_success">重启指令已发送</string>
-    <string name="restart_failed">重启失败（可能未获取 root 权限）</string>
+    <string name="restart_personal_assistant">智能助理</string>
+    <string name="restart_success">停止指令已发送，请重新打开相关应用</string>
+    <string name="restart_failed">停止应用失败（可能未获取 root 权限）</string>
     <string name="common_retry">重试</string>
     <string name="common_share">分享</string>
     <string name="log_progress">正在生成日志（已完成 %1$d/%2$d 项）</string>

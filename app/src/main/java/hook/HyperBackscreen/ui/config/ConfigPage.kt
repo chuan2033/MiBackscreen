@@ -19,6 +19,7 @@ internal fun ConfigPage(
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
     bottomBarBlur: Boolean,
+    showFunctionCount: Boolean,
     appLanguage: AppLanguage,
     checkUpdates: Boolean,
     enableAppCard: Boolean,
@@ -26,6 +27,7 @@ internal fun ConfigPage(
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
     onBottomBarBlurChange: (Boolean) -> Unit,
+    onShowFunctionCountChange: (Boolean) -> Unit,
     onAppLanguageChange: (AppLanguage) -> Unit,
     onCheckUpdatesChange: (Boolean) -> Unit,
     onEnableAppCardChange: (Boolean) -> Unit,
@@ -124,6 +126,12 @@ internal fun ConfigPage(
             onCheckedChange = onBottomBarBlurChange,
             title = stringResource(R.string.config_bottom_bar_blur_title),
             summary = stringResource(R.string.config_bottom_bar_blur_summary)
+        )
+        SwitchPreference(
+            checked = showFunctionCount,
+            onCheckedChange = onShowFunctionCountChange,
+            title = stringResource(R.string.config_show_function_count_title),
+            summary = stringResource(R.string.config_show_function_count_summary)
         )
     }
 }

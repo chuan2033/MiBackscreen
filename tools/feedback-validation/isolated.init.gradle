@@ -2,7 +2,7 @@ gradle.beforeProject { project ->
     if (project.path == ':app') {
         project.plugins.withId('com.android.application') {
             def fixtures = new File(project.rootDir, 'tools/feedback-validation')
-            project.layout.buildDirectory.set(new File('D:/Codex/MiBackscreenHuancun/evidence/feedback13/isolated-build'))
+            project.layout.buildDirectory.set(new File(project.rootDir, 'build/feedback-validation/app'))
             project.tasks.configureEach { task ->
                 if (task.name == 'compileDebugKotlin') task.source(new File(fixtures, 'FeedbackValidation.kt'))
             }

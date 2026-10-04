@@ -1,5 +1,7 @@
 package hook.HyperBackscreen.ui.components
 
+import android.widget.Toast
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -15,8 +17,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
+import hook.HyperBackscreen.R
 import hook.HyperBackscreen.ui.util.openUrl
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -49,8 +53,8 @@ internal fun CardBlock(
         pressFeedbackType = pressFeedbackType,
         showIndication = pressFeedbackType != PressFeedbackType.None,
         holdDownState = false,
-        onClick = onClick ?: {},
-        onLongPress = {}
+        onClick = onClick,
+        onLongPress = null
     ) {
         content()
     }
@@ -90,6 +94,15 @@ internal fun AboutArrowPreference(
     onClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val feedback = LocalUiFeedback.current
+    val failedMessage = stringResource(R.string.activity_open_failed)
+    val retryLabel = stringResource(R.string.common_retry)
+    fun launchUrl() {
+        if (!url.isNullOrBlank() && !openUrl(context, url)) {
+            if (feedback != null) feedback.show(failedMessage, retryLabel) { launchUrl() }
+            else Toast.makeText(context, failedMessage, Toast.LENGTH_LONG).show()
+        }
+    }
     ArrowPreference(
         modifier = modifier,
         title = title,
@@ -98,7 +111,7 @@ internal fun AboutArrowPreference(
             if (onClick != null) {
                 onClick()
             } else if (!url.isNullOrBlank()) {
-                openUrl(context, url)
+                launchUrl()
             }
         }
     )

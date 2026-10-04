@@ -8,7 +8,7 @@ object HomeUiTokens {
     val CardCornerRadius = 16.dp
 
     val AboutHeaderTopPadding = 48.dp
-    val AboutHeaderBottomPadding = 24.dp
+    val AboutHeaderBottomPadding = 74.dp
     val AboutLogoSize = 100.dp
     val AboutLogoCornerRadius = 18.dp
     val AboutHeaderSpacing = 2.dp

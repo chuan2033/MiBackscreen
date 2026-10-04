@@ -183,7 +183,11 @@ public final class PickupCodes {
     private static final String ISLAND_CODE_GAP = ",";
 
     public static String formatCollapsedText(List<String> codes) {
-        if (codes.isEmpty()) return "取件码";
+        return formatCollapsedText(codes, defaultPickupLabel());
+    }
+
+    public static String formatCollapsedText(List<String> codes, String emptyLabel) {
+        if (codes.isEmpty()) return emptyLabel;
         return String.join(",", codes.subList(0, Math.min(codes.size(), MAX_ISLAND_CODES)));
     }
 
@@ -192,7 +196,11 @@ public final class PickupCodes {
      * 只是显示排版，不影响识别结果本身。
      */
     public static String formatIslandText(List<String> codes) {
-        if (codes.isEmpty()) return "取件码";
+        return formatIslandText(codes, defaultPickupLabel());
+    }
+
+    public static String formatIslandText(List<String> codes, String emptyLabel) {
+        if (codes.isEmpty()) return emptyLabel;
         int limit = Math.min(codes.size(), MAX_ISLAND_CODES);
         StringBuilder builder = new StringBuilder();
         for (int i = 0; i < limit; i++) {
@@ -203,5 +211,9 @@ public final class PickupCodes {
             builder.append(codes.get(i));
         }
         return builder.toString();
+    }
+
+    private static String defaultPickupLabel() {
+        return "zh".equals(Locale.getDefault().getLanguage()) ? "取件码" : "Pickup codes";
     }
 }

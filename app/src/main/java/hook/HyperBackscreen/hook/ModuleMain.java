@@ -57,6 +57,7 @@ import hook.HyperBackscreen.bridge.PrefsBridge;
 import hook.HyperBackscreen.BuildConfig;
 import hook.HyperBackscreen.bridge.DiagnosticLogStore;
 import hook.HyperBackscreen.common.Constants;
+import hook.HyperBackscreen.common.ModuleStrings;
 import hook.HyperBackscreen.common.BackgroundTasks;
 import hook.HyperBackscreen.common.RearScreenWakeMatcher;
 import hook.HyperBackscreen.common.ThemeResourceAccess;
@@ -1405,7 +1406,7 @@ public class ModuleMain extends XposedModule {
         int nextSlot = 0;
         if (shouldInsertAi) {
             Object shortcut = createThemeSettingsShortcutController(
-                    context, classLoader, "AI 背屏", aiIntent);
+                    context, classLoader, ModuleStrings.get(context, "ai_rear_screen_title", "AI 背屏", "AI rear screen"), aiIntent);
             if (shortcut != null) {
                 copy.add(Math.min(insertionIndexes.get(nextSlot++), copy.size()), shortcut);
                 themeAiShortcutControllers.add(shortcut);
@@ -1570,6 +1571,7 @@ public class ModuleMain extends XposedModule {
             } catch (Throwable e) {
                 log(Log.WARN, Constants.LOG_TAG,
                         "MiBackscreen theme settings entry launch failed", e);
+                ModuleStrings.showOpenFailure(v.getContext());
             }
         });
     }
@@ -1584,7 +1586,7 @@ public class ModuleMain extends XposedModule {
         if (titleId != 0) {
             View titleView = row.findViewById(titleId);
             if (titleView instanceof TextView) {
-                ((TextView) titleView).setText("AI 背屏");
+                ((TextView) titleView).setText(ModuleStrings.get(context, "ai_rear_screen_title", "AI 背屏", "AI rear screen"));
             }
         }
         row.setOnClickListener(v -> {
@@ -1592,10 +1594,13 @@ public class ModuleMain extends XposedModule {
                 Intent intent = resolveRearScreenAiIntent(v.getContext().getClassLoader());
                 if (intent != null) {
                     v.getContext().startActivity(intent);
+                } else {
+                    ModuleStrings.showOpenFailure(v.getContext());
                 }
             } catch (Throwable e) {
                 log(Log.WARN, Constants.LOG_TAG,
                         "AI rear screen entry launch failed", e);
+                ModuleStrings.showOpenFailure(v.getContext());
             }
         });
     }

@@ -7,15 +7,11 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import hook.HyperBackscreen.app.ModuleApp;
 import hook.HyperBackscreen.common.Constants;
-import hook.HyperBackscreen.common.PackageListCodec;
 import hook.HyperBackscreen.common.RearScreenWakeMatcher;
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.service.XposedService;
@@ -23,7 +19,7 @@ import io.github.libxposed.service.XposedService;
 public final class PrefsBridge {
     private static final String TAG = Constants.LOG_TAG + ":PrefsBridge";
     private static final String PENDING_PANEL_PREFIX = "__pending_panel__";
-    private static final String PENDING_UI_PREFIX = "__pending_ui__";
+    static final String PENDING_UI_PREFIX = "__pending_ui__";
 
     public static final boolean DEFAULT_DISABLE_LONG_PRESS_EDIT = true;
     public static final boolean DEFAULT_REMOVE_WALLPAPER_LIMIT = true;
@@ -34,6 +30,7 @@ public final class PrefsBridge {
     private static final boolean DEFAULT_LIQUID_GLASS = false;
     /** 三种底栏共用的背景模糊开关；默认开，保持与旧版观感一致。 */
     private static final boolean DEFAULT_BOTTOM_BAR_BLUR = true;
+    private static final boolean DEFAULT_SHOW_FUNCTION_COUNT = true;
     /** 启动时自动检查 GitHub Release 是否有新版；默认开。 */
     private static final boolean DEFAULT_CHECK_UPDATES = true;
     public static final boolean DEFAULT_ENABLE_PICKUP = true;
@@ -80,18 +77,25 @@ public final class PrefsBridge {
         return null;
     }
 
-    /** UI 侧读取：远程优先并回写本地缓存；服务未就绪时退回本地值。 */
+    /** UI 侧读取：待同步值优先，其次远程并回写缓存，离线时读取本地。 */
     private static boolean readForUi(@NonNull Context context, @NonNull String key, boolean def) {
-        SharedPreferences remote = remote();
-        if (remote != null) {
-            boolean value = remote.getBoolean(key, def);
-            local(context).edit().putBoolean(key, value).apply();
-            return value;
-        }
-        return local(context).getBoolean(key, def);
+        return readForUi(local(context), remote(), key, def);
     }
 
-    /** UI 侧写入：本地与远程双写，并重建跨进程快照，Hook 端下次读取即生效，无需重启。 */
+    static boolean readForUi(@NonNull SharedPreferences localPrefs,
+                             @Nullable SharedPreferences remote,
+                             @NonNull String key, boolean def) {
+        String pendingKey = PENDING_UI_PREFIX + key;
+        if (localPrefs.contains(pendingKey)) return localPrefs.getBoolean(pendingKey, def);
+        if (remote != null) {
+            boolean value = remote.getBoolean(key, def);
+            localPrefs.edit().putBoolean(key, value).apply();
+            return value;
+        }
+        return localPrefs.getBoolean(key, def);
+    }
+
+    /** UI 双写；服务未连接时保存待同步值，重连后补交到 RemotePreferences。 */
     private static void writeFromUi(@NonNull Context context, @NonNull String key, boolean value) {
         SharedPreferences localPrefs = local(context);
         SharedPreferences remote = remote();
@@ -110,13 +114,23 @@ public final class PrefsBridge {
     }
 
     private static String readStringForUi(@NonNull Context context, @NonNull String key, @NonNull String def) {
-        SharedPreferences remote = remote();
-        if (remote != null) {
-            String value = remote.getString(key, def);
-            local(context).edit().putString(key, value).apply();
+        return readStringForUi(local(context), remote(), key, def);
+    }
+
+    static String readStringForUi(@NonNull SharedPreferences localPrefs,
+                                  @Nullable SharedPreferences remote,
+                                  @NonNull String key, @NonNull String def) {
+        String pendingKey = PENDING_UI_PREFIX + key;
+        if (localPrefs.contains(pendingKey)) {
+            String value = localPrefs.getString(pendingKey, def);
             return value == null ? def : value;
         }
-        String value = local(context).getString(key, def);
+        if (remote != null) {
+            String value = remote.getString(key, def);
+            localPrefs.edit().putString(key, value).apply();
+            return value == null ? def : value;
+        }
+        String value = localPrefs.getString(key, def);
         return value == null ? def : value;
     }
 
@@ -254,12 +268,6 @@ public final class PrefsBridge {
     /** 取件码页在模块进程写，Hook 在小爱进程读，必须走远程偏好。 */
     @NonNull
     public static String readPickupIslandSelectionForUi(@NonNull Context context) {
-        SharedPreferences localPrefs = local(context);
-        String pendingKey = PENDING_UI_PREFIX + Constants.KEY_PICKUP_ISLAND_SELECTION;
-        if (localPrefs.contains(pendingKey)) {
-            String pending = localPrefs.getString(pendingKey, DEFAULT_PICKUP_ISLAND_SELECTION);
-            return pending == null ? DEFAULT_PICKUP_ISLAND_SELECTION : pending;
-        }
         return readStringForUi(
                 context,
                 Constants.KEY_PICKUP_ISLAND_SELECTION,
@@ -336,6 +344,14 @@ public final class PrefsBridge {
         local(context).edit().putBoolean(Constants.KEY_BOTTOM_BAR_BLUR, enabled).apply();
     }
 
+    public static boolean readShowFunctionCount(@NonNull Context context) {
+        return local(context).getBoolean(Constants.KEY_SHOW_FUNCTION_COUNT, DEFAULT_SHOW_FUNCTION_COUNT);
+    }
+
+    public static void writeShowFunctionCount(@NonNull Context context, boolean enabled) {
+        local(context).edit().putBoolean(Constants.KEY_SHOW_FUNCTION_COUNT, enabled).apply();
+    }
+
     public static boolean readCheckUpdates(@NonNull Context context) {
         return local(context).getBoolean(Constants.KEY_CHECK_UPDATES, DEFAULT_CHECK_UPDATES);
     }
@@ -378,15 +394,6 @@ public final class PrefsBridge {
 
     public static boolean shouldDisableDoubleTapWake(@NonNull XposedModule module) {
         return readForHook(module, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, DEFAULT_DISABLE_DOUBLE_TAP_WAKE);
-    }
-
-    public static boolean shouldSkipDoubleTapWakeForPackage(@NonNull XposedModule module, @Nullable String packageName) {
-        if (packageName == null || !shouldDisableDoubleTapWake(module)) return false;
-        String raw = readStringForHook(
-                module,
-                Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,
-                DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
-        return PackageListCodec.parse(raw).contains(packageName);
     }
 
     public static boolean shouldSkipDoubleTapWakeForPackages(@NonNull XposedModule module, @Nullable String... packageNames) {
@@ -509,7 +516,7 @@ public final class PrefsBridge {
         }
     }
 
-    /** 服务就绪时对齐本地与远程：远程有值以远程为准，否则用本地值补齐远程，都没有则写入默认值。 */
+    /** 服务就绪时先补交待同步值，再对齐远程、本地和默认值；补交失败的值继续保留。 */
     public static void syncOnServiceAvailable(@NonNull Context context, @NonNull XposedService service) {
         try {
             SharedPreferences localPrefs = local(context);
@@ -547,7 +554,6 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_PICKUP_ISLAND_SELECTION,
                     DEFAULT_PICKUP_ISLAND_SELECTION);
-            // 对齐完成后重建快照，保证被 Hook 进程拿到的就是这份对齐结果。
         } catch (Throwable e) {
             Log.w(TAG, "Failed to sync prefs on service available", e);
         }

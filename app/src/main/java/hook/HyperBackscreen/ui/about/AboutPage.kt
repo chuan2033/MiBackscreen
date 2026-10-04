@@ -79,7 +79,7 @@ private fun AboutHeader() {
         ) {
             Image(
                 painter = painterResource(id = R.drawable.ic_about_logo),
-                contentDescription = "App Icon",
+                contentDescription = null,
                 modifier = Modifier.size(HomeUiTokens.AboutLogoSize),
                 contentScale = ContentScale.Fit
             )

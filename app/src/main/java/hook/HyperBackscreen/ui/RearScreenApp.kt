@@ -1,6 +1,7 @@
 package hook.HyperBackscreen.ui
 
 import android.graphics.Color
+import android.content.Context
 import androidx.compose.runtime.CompositionLocalProvider
 import hook.HyperBackscreen.ui.components.LocalUiFeedback
 import hook.HyperBackscreen.ui.components.rememberUiFeedback
@@ -27,9 +28,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.app.ModuleApp
 import hook.HyperBackscreen.bridge.PrefsBridge
+import hook.HyperBackscreen.bridge.ModulePreferencesSnapshot
 import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.ui.updater.UpdateChecker
 import hook.HyperBackscreen.ui.updater.UpdateDialog
@@ -51,24 +56,29 @@ import top.yukonga.miuix.kmp.theme.lightColorScheme
 import top.yukonga.miuix.kmp.theme.platformDynamicColors
 import top.yukonga.miuix.kmp.window.WindowDialog
 
-private val FORCE_STOP_PACKAGE_PATTERN = Regex("(?:system|[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+)")
-
 @Composable
 internal fun RearScreenApp() {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val feedback = rememberUiFeedback()
     val retryLabel = stringResource(R.string.common_retry)
     val saveFailed = stringResource(R.string.settings_save_failed)
     val restartSuccess = stringResource(R.string.restart_success)
     val restartFailed = stringResource(R.string.restart_failed)
-    fun refreshScopes(vararg packageNames: String) {
+    val rebootSuccess = stringResource(R.string.restart_device_success)
+    val rebootFailed = stringResource(R.string.restart_device_failed)
+    fun refreshScopes(vararg packageNames: String, allowSystemReboot: Boolean = false) {
+        val reboot = allowSystemReboot && Constants.SYSTEM_PACKAGE in packageNames
         scope.launch {
             val ok = withContext(Dispatchers.IO) {
-                packageNames.distinct().all { forceStopPackage(it) }
+                val commands = scopeActionCommands(packageNames.toList(), allowSystemReboot)
+                commands != null && commands.map { executeScopeCommand(it) }.all { it }
             }
-            if (ok) feedback.show(restartSuccess)
-            else feedback.show(restartFailed, retryLabel) { refreshScopes(*packageNames) }
+            if (ok) feedback.show(if (reboot) rebootSuccess else restartSuccess)
+            else feedback.show(if (reboot) rebootFailed else restartFailed, retryLabel) {
+                refreshScopes(*packageNames, allowSystemReboot = allowSystemReboot)
+            }
         }
     }
 
@@ -96,6 +106,9 @@ internal fun RearScreenApp() {
     var bottomBarBlur by remember {
         mutableStateOf(PrefsBridge.readBottomBarBlur(context))
     }
+    var showFunctionCount by remember {
+        mutableStateOf(PrefsBridge.readShowFunctionCount(context))
+    }
     var appLanguage by remember {
         mutableStateOf(AppLanguage.current(context))
     }
@@ -103,6 +116,7 @@ internal fun RearScreenApp() {
         mutableStateOf(PrefsBridge.readCheckUpdates(context))
     }
     var pendingUpdate by remember { mutableStateOf<UpdateInfo?>(null) }
+    var downloadFailed by remember { mutableStateOf(false) }
     var enablePickup by remember {
         mutableStateOf(PrefsBridge.readEnablePickupForUi(context))
     }
@@ -144,45 +158,41 @@ internal fun RearScreenApp() {
         }
     }
 
-    // Xposed 服务是异步绑定的：首帧组合时可能尚未就绪，读到的是本地/默认值。
-    // 服务绑定后通过回调重新读取远程偏好并刷新开关，取代之前每 500ms 一次的空转轮询。
-    DisposableEffect(Unit) {
+    // Provider/UI writes and service reconciliation all update this App-process cache.
+    // Read it on the UI thread when handling the event, so queued refreshes cannot replay old values.
+    DisposableEffect(context, lifecycleOwner) {
+        val preferences = context.getSharedPreferences(Constants.PREF_GROUP, Context.MODE_PRIVATE)
+        var disposed = false
         val listener = Runnable {
             scope.launch {
-                val values = withContext(Dispatchers.IO) {
-                    listOf(
-                        PrefsBridge.readDisableLongPressForUi(context),
-                        PrefsBridge.readRemoveWallpaperLimitForUi(context),
-                        PrefsBridge.readEnableAppCardForUi(context),
-                        PrefsBridge.readRemoveAppCardLimitForUi(context),
-                        PrefsBridge.readFixRearScreenApplyForUi(context)
-                    )
-                }
-                val shortcut = withContext(Dispatchers.IO) {
-                    PrefsBridge.readThemeSettingsShortcutForUi(context)
-                }
-                val (cover, doubleTap, packages) = withContext(Dispatchers.IO) {
-                    Triple(
-                        PrefsBridge.readDisableRearScreenCoverForUi(context),
-                        PrefsBridge.readDisableDoubleTapWakeForUi(context),
-                        PrefsBridge.readDoubleTapWakeDisabledPackagesForUi(context)
-                    )
-                }
-                disableLongPress = values[0]
-                removeWallpaperLimit = values[1]
-                enableAppCard = values[2]
-                removeAppCardLimit = values[3]
-                fixRearScreenApply = values[4]
-                themeSettingsShortcut = shortcut
-                disableRearScreenCover = cover
-                disableDoubleTapWake = doubleTap
-                doubleTapWakeDisabledPackages = packages
+                if (disposed) return@launch
+                val values = ModulePreferencesSnapshot.read(preferences)
+                disableLongPress = values.disableLongPress
+                removeWallpaperLimit = values.removeWallpaperLimit
+                enableAppCard = values.enableAppCard
+                removeAppCardLimit = values.removeAppCardLimit
+                fixRearScreenApply = values.fixRearScreenApply
+                enablePickup = values.enablePickup
+                themeSettingsShortcut = values.themeSettingsShortcut
+                disableRearScreenCover = values.disableRearScreenCover
+                disableDoubleTapWake = values.disableDoubleTapWake
+                doubleTapWakeDisabledPackages = values.doubleTapWakeDisabledPackages
                 moduleActivated = ModuleApp.getService() != null
             }
         }
+        val subscription = ModulePreferencesSnapshot.observe(preferences, listener)
+        val lifecycleObserver = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) listener.run()
+        }
         ModuleApp.addServiceListener(listener)
-        if (ModuleApp.getService() != null) listener.run()
-        onDispose { ModuleApp.removeServiceListener(listener) }
+        lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
+        listener.run()
+        onDispose {
+            disposed = true
+            subscription.close()
+            ModuleApp.removeServiceListener(listener)
+            lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
+        }
     }
 
     val isDark = themeMode.resolve(isSystemInDarkTheme())
@@ -229,6 +239,7 @@ internal fun RearScreenApp() {
             floatingNavBar = floatingNavBar,
             liquidGlass = liquidGlass,
             bottomBarBlur = bottomBarBlur,
+            showFunctionCount = showFunctionCount,
             appLanguage = appLanguage,
             checkUpdates = checkUpdates,
             enableAppCard = enableAppCard,
@@ -269,6 +280,10 @@ internal fun RearScreenApp() {
                 bottomBarBlur = newValue
                 PrefsBridge.writeBottomBarBlur(context, newValue)
             },
+            onShowFunctionCountChange = { newValue ->
+                showFunctionCount = newValue
+                PrefsBridge.writeShowFunctionCount(context, newValue)
+            },
             onAppLanguageChange = { newValue ->
                 appLanguage = newValue
                 AppLanguage.apply(context, newValue)
@@ -308,7 +323,7 @@ internal fun RearScreenApp() {
                     }
                 }
             },
-            onForceStopPackage = { packageName -> refreshScopes(packageName) },
+            onRestartScopes = { selected -> refreshScopes(*selected.toTypedArray(), allowSystemReboot = true) },
             themeMode = themeMode,
             onThemeModeChange = { newMode ->
                 ThemePrefs.setThemeMode(context, newMode)
@@ -325,11 +340,14 @@ internal fun RearScreenApp() {
       }
         UpdateDialog(
             update = pendingUpdate,
+            downloadFailed = downloadFailed,
             onDownload = {
-                pendingUpdate?.let { UpdateChecker.openDownload(context, it) }
-                pendingUpdate = null
+                pendingUpdate?.let {
+                    downloadFailed = !UpdateChecker.openDownload(context, it)
+                    if (!downloadFailed) pendingUpdate = null
+                }
             },
-            onDismiss = { pendingUpdate = null }
+            onDismiss = { pendingUpdate = null; downloadFailed = false }
         )
 
         WindowDialog(
@@ -364,10 +382,9 @@ internal fun RearScreenApp() {
     }
 }
 
-private fun forceStopPackage(packageName: String): Boolean {
-    if (!FORCE_STOP_PACKAGE_PATTERN.matches(packageName)) return false
+private fun executeScopeCommand(command: Array<String>): Boolean {
     return try {
-        val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "am force-stop $packageName"))
+        val process = Runtime.getRuntime().exec(command)
         if (!process.waitFor(5, TimeUnit.SECONDS)) {
             process.destroy()
             false

@@ -217,7 +217,7 @@ private class PagerSwipeNode(
                                 change.consume()
                                 // Keep the first drag frame's movement beyond slop.
                                 val overSlop = accumulated.x - sign(accumulated.x) * viewConfiguration.touchSlop
-                                events?.trySend(PagerDragEvent.Delta(overSlop * scrollSign))
+                                events.trySend(PagerDragEvent.Delta(overSlop * scrollSign))
                             } else if (y > viewConfiguration.touchSlop) {
                                 // Yield without touching any existing pager settling animation.
                                 break

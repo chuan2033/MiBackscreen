@@ -97,8 +97,8 @@ public class PickupCodesTest {
         assertFalse(text.contains("a5"));
         assertFalse(text.contains("a6"));
         assertFalse(PickupCodes.formatIslandText(Arrays.asList("001", "002")).contains("\n"));
-        assertEquals("取件码", PickupCodes.formatIslandText(Collections.emptyList()));
-        assertEquals("取件码", PickupCodes.formatCollapsedText(Collections.emptyList()));
+        assertEquals("取件码", PickupCodes.formatIslandText(Collections.emptyList(), "取件码"));
+        assertEquals("取件码", PickupCodes.formatCollapsedText(Collections.emptyList(), "取件码"));
     }
 
     @Test public void mergeDistinctKeepsOrderAndSkipsDuplicates() {

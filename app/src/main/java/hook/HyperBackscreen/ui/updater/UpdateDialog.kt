@@ -32,6 +32,7 @@ import top.yukonga.miuix.kmp.window.WindowDialog
 @Composable
 fun UpdateDialog(
     update: UpdateInfo?,
+    downloadFailed: Boolean = false,
     onDownload: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -52,6 +53,13 @@ fun UpdateDialog(
                 style = MiuixTheme.textStyles.body1
             )
         }
+        if (downloadFailed) {
+            Text(
+                text = stringResource(R.string.activity_open_failed),
+                modifier = Modifier.padding(top = 8.dp),
+                color = MiuixTheme.colorScheme.error,
+            )
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -68,7 +76,7 @@ fun UpdateDialog(
                 modifier = Modifier.weight(1f).height(48.dp),
                 onClick = onDownload,
                 colors = ButtonDefaults.buttonColorsPrimary(),
-                content = { Text(stringResource(R.string.update_download)) }
+                content = { Text(stringResource(if (downloadFailed) R.string.common_retry else R.string.update_download)) }
             )
         }
     }

@@ -1040,6 +1040,7 @@ object SwipePanelHost {
         private val chinese = activity.resources.configuration.locales[0]?.language == "zh"
         private val moduleContext = if (allowModuleResources) try {
             activity.createPackageContext(Constants.MODULE_PACKAGE, Context.CONTEXT_IGNORE_SECURITY)
+                .createConfigurationContext(activity.resources.configuration)
         } catch (_: Throwable) {
             null
         } else null
@@ -1056,16 +1057,16 @@ object SwipePanelHost {
             R.string.panel_restart_required,
             if (chinese) "请重启背屏作用域" else "Please restart the rear screen scope",
         )
-        val disableTitle = get(R.string.panel_disable_long_press_title, "禁用背屏长按切换壁纸")
-        val disableOn = get(R.string.panel_disable_long_press_on, "当前已禁用原厂长按切换壁纸")
-        val disableOff = get(R.string.panel_disable_long_press_off, "当前恢复原厂长按行为")
-        val removeTitle = get(R.string.panel_remove_limit_title, "去除背屏壁纸数量限制")
-        val removeOn = get(R.string.panel_remove_limit_on, "当前已去除15张上限")
-        val removeOff = get(R.string.panel_remove_limit_off, "当前保持默认15张上限")
-        val removeAppCardTitle = get(R.string.panel_remove_app_card_limit_title, "移除背屏应用卡数量限制")
-        val removeAppCardOn = get(R.string.panel_remove_app_card_limit_on, "当前已去除15个应用卡上限")
-        val removeAppCardOff = get(R.string.panel_remove_app_card_limit_off, "当前保持默认15个应用卡上限")
-        val saveFailed = get(R.string.panel_save_failed, "保存失败，请在主应用中修改")
+        val disableTitle = get(R.string.panel_disable_long_press_title, if (chinese) "禁用背屏长按切换壁纸" else "Disable long-press wallpaper switching")
+        val disableOn = get(R.string.panel_disable_long_press_on, if (chinese) "当前已禁用原厂长按切换壁纸" else "Factory long-press switching is disabled")
+        val disableOff = get(R.string.panel_disable_long_press_off, if (chinese) "当前恢复原厂长按行为" else "Factory long-press behavior is enabled")
+        val removeTitle = get(R.string.panel_remove_limit_title, if (chinese) "去除背屏壁纸数量限制" else "Remove rear wallpaper count limit")
+        val removeOn = get(R.string.panel_remove_limit_on, if (chinese) "当前已去除15张上限" else "The 15-wallpaper limit is removed")
+        val removeOff = get(R.string.panel_remove_limit_off, if (chinese) "当前保持默认15张上限" else "The default 15-wallpaper limit is active")
+        val removeAppCardTitle = get(R.string.panel_remove_app_card_limit_title, if (chinese) "移除背屏应用卡数量限制" else "Remove rear screen app card count limit")
+        val removeAppCardOn = get(R.string.panel_remove_app_card_limit_on, if (chinese) "当前已去除15个应用卡上限" else "The 15-app-card limit is removed")
+        val removeAppCardOff = get(R.string.panel_remove_app_card_limit_off, if (chinese) "当前保持默认15个应用卡上限" else "The default 15-app-card limit is active")
+        val saveFailed = get(R.string.panel_save_failed, if (chinese) "保存失败，请在主应用中修改" else "Save failed; change this setting in the main app")
     }
 
     /**

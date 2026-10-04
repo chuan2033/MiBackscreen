@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="config_show_function_count_title">Show enabled function count</string>
+    <string name="config_show_function_count_summary">Show the number of enabled functions on the Functions tab</string>
+    <plurals name="enabled_function_count">
+        <item quantity="one">%1$d function enabled</item>
+        <item quantity="other">%1$d functions enabled</item>
+    </plurals>
+    <string name="app_picker_load_failed">Could not load apps. Your selections have been kept. Tap Retry to try again.</string>
+    <string name="app_picker_unavailable">No enabled apps are visible to the system query. Check app-list access in system settings and retry. Existing selections are kept.</string>
+    <string name="app_picker_partial">Some selected apps are currently unavailable or hidden from this list. You can still deselect them.</string>
+    <string name="ai_rear_screen_title">AI rear screen</string>
+    <string name="activity_open_failed">Could not open this page. Check that the required app is installed and enabled, then retry.</string>
     <string name="pickup_title">Pickup codes</string>
     <plurals name="pickup_count">
         <item quantity="one">Recognized %1$d pickup code</item>
@@ -29,11 +40,8 @@
     <string name="log_failed">Failed to generate log</string>
     <string name="log_share_title">Share log</string>
     <string name="home_disable_long_press_title">Disable rear screen long press to switch wallpaper</string>
-    <string name="home_disable_long_press_summary">Intercept long-press gesture to avoid accidental entry into edit mode</string>
     <string name="home_remove_wallpaper_limit_title">Remove rear screen wallpaper count limit</string>
-    <string name="home_remove_wallpaper_limit_summary">Remove the 15-wallpaper limit</string>
     <string name="home_remove_app_card_limit_title">Remove rear screen app card count limit</string>
-    <string name="home_remove_app_card_limit_summary">Remove the 15-app-card limit</string>
     <string name="home_fix_apply_title">Fix rear screen wallpaper apply failure</string>
     <string name="home_fix_apply_summary">Requires the theme crack module to be used together</string>
     <string name="home_status_activated">Activated</string>
@@ -103,11 +111,8 @@
     <string name="about_donate_title">Donate</string>
     <string name="about_donate_qr_entry">If MiBackscreen helps you, support is welcome</string>
     <string name="about_donate_wechat">WeChat</string>
-    <string name="about_donate_wechat_summary">Scan with WeChat Pay</string>
     <string name="about_donate_alipay">Alipay</string>
-    <string name="about_donate_alipay_summary">Scan with Alipay</string>
     <string name="about_donate_qr_description">Donation QR code</string>
-    <string name="about_donate_scan_hint">Scan to support the developer</string>
 
     <!-- License Page -->
     <string name="license_title">Open Source Licenses</string>
@@ -127,14 +132,17 @@
     <string name="panel_save_failed">Save failed; change this setting in the main app</string>
 
     <!-- Restart Scope Dialog -->
-    <string name="restart_title">Restart Scope</string>
-    <string name="restart_scope">Restart Scope</string>
+    <string name="restart_title">Restart scopes</string>
+    <string name="restart_scope">Restart scopes</string>
     <string name="restart_system">System</string>
+    <string name="restart_device_success">Reboot request sent</string>
+    <string name="restart_device_failed">Could not reboot the phone (root may be unavailable)</string>
     <string name="restart_voice_assist">XiaoAi</string>
     <string name="restart_backscreen">Rear Screen</string>
     <string name="restart_theme_manager">Theme Store</string>
-    <string name="restart_success">Restart command sent</string>
-    <string name="restart_failed">Restart failed (root may be unavailable)</string>
+    <string name="restart_personal_assistant">Personal Assistant</string>
+    <string name="restart_success">Stop command sent; open the affected app again</string>
+    <string name="restart_failed">Could not stop the app (root may be unavailable)</string>
     <string name="common_retry">Retry</string>
     <string name="common_share">Share</string>
     <string name="log_progress">Generating log · Progress: %1$d/%2$d</string>

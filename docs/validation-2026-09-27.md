@@ -1,9 +1,11 @@
 # 本地背屏验证记录（2026-09-27）
 
+本文是 2026-09-27 的历史证据，不能替代当前提交验收。当前工程规则与签名前提见[工程说明](../交接文档.md)。
+
 ## 分支与环境
 
 - 在 `feat/18pro-max-rear-screen` / `5ffe821` 上继续开发；主线基线 `48921ad`，不合入 main。
-- 当前实际项目：`D:\Codex\MiBackscreen`；原说明中的 `D:\Ai\MiBackscreen` 不存在。
+- 仓库工作目录：`D:\Codex\MiBackscreen`。
 - 工具、宿主反编译资料、APK 备份和日志：`D:\Codex\MiBackscreenHuancun`。该目录不提交。
 - ADB 设备：popsicle / 2509FPN0BC，小米 17 Pro Max。
 - 实测系统：Android **17 / API 37**，`OS4.0.0.44.XPBCNXM`。与最初描述的 Android 16 / API 36 不同。
@@ -42,27 +44,11 @@ API 102 的只读契约也已从 Maven 发布的 `api-102.0.0-sources.jar` 核�
 - 修正 `U1.C0118n`（JADX 的 Windows 文件名别名）为实际 DEX 类名 `U1.n`，恢复与官方动画状态的同步。
 - 系统唤醒优先 Hook PowerManagerServiceImpl；仅主目标不可用时 Hook cover manager，避免同一次官方委托链重复查询前台任务。
 
-## 验证方法
+## 宿主探针
 
-```powershell
-$env:JAVA_HOME = 'D:\Codex\MiBackscreenHuancun\tools\jdk-21.0.2'
-$env:GRADLE_USER_HOME = 'D:\Codex\MiBackscreenHuancun\gradle'
-& D:\Codex\MiBackscreenHuancun\tools\gradle-9.6.0\bin\gradle.bat `
-  :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain
-```
+构建与签名步骤统一见 [README](../README.md#构建)。以下探针可能临时写配置或发布合成通知，须有当前任务授权才可执行。
 
-签名通过 `local.properties` 或同名环境变量配置：
-
-```properties
-RELEASE_STORE_FILE=D\:/Codex/release-key.jks
-RELEASE_KEY_ALIAS=hyperbackscreen
-RELEASE_STORE_PASSWORD=<本地填写>
-RELEASE_KEY_PASSWORD=<本地填写>
-```
-
-配置了路径但缺少密钥或密码时，构建直接失败，不悄悄换回默认 debug 签名。`local.properties`、密钥、签名说明和设备数据均不提交。
-
-debug 的 `hook.HyperBackscreen.DEBUG_PROBE` 动态广播入口仅在小爱/背屏进程注册，要求发送方具备 `android.permission.DUMP`。它不在 release 源集中。
+debug 的 `hook.HyperBackscreen.DEBUG_PROBE` 动态广播入口在小爱/背屏/主题商店进程注册，要求发送方具备 `android.permission.DUMP`。它不在 release 源集中。
 
 ```powershell
 $adb = 'D:\Codex\MiBackscreenHuancun\tools\platform-tools\adb.exe'
@@ -104,9 +90,4 @@ $adb = 'D:\Codex\MiBackscreenHuancun\tools\platform-tools\adb.exe'
 
 设备日志与截图保存在缓存 evidence 目录，仅本地保留。所有“通过”均限定于表中场景。
 
-## 最终交付
-
-- APK：`app/build/outputs/apk/debug/app-debug.apk`。
-- SHA-256：`ed7f613b3b650aa07f6531454aca6329bd2f761d7bc2cf4ca9974b01c3baf394`。
-- 仅构建 debug，未构建或发布 release。
-- 修改保留在独立分支工作区，未提交、推送或合入 main。
+当日仅构建并安装 Debug，未构建 Release；安装及工作区状态不在历史文档中持续维护。

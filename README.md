@@ -1,180 +1,82 @@
-<h1>MiBackscreen</h1>
+# MiBackscreen
 
-<p>
-  用于小米 17 Pro 系列的背屏Xposed模块。<br>
- 为背屏补全壁纸管理、背屏保护与快捷面板等功能。
-</p>
+[English](README_EN.md) · [项目主页](https://github.com/chuan2033/MiBackscreen) · [下载](https://github.com/chuan2033/MiBackscreen/releases)
 
-<p>
-  <a href="./README_EN.md">English</a> · <a href="https://github.com/chuan2033/MiBackscreen">项目主页</a>
-</p>
+基于 Modern Xposed 的小米背屏模块。当前分支 `feat/18pro-max-rear-screen` 包含新版背屏中心、主题商店和负一屏应用卡适配。分支名及请求中使用的机型标识不代表实际设备支持范围。
 
-<p>
-  <a href="https://github.com/chuan2033/MiBackscreen/releases"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/chuan2033/MiBackscreen?display_name=release"></a>
- <a href="https://github.com/chuan2033/MiBackscreen/stargazers"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/chuan2033/MiBackscreen?style=flat"></a>
- <a href="https://github.com/chuan2033/MiBackscreen/issues"><img alt="GitHub Issues" src="https://img.shields.io/github/issues/chuan2033/MiBackscreen"></a>
-  <a href="https://developer.android.com/"><img src="https://img.shields.io/badge/Android-16%2B-3DDC84?logo=android&logoColor=white" alt="Android"></a>
- <a href="https://github.com/LSPosed/LSPosed"><img src="https://img.shields.io/badge/Framework-LSPosed%20%2F%20Xposed-5C6BC0" alt="Framework"></a>
-</p>
+## 功能与默认值
 
+| 功能 | 默认 | 使用说明 |
+| --- | --- | --- |
+| 禁用长按切换壁纸 | 开 | 背屏长按不进入编辑 |
+| 移除壁纸数量限制 | 开 | 解除主题商店的 15 张限制 |
+| 背屏应用卡 / 移除应用卡数量限制 | 开 / 开 | 官方上滑列表中显示 MiBackscreen 卡片；点击进入快捷面板 |
+| 修复背屏壁纸应用 | 关 | 修复资源访问及应用状态同步；确认切换与取消编辑保持不同语义 |
+| 取件码增强 | 开 | 小爱取件卡片进入分组选择页，选择显示在岛上的码；新批次不混入旧批次 |
+| 禁用背屏保护提示 | 关 | 拦截要求先熄灭正屏的提示 |
+| 按应用禁用双击唤醒 | 关，名单为空 | 功能页进入选择应用；关掉开关保留名单，仅匹配当前主屏前台相关应用 |
+| 主题商店模块入口 | 开 | 妙享背屏设置页显示快捷入口 |
 
-## 功能概览
+外观支持系统/浅色/深色、动态取色、普通或悬浮底栏及液态玻璃。悬浮底栏、液态玻璃默认关闭，底栏模糊及启动检查更新默认开启。
 
-- 解除背屏壁纸 15 张上限，并修复主题商店壁纸应用失败与状态同步。
-- 拦截背屏保护提示，支持按应用禁用背屏双击唤醒。
-- 在官方上滑应用卡列表中注入 MiBackscreen 入口，点击打开快捷面板。
-- 识别小爱记忆岛中的多个快递取件码，支持按驿站分类并选择显示在灵动岛卡片上。
+底部“功能”标签默认显示已开启功能数量（1–7），全部关闭时不显示角标。每个功能开关计 1，包括应用选择页中的双击唤醒总开关，不按应用名单数量累加。在“设置 → 外观 → 显示功能数量”可隐藏角标，三种底栏均支持。
 
-## 主要功能
+快捷面板从官方应用卡入口打开，底部上滑关闭。面板支持长按、壁纸上限、应用卡上限三个开关；写入失败会回滚。模块 App 离线修改保留待同步值，连接 LSPosed 服务后补交；待同步不表示宿主已经生效。
 
-### 背屏中心 
+## 环境与安装
 
-- 禁用背屏长按切换壁纸。
-- 背屏上滑快捷面板。
+- 最低 Android API 36；使用支持 Modern Xposed 的 LSPosed / 兼容框架。模块元数据声明最低 API 101、目标 API 102，代码依赖 API 102。
+- 仓库历史实测设备为小米 17 Pro Max（popsicle / 2509FPN0BC），Android 17 / API 37、HyperOS 4，副屏 976 × 596。已测试场景及宿主版本见[设备验证记录](docs/validation-2026-09-27.md)，不代表跨设备或跨固件完整兼容。
+- Hook 依赖宿主类和方法签名。系统、背屏中心、主题商店或小爱更新后，需要重新核验。
+- 主题商店含 AI 背屏资源与人脸录入数量兼容逻辑；人脸读取失败按未知处理。萌宠实际应用全链路仍待真机验证。
 
-### 系统进程 
+安装 APK，在框架中启用模块并勾选以下五个作用域，然后重启手机使所有 Hook 加载：
 
-- 禁用背屏保护提示（"请按电源键熄灭正屏后使用背屏"）。
-- 按应用禁用背屏双击唤醒，按当前正屏前台应用包名拦截。
+| 作用域 | 用途 |
+| --- | --- |
+| `system` | 背屏保护提示、按应用拦截双击唤醒 |
+| `com.xiaomi.subscreencenter` | 长按、应用卡及快捷面板、确认壁纸选择同步 |
+| `com.android.thememanager` | 壁纸数量/应用、设置入口、AI 背屏与人脸数量兼容 |
+| `com.miui.voiceassist` | 取件码识别结果展示、通知点击及刷新 |
+| `com.miui.personalassistant` | 负一屏背屏应用卡商店请求适配 |
 
-### 主题商店 
+主页“已激活”表示模块服务已连接，不证明所有 Hook 成功。配置由 Hook 下次读取生效；壁纸/应用卡等部分开关还会请求停止相关宿主，需 root 并重新打开对应应用。APK 更新后需重新加载相关宿主进程，系统 Hook 更新需重启手机。“重启作用域”包含系统、小爱、背屏、主题商店和智能助理；勾选“系统”并点击“确定”后，模块通过 root 执行整机重启；同时选择应用时只发送一次重启命令。仅选择应用则停止对应应用，普通设置开关的自动刷新不会重启手机。
 
-- 去除 15 张壁纸上限。
-- 修复背屏壁纸应用失败，并负责壁纸状态同步。
-- 妙享背屏页快捷入口。
+若提示 `vendor.display.builtin_presentation=0`，检查隐藏背屏/防屏幕共享类模块，它们可能影响背屏截图或自定义壁纸。
 
-## 模块作用域
+## 反馈
 
-| 包名                         | 用途                                   |
-| ---------------------------- | -------------------------------------- |
-| `system`                     | 背屏保护提示、背屏双击唤醒拦截         |
-| `com.xiaomi.subscreencenter` | 长按拦截、快捷面板                     |
-| `com.android.thememanager`   | 壁纸数量限制、壁纸应用修复、设置页入口 |
-| `com.miui.voiceassist`       | 取件码识别、灵动岛卡片点击与刷新       |
-| `com.miui.personalassistant` | 独立分支的背屏应用卡商店适配 |
+复现后立即打开“主页 → 日志”，在重新应用壁纸或重启宿主之前生成反馈 ZIP。关闭进度卡片不会取消任务；完成后手动点击分享，失败可重试，不会自动发送。
 
-最低 Android 版本为 API 36。
+当前反馈格式为 schema 6：包括设备/宿主版本、配置、Hook 状态、取件选择、过滤日志、系统诊断、资源路径与文件元数据、editConfig 文本、主题商店 `rearScreen.db` 及 WAL/SHM 副本；AI 数据库只报告结构，不复制内容。不复制用户壁纸图片/视频字节。包内可能包含取件码、应用名单及其他私人信息，分享前请检查。
 
-## 前置要求与兼容性
+完整采集需要 root 和支持 `su -M` 的实现；无权限、超时或缺失文件会记入相应报告，ZIP 生成成功不表示每项采集成功。通过 [Issues](https://github.com/chuan2033/MiBackscreen/issues) 提供复现步骤、预期/实际行为、版本和必要截图，按需附经检查的反馈包。
 
-- Android API 36 及以上。
-- LSPosed / 兼容 Xposed 环境，Modern Xposed API 102。
-- 目标背屏 `976 × 596px`（HyperOS 4）。
-- 反馈包的数据库采集依赖 Root 实现的 `su -M`；KernelSU 与 Magisk 均提供该参数。
-- 若检测到 `vendor.display.builtin_presentation=0`，模块 App 会提示隐藏背屏/防屏幕共享类模块可能导致背屏截图失败或自定义壁纸黑屏。
-- `k2.s`、`Z1.t`、`Z1.v`、`yp31`、`o5`、`ol` 等为宿主 R8 名称，系统应用升级后需要重新核对。
-- 系统进程 Hook 依赖 `DualScreenCoverManager`、`PowerManagerServiceImpl` 以及当前前台任务字段，系统升级后需要重新确认。
-- 妙享背屏页快捷入口依赖主题商店 `com.rearScreen.RearScreenSettingActivity`、`EntryConfig` 和 `user_guide` / `serve_assistant` 这些 controller key。
-- 权限目录字段必须经过绝对路径校验；不要重新把非路径字符串 `qp5l=incallshow` 当作目录。
-- 快捷面板依赖 `SubScreenLauncher`、`notification_panel` 和 `smart_assistant_panel`。
-- 面板打开期间的系统手势排除区占底部 22%，新增原厂手势时需要重新评估冲突。
-- `textureBlur` 不能放入同一个 `layerBackdrop` 采样子树，否则可能形成采样环并触发 native crash。
+## 构建
 
-## 安装
-
-1. 从 [Releases](https://github.com/chuan2033/MiBackscreen/releases) 下载最新 APK 并安装。
-2. 在 LSPosed 中启用 `MiBackscreen`。
-3. 勾选作用域：`system`、`com.xiaomi.subscreencenter`、`com.android.thememanager`、`com.miui.voiceassist`。
-4. 重启手机；只调试背屏中心或主题商店功能时，也可分别重启对应作用域进程。
-5. 打开模块 App，主页状态卡显示已激活（绿卡）即可。
-
-App 内强制停止作用域进程的功能需要 root。
-
-## 使用说明
-
-- 上滑打开官方应用卡列表，点击 MiBackscreen 卡片进入快捷面板；底部上滑关闭，关闭后恢复宿主手势。
-- 按应用禁用双击唤醒时，会同时读取系统记录的前台包名和当前主屏任务中的候选 Activity 包名（不包含历史后台任务），覆盖游戏启动后短暂跳转到 SDK/登录页导致前台包名变化的场景。
-- 反馈日志应在复现问题后立即生成，生成前不要重新应用壁纸或重启背屏中心、主题商店。
-
-## 快捷面板
-
-### 手势
-
-- 沿用官方上滑手势打开应用卡列表。
-- 点击 MiBackscreen 卡片打开快捷面板。
-- 从面板底部上滑关闭，系统手势排除区恢复为打开前的值。
-
-## 取件码
-
-- 在小爱中记忆包含多个快递取件码的通知后，点击灵动岛取件卡片进入取件码页。
-- 页面按驿站分组；每个驿站可以单独选择哪些取件码显示在灵动岛上。
-- 不同一批记忆结果不会继续带入上一批历史码；确认取件后，当前取件码页会自动关闭。
-- 模块 App「功能」页提供「取件码增强」总开关，默认开启；关闭后完全走原生逻辑，无需重启小爱作用域。
-
-## 从源码构建
-
-当前 `feat/18pro-max-rear-screen` 是独立开发分支，包含新版宿主应用卡片及快捷面板适配，不合入以 `48921ad` 为基线的 main。快捷面板入口为官方上滑应用卡列表中的 MiBackscreen 卡片。本轮设备信息、上游调查、修复及验证结果见 [本地验证记录](docs/validation-2026-09-27.md)。
-
-本地测试只需 debug。若要让 debug 使用指定密钥签名，在不提交的 `local.properties` 中设置 `RELEASE_STORE_FILE`、`RELEASE_KEY_ALIAS`、`RELEASE_STORE_PASSWORD`、`RELEASE_KEY_PASSWORD`；也支持同名环境变量。debug 保持不混淆及调试日志，仅更换签名。指定密钥配置不完整时会报错，不会回退到默认 debug 签名。
-
-要求：
-
-- JDK 21
-- Android SDK 37
-- Android Build Tools 37.0.0
-- Gradle 9.6.0
-
-Debug：
+需要 JDK 21、Android SDK 37、Build Tools 37.0.0；Wrapper 固定 Gradle 9.6.0。版本以 [app/build.gradle](app/build.gradle) 为准。设置本机 `JAVA_HOME` 和忽略的 `local.properties` 中的 `sdk.dir`，执行：
 
 ```powershell
-.\gradlew.bat :app:assembleDebug --offline --console=plain
-```
-
-首次构建没有本地缓存时去掉 `--offline`。APK 输出到：
-
-```text
-app/build/outputs/apk/debug/app-debug.apk
-```
-
-Release：
-
-```powershell
+.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --offline --console=plain
 .\gradlew.bat :app:assembleRelease --offline --console=plain
 ```
 
-产物：
+没有依赖或 Wrapper 缓存时去掉 `--offline` 并联网准备依赖。Debug 输出为 `app/build/outputs/apk/debug/app-debug.apk`。
 
-```text
-app/build/outputs/apk/release/app-release.apk
-```
+Release 开启 R8 和资源收缩；配置签名后输出 `app/build/outputs/apk/release/app-release.apk`，未配置则为 `app-release-unsigned.apk`。签名从 `local.properties` 或同名环境变量读取 `RELEASE_STORE_FILE`、`RELEASE_STORE_PASSWORD`、`RELEASE_KEY_PASSWORD`，可选 `RELEASE_KEY_ALIAS`（默认 `hyperbackscreen`）。相对密钥路径基于 `app/`；未指定文件时检查 `app/release-key.jks`。显式指定密钥文件但配置不完整时构建报错。签名可用时 Debug 也使用该密钥，但保持不混淆；否则使用默认 Debug 签名。覆盖安装须与已安装版本证书一致。
 
-```powershell
-adb shell am start --display 1 -n com.xiaomi.subscreencenter/.SubScreenLauncher
-```
+开发链路、配置键及维护约束见[工程说明](交接文档.md)，验证范围见[回归矩阵](docs/DEVICE_TEST_MATRIX.md)。编译通过不等于真机 Hook 正常。
 
-## 问题反馈
+## 许可证与致谢
 
-在 [Issues](https://github.com/chuan2033/MiBackscreen/issues) 提交反馈，请附带：
+[GPL-3.0](LICENSE)。模块修改系统及宿主行为，不同固件可能存在兼容问题，请按已验证范围使用。
 
-1. LSPosed 模块日志（主页 → 日志）。
-2. 设备型号、系统版本与模块版本。
-3. 复现步骤。
-4. 预期行为与实际行为。
-5. 相关截图。
+下表列主要技术来源；App“开源许可”按运行依赖及本地移植来源归组列出，包括 Kotlin / kotlinx、JetBrains Compose、Material Color Utilities、Poko、注解库、Guava 和 libxposed 服务接口。清单维护于 [LicensePage.kt](app/src/main/java/hook/HyperBackscreen/ui/about/LicensePage.kt)。
 
-模块 App 主页「日志」卡可生成 ZIP 反馈包并调起系统分享面板（需 root 授权才采集完整日志，生成时机见上方使用说明）。
-
-## 免责声明
-
-- 本模块会修改系统背屏、系统界面与主题商店行为，请自行评估风险。
-- 不同系统版本、固件版本、Xposed 环境之间可能存在兼容性差异。
-- 系统框架、系统界面或主题商店更新后，部分 Hook 点可能需要重新适配。
-- 使用本模块造成的功能异常或设备风险，请自行承担。
-
-## 技术栈与致谢
-
-项目许可证：[GPL-3.0](LICENSE)。
-
-| 项目                                                         | 许可证     | 用途                           |
-| ------------------------------------------------------------ | ---------- | ------------------------------ |
-| [compose-miuix-ui/miuix](https://github.com/compose-miuix-ui/miuix) | Apache-2.0 | Compose UI、主题、开关视觉规格 |
-| [AndroidX Activity Compose](https://developer.android.com/jetpack/androidx/releases/activity) | Apache-2.0 | Compose Activity               |
-| [Modern Xposed API](https://github.com/libxposed/api)        | Apache-2.0 | LSPosed 模块 API               |
-| [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) | Apache-2.0 | 液态玻璃效果上游               |
-| [KernelSU](https://github.com/tiann/KernelSU)                | GPL-3.0    | 悬浮底栏实现参考               |
-
-致谢：感谢 miuix、Modern Xposed API、AndroidLiquidGlass 与 KernelSU 等开源项目。
-
-## License
-
-See [LICENSE](LICENSE).
+| 项目 | 许可证 | 用途 |
+| --- | --- | --- |
+| [Miuix](https://github.com/compose-miuix-ui/miuix) | Apache-2.0 | Compose UI、导航及模糊 |
+| [AndroidX](https://developer.android.com/jetpack/androidx) | Apache-2.0 | Activity、Compose、生命周期 |
+| [Modern Xposed](https://central.sonatype.com/artifact/io.github.libxposed/api/102.0.0) | Apache-2.0 | Hook API |
+| [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) | Apache-2.0 | 本地玻璃效果来源 |
+| [KernelSU](https://github.com/tiann/KernelSU) | GPL-3.0 | 悬浮底栏实现参考 |

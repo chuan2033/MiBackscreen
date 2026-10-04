@@ -16,6 +16,7 @@ public final class Constants {
     public static final String KEY_FLOATING_NAV_BAR = "floating_nav_bar";
     public static final String KEY_LIQUID_GLASS = "liquid_glass";
     public static final String KEY_BOTTOM_BAR_BLUR = "bottom_bar_blur";
+    public static final String KEY_SHOW_FUNCTION_COUNT = "show_function_count";
     public static final String KEY_CHECK_UPDATES = "check_updates";
     public static final String KEY_DISABLE_REAR_SCREEN_COVER = "disable_rear_screen_cover";
     public static final String KEY_DISABLE_DOUBLE_TAP_WAKE = "disable_double_tap_wake";

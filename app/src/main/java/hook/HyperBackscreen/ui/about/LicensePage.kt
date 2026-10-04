@@ -39,24 +39,92 @@ private data class LicenseItem(
     val url: String
 )
 
+// Reviewed against releaseRuntimeClasspath and local source attribution headers.
+// Group artifacts from the same project; Gradle/compiler/test tools are not app dependencies.
 private val licenses = listOf(
     LicenseItem(
-        name = "compose-miuix-ui (miuix library)",
+        name = "Miuix (UI / Preference / Icons / Blur / Navigation)",
         license = "Apache-2.0",
         url = "https://github.com/compose-miuix-ui/miuix"
     ),
     LicenseItem(
-        name = "AndroidX Activity Compose",
+        // Includes Compose, Activity, Lifecycle, Core, SavedState, Collection, Window,
+        // NavigationEvent, Graphics, Emoji2 and their supporting AndroidX modules.
+        name = "AndroidX / Jetpack Compose",
         license = "Apache-2.0",
-        url = "https://developer.android.com/jetpack/androidx/activity/activity-compose"
+        url = "https://github.com/androidx/androidx"
+    ),
+    LicenseItem(
+        name = "Compose Multiplatform",
+        license = "Apache-2.0",
+        url = "https://github.com/JetBrains/compose-multiplatform"
+    ),
+    LicenseItem(
+        name = "JetBrains AndroidX (Lifecycle / SavedState)",
+        license = "Apache-2.0",
+        url = "https://github.com/JetBrains/compose-multiplatform-core"
+    ),
+    LicenseItem(
+        name = "Kotlin Standard Library",
+        license = "Apache-2.0",
+        url = "https://github.com/JetBrains/kotlin"
+    ),
+    LicenseItem(
+        name = "kotlinx.coroutines",
+        license = "Apache-2.0",
+        url = "https://github.com/Kotlin/kotlinx.coroutines"
+    ),
+    LicenseItem(
+        name = "kotlinx.serialization",
+        license = "Apache-2.0",
+        url = "https://github.com/Kotlin/kotlinx.serialization"
+    ),
+    LicenseItem(
+        name = "kotlinx.collections.immutable",
+        license = "Apache-2.0",
+        url = "https://github.com/Kotlin/kotlinx.collections.immutable"
+    ),
+    LicenseItem(
+        name = "Material Color Utilities (Google / MaterialKolor)",
+        // The utilities module has its own Apache-2.0 LICENSE. MaterialKolor's
+        // root MIT license / published POM does not replace that module license.
+        license = "Apache-2.0",
+        url = "https://github.com/jordond/MaterialKolor#license"
+    ),
+    LicenseItem(
+        name = "Poko Annotations",
+        license = "Apache-2.0",
+        url = "https://github.com/drewhamilton/Poko"
+    ),
+    LicenseItem(
+        name = "JetBrains Java Annotations",
+        license = "Apache-2.0",
+        url = "https://github.com/JetBrains/java-annotations"
+    ),
+    LicenseItem(
+        name = "JSpecify",
+        license = "Apache-2.0",
+        url = "https://github.com/jspecify/jspecify"
+    ),
+    LicenseItem(
+        name = "Guava ListenableFuture",
+        license = "Apache-2.0",
+        url = "https://github.com/google/guava"
     ),
     LicenseItem(
         name = "Modern Xposed API",
         license = "Apache-2.0",
-        url = "https://github.com/libxposed/api"
+        // compileOnly: implemented by the Xposed framework, not bundled as API classes.
+        url = "https://central.sonatype.com/artifact/io.github.libxposed/api/102.0.0"
     ),
     LicenseItem(
-        name = "AndroidLiquidGlass",
+        name = "libxposed Service / Interface",
+        license = "Apache-2.0",
+        // Local JARs match classes.jar in the official 102.0.0 Maven AARs.
+        url = "https://central.sonatype.com/artifact/io.github.libxposed/service/102.0.0"
+    ),
+    LicenseItem(
+        name = "AndroidLiquidGlass (Backdrop / Liquid Glass)",
         license = "Apache-2.0",
         url = "https://github.com/Kyant0/AndroidLiquidGlass"
     ),

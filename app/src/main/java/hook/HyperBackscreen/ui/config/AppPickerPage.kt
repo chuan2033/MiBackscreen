@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.widget.ImageView
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -21,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -36,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.common.AppPickerFilter
+import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.common.PackageListCodec
 import hook.HyperBackscreen.ui.components.BlurredBar
 import hook.HyperBackscreen.ui.components.CardBlock
@@ -50,6 +53,7 @@ import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
 import top.yukonga.miuix.kmp.blur.layerBackdrop
@@ -90,6 +94,8 @@ internal fun AppPickerPage(
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var apps by remember { mutableStateOf(emptyList<InstalledAppItem>()) }
     var loading by remember { mutableStateOf(true) }
+    var loadFailed by remember { mutableStateOf(false) }
+    var loadAttempt by remember { mutableIntStateOf(0) }
     val selectedSet = remember(selectedPackages) {
         PackageListCodec.parse(selectedPackages)
     }
@@ -108,10 +114,17 @@ internal fun AppPickerPage(
         }
     }
 
-    LaunchedEffect(context) {
+    LaunchedEffect(context, loadAttempt) {
         loading = true
-        apps = withContext(Dispatchers.IO) {
-            loadInstalledApps(context)
+        loadFailed = false
+        when (val result = withContext(Dispatchers.IO) {
+            loadAppList { loadInstalledApps(context) }
+        }) {
+            is AppListLoadResult.Loaded -> apps = result.apps
+            is AppListLoadResult.Failed -> {
+                loadFailed = true
+                Log.w(Constants.LOG_TAG, "Unable to load visible applications", result.error)
+            }
         }
         loading = false
     }
@@ -174,14 +187,35 @@ internal fun AppPickerPage(
                     Spacer(Modifier.height(12.dp))
                 }
 
-                when {
-                    loading -> item {
+                if (loading) {
+                    item {
                         MessageCard(text = stringResource(R.string.app_picker_loading))
                     }
-                    filteredApps.isEmpty() -> item {
-                        MessageCard(text = stringResource(R.string.app_picker_empty))
+                } else {
+                    if (loadFailed || apps.isEmpty()) {
+                        item(key = "load_status") {
+                            CardBlock(pressFeedbackType = PressFeedbackType.None) {
+                                Text(
+                                    text = stringResource(if (loadFailed) R.string.app_picker_load_failed else R.string.app_picker_unavailable),
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                )
+                                TextButton(
+                                    text = stringResource(R.string.common_retry),
+                                    onClick = { loadAttempt++ },
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                )
+                            }
+                        }
+                    } else if (selectedSet.any { it !in knownPackages }) {
+                        item(key = "visibility_notice") {
+                            MessageCard(text = stringResource(R.string.app_picker_partial))
+                        }
                     }
-                    else -> items(filteredApps, key = { it.packageName }) { app ->
+                    if (filteredApps.isEmpty() && (query.isNotBlank() || apps.isNotEmpty())) {
+                        item { MessageCard(text = stringResource(R.string.app_picker_empty)) }
+                    }
+                    items(filteredApps, key = { it.packageName }) { app ->
                         CardBlock(pressFeedbackType = PressFeedbackType.None) {
                             CheckboxPreference(
                                 title = app.label,
@@ -266,7 +300,11 @@ private fun loadInstalledApps(context: Context): List<InstalledAppItem> {
         .filter { it.packageName != context.packageName }
         .map { applicationInfo ->
             val packageName = applicationInfo.packageName
-            val label = applicationInfo.loadLabel(packageManager).toString().ifBlank { packageName }
+            val label = try {
+                applicationInfo.loadLabel(packageManager).toString().ifBlank { packageName }
+            } catch (_: RuntimeException) {
+                packageName
+            }
             val icon = runCatching { applicationInfo.loadIcon(packageManager) }.getOrNull()
             InstalledAppItem(label, packageName, icon)
         }

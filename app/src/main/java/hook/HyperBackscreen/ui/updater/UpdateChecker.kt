@@ -1,8 +1,7 @@
 package hook.HyperBackscreen.ui.updater
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
+import hook.HyperBackscreen.ui.util.openUrl
 import android.os.SystemClock
 import android.util.Log
 import hook.HyperBackscreen.BuildConfig
@@ -132,11 +131,5 @@ object UpdateChecker {
     }
 
     /** 用浏览器打开 APK 直链，交给浏览器自动下载。 */
-    fun openDownload(context: Context, info: UpdateInfo) {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(info.apkUrl))
-        try {
-            context.startActivity(intent)
-        } catch (_: RuntimeException) {
-        }
-    }
+    fun openDownload(context: Context, info: UpdateInfo): Boolean = openUrl(context, info.apkUrl)
 }

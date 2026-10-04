@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Host hooks resolve the panel icon and AI title by name from the installed module APK. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/panel_icon,@string/ai_rear_screen_title" />

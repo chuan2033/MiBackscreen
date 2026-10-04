@@ -56,6 +56,7 @@ import hook.HyperBackscreen.ui.about.DonatePage
 import hook.HyperBackscreen.ui.about.LicensePage
 import hook.HyperBackscreen.ui.components.BlurredBar
 import hook.HyperBackscreen.ui.components.FloatingBottomBar
+import hook.HyperBackscreen.ui.components.FunctionCountBadge
 import hook.HyperBackscreen.ui.components.LocalUiFeedback
 import top.yukonga.miuix.kmp.basic.SnackbarHost
 import hook.HyperBackscreen.ui.components.ScrollGlassIconButton
@@ -130,7 +131,8 @@ private val restartScopeItems = listOf(
     RestartScopeItem(R.string.restart_system, Constants.SYSTEM_PACKAGE),
     RestartScopeItem(R.string.restart_voice_assist, Constants.VOICE_ASSIST_PACKAGE),
     RestartScopeItem(R.string.restart_backscreen, Constants.TARGET_PACKAGE),
-    RestartScopeItem(R.string.restart_theme_manager, Constants.THEME_STORE_PACKAGE)
+    RestartScopeItem(R.string.restart_theme_manager, Constants.THEME_STORE_PACKAGE),
+    RestartScopeItem(R.string.restart_personal_assistant, Constants.PERSONAL_ASSISTANT_PACKAGE)
 )
 
 @Composable
@@ -142,6 +144,7 @@ internal fun HomeScreen(
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
     bottomBarBlur: Boolean,
+    showFunctionCount: Boolean,
     appLanguage: AppLanguage,
     checkUpdates: Boolean,
     enableAppCard: Boolean,
@@ -157,6 +160,7 @@ internal fun HomeScreen(
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
     onBottomBarBlurChange: (Boolean) -> Unit,
+    onShowFunctionCountChange: (Boolean) -> Unit,
     onAppLanguageChange: (AppLanguage) -> Unit,
     onCheckUpdatesChange: (Boolean) -> Unit,
     onEnableAppCardChange: (Boolean) -> Unit,
@@ -164,7 +168,7 @@ internal fun HomeScreen(
     onDisableDoubleTapWakeChange: (Boolean) -> Unit,
     onDoubleTapWakeDisabledPackagesChange: (String) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
-    onForceStopPackage: (String) -> Unit,
+    onRestartScopes: (List<String>) -> Unit,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     themeSettingsShortcut: Boolean,
@@ -172,6 +176,15 @@ internal fun HomeScreen(
     enablePickup: Boolean,
     onEnablePickupChange: (Boolean) -> Unit
 ) {
+    val enabledFunctionCount = countEnabledFunctions(
+        disableLongPress = disableLongPress,
+        removeWallpaperLimit = removeWallpaperLimit,
+        removeAppCardLimit = removeAppCardLimit,
+        fixRearScreenApply = fixRearScreenApply,
+        disableRearScreenCover = disableRearScreenCover,
+        disableDoubleTapWake = disableDoubleTapWake,
+        enablePickup = enablePickup,
+    )
     var selected by rememberSaveable { mutableStateOf(HomeNavigationPolicy.Tab.HOME) }
     val backStack = rememberNavBackStack<HomeRoute>(HomeRoute.Main)
     val homeListState = rememberLazyListState()
@@ -214,6 +227,7 @@ internal fun HomeScreen(
                         floatingNavBar = floatingNavBar,
                         liquidGlass = liquidGlass,
                         bottomBarBlur = bottomBarBlur,
+                        showFunctionCount = showFunctionCount,
                         appLanguage = appLanguage,
                         checkUpdates = checkUpdates,
                         enableAppCard = enableAppCard,
@@ -221,6 +235,7 @@ internal fun HomeScreen(
                         onFloatingNavBarChange = onFloatingNavBarChange,
                         onLiquidGlassChange = onLiquidGlassChange,
                         onBottomBarBlurChange = onBottomBarBlurChange,
+                        onShowFunctionCountChange = onShowFunctionCountChange,
                         onAppLanguageChange = onAppLanguageChange,
                         onCheckUpdatesChange = onCheckUpdatesChange,
                         onEnableAppCardChange = onEnableAppCardChange,
@@ -241,6 +256,7 @@ internal fun HomeScreen(
                         onBack = navigateBack
                     )
                     HomeRoute.Main -> MainContent(
+                        enabledFunctionCount = enabledFunctionCount,
                         selected = selected,
                         homeListState = homeListState,
                         functionListState = functionListState,
@@ -253,6 +269,7 @@ internal fun HomeScreen(
                         floatingNavBar = floatingNavBar,
                         liquidGlass = liquidGlass,
                         bottomBarBlur = bottomBarBlur,
+                        showFunctionCount = showFunctionCount,
                         appLanguage = appLanguage,
                         checkUpdates = checkUpdates,
                         disableRearScreenCover = disableRearScreenCover,
@@ -274,7 +291,7 @@ internal fun HomeScreen(
                         onAddDisabledAppsClick = { openDetail(HomeRoute.AppPicker) },
                         onLicenseClick = { openDetail(HomeRoute.License) },
                         onDonateClick = { openDetail(HomeRoute.Donate) },
-                        onForceStopPackage = onForceStopPackage,
+                        onRestartScopes = onRestartScopes,
                         themeMode = themeMode,
                         onThemeModeChange = onThemeModeChange,
                         themeSettingsShortcut = themeSettingsShortcut,
@@ -303,6 +320,7 @@ private fun SettingsPage(
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
     bottomBarBlur: Boolean,
+    showFunctionCount: Boolean,
     appLanguage: AppLanguage,
     checkUpdates: Boolean,
     enableAppCard: Boolean,
@@ -310,6 +328,7 @@ private fun SettingsPage(
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
     onBottomBarBlurChange: (Boolean) -> Unit,
+    onShowFunctionCountChange: (Boolean) -> Unit,
     onAppLanguageChange: (AppLanguage) -> Unit,
     onCheckUpdatesChange: (Boolean) -> Unit,
     onEnableAppCardChange: (Boolean) -> Unit,
@@ -367,6 +386,7 @@ private fun SettingsPage(
                         floatingNavBar = floatingNavBar,
                         liquidGlass = liquidGlass,
                         bottomBarBlur = bottomBarBlur,
+                        showFunctionCount = showFunctionCount,
                         appLanguage = appLanguage,
                         checkUpdates = checkUpdates,
                         enableAppCard = enableAppCard,
@@ -374,6 +394,7 @@ private fun SettingsPage(
                         onFloatingNavBarChange = onFloatingNavBarChange,
                         onLiquidGlassChange = onLiquidGlassChange,
                         onBottomBarBlurChange = onBottomBarBlurChange,
+                        onShowFunctionCountChange = onShowFunctionCountChange,
                         onAppLanguageChange = onAppLanguageChange,
                         onCheckUpdatesChange = onCheckUpdatesChange,
                         onEnableAppCardChange = onEnableAppCardChange,
@@ -531,6 +552,7 @@ private fun MainTabPage(
 
 @Composable
 private fun MainContent(
+    enabledFunctionCount: Int,
     selected: HomeNavigationPolicy.Tab,
     homeListState: LazyListState,
     functionListState: LazyListState,
@@ -543,6 +565,7 @@ private fun MainContent(
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
     bottomBarBlur: Boolean,
+    showFunctionCount: Boolean,
     appLanguage: AppLanguage,
     checkUpdates: Boolean,
     disableRearScreenCover: Boolean,
@@ -564,7 +587,7 @@ private fun MainContent(
     onAddDisabledAppsClick: () -> Unit,
     onLicenseClick: () -> Unit,
     onDonateClick: () -> Unit,
-    onForceStopPackage: (String) -> Unit,
+    onRestartScopes: (List<String>) -> Unit,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     themeSettingsShortcut: Boolean,
@@ -607,6 +630,9 @@ private fun MainContent(
     }
     // A click highlights its destination immediately; finger swipes follow the displayed page.
     val navigationIndex = pageRequest?.index ?: pagerState.currentPage
+    val functionBadge: (@Composable () -> Unit)? = if (showFunctionCount && enabledFunctionCount > 0) {
+        { FunctionCountBadge(enabledFunctionCount) }
+    } else null
     fun selectPage(index: Int) { pageRequest = TabPageRequest(index) }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -691,6 +717,7 @@ private fun MainContent(
                             onClick = { selectPage(navItems.indexOf(item)) },
                             icon = item.icon,
                             label = stringResource(item.labelRes),
+                            badge = if (item.tab == HomeNavigationPolicy.Tab.FUNCTION) functionBadge else null,
                             colors = NavigationBarDefaults.navigationBarItemColors(
                                 unselectedContentColor = MiuixTheme.colorScheme.onSurface,
                                 selectedContentColor = MiuixTheme.colorScheme.primary
@@ -713,7 +740,10 @@ private fun MainContent(
                         selectedIndex = navigationIndex,
                         onItemClick = ::selectPage,
                         backdrop = bottomBarBackdrop,
-                        isBlurActive = bottomBarBlur
+                        isBlurActive = bottomBarBlur,
+                        badge = { index ->
+                            if (navItems[index].tab == HomeNavigationPolicy.Tab.FUNCTION) functionBadge else null
+                        }
                     )
                 }
             }
@@ -754,6 +784,7 @@ private fun MainContent(
                                 onClick = { selectPage(navItems.indexOf(item)) },
                                 icon = item.icon,
                                 label = stringResource(item.labelRes),
+                                badge = if (item.tab == HomeNavigationPolicy.Tab.FUNCTION) functionBadge else null,
                                 colors = NavigationBarDefaults.navigationBarItemColors(
                                     unselectedContentColor = MiuixTheme.colorScheme.onSurface,
                                     selectedContentColor = MiuixTheme.colorScheme.primary
@@ -800,11 +831,9 @@ private fun MainContent(
                 modifier = Modifier.weight(1f).height(48.dp),
                 onClick = {
                     showRestartDialog = false
-                    restartScopeItems.forEach { item ->
-                        if (checkedItems[item.packageName] == true) {
-                            onForceStopPackage(item.packageName)
-                        }
-                    }
+                    val selected = restartScopeItems.filter { checkedItems[it.packageName] == true }
+                        .map { it.packageName }
+                    if (selected.isNotEmpty()) onRestartScopes(selected)
                     checkedItems.clear()
                 },
                 colors = ButtonDefaults.buttonColorsPrimary(),
