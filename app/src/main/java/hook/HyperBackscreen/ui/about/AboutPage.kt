@@ -13,6 +13,9 @@ import top.yukonga.miuix.kmp.squircle.squircleClip
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -31,16 +34,33 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 internal fun AboutPage(onLicenseClick: () -> Unit = {}) {
     AboutHeader()
 
+    SmallTitle(text = stringResource(R.string.about_developer_title), insideMargin = PaddingValues(16.dp, 8.dp))
     CardBlock(pressFeedbackType = PressFeedbackType.None) {
         AboutArrowPreference(
-            title = stringResource(R.string.about_developer_title),
-            summary = "AxlQ",
-            url = "https://github.com/chuan2033"
+            title = "Axl_Q",
+            summary = null,
+            url = "https://github.com/chuan2033",
+            avatar = R.drawable.avatar_axlq
         )
+    }
+
+    SmallTitle(text = stringResource(R.string.about_module_url_title), insideMargin = PaddingValues(16.dp, 8.dp))
+    CardBlock(pressFeedbackType = PressFeedbackType.None) {
         AboutArrowPreference(
-            title = stringResource(R.string.about_project_url_title),
-            summary = "MiBackscreen",
-            url = "https://github.com/chuan2033/MiBackscreen"
+            title = "MiBackscreen",
+            summary = null,
+            url = "https://github.com/chuan2033/MiBackscreen",
+            startAction = {
+                Image(
+                    painter = painterResource(R.drawable.ic_github),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    contentScale = ContentScale.Fit,
+                    colorFilter = ColorFilter.tint(
+                        if (MiuixTheme.colorScheme.surface.luminance() < 0.5f) Color.White else Color.Black
+                    )
+                )
+            }
         )
     }
 

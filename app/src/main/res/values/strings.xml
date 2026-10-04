@@ -102,7 +102,7 @@
 
     <!-- About Page -->
     <string name="about_developer_title">Developer</string>
-    <string name="about_project_url_title">Project URL</string>
+    <string name="about_module_url_title">Module URL</string>
     <string name="about_credits_title">Credits</string>
     <string name="about_miuix_summary">This project uses Miuix UI components</string>
     <string name="about_miuix_lib">miuix-kotlin-multiplatform (Apache-2.0)</string>

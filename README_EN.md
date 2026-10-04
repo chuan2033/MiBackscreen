@@ -26,7 +26,7 @@ Open the quick panel through the stock MiBackscreen card; swipe up from its bott
 ## Requirements and installation
 
 - Minimum Android API 36 and an LSPosed / compatible framework supporting Modern Xposed. Module metadata declares minimum API 101 and target API 102; the code depends on API 102.
-- Historical device tests used Xiaomi 17 Pro Max (popsicle / 2509FPN0BC), Android 17 / API 37, HyperOS 4, and a 976 × 596 rear display. See the [device record](docs/validation-2026-09-27.md) for tested scenarios and host versions. These results do not establish full compatibility across devices or firmware.
+- Historical device tests used Xiaomi 17 Pro Max (popsicle / 2509FPN0BC), Android 17 / API 37, HyperOS 4, and a 976 × 596 rear display. These results do not establish full compatibility across devices or firmware.
 - Hooks depend on host classes and method signatures; recheck after system or host updates.
 - Theme Manager includes AI rear-screen resource and face-enrollment-count compatibility paths. Failed face queries return unknown. The complete pet-wallpaper application flow still needs device validation.
 
@@ -65,7 +65,7 @@ Without cached dependencies or the wrapper distribution, remove `--offline` and 
 
 Release enables R8 and resource shrinking. Signed output is `app/build/outputs/apk/release/app-release.apk`; without signing it is `app-release-unsigned.apk`. Signing reads `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_PASSWORD` and optional `RELEASE_KEY_ALIAS` (default: `hyperbackscreen`) from `local.properties` or matching environment variables. Relative key paths resolve from `app/`; absent an explicit path, the build checks `app/release-key.jks`. An explicitly configured key with incomplete settings fails the build. Available signing credentials also sign Debug without enabling minification; otherwise Debug uses its default certificate. Updating an installed app requires the same signing certificate.
 
-See the [engineering guide](交接文档.md) for architecture, configuration keys and maintenance constraints, and the [regression matrix](docs/DEVICE_TEST_MATRIX.md) for validation scope. Compilation does not prove host hooks work.
+After a successful build, validate hook behavior on the target device and host versions.
 
 ## License and acknowledgements
 

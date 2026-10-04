@@ -26,7 +26,7 @@
 ## 环境与安装
 
 - 最低 Android API 36；使用支持 Modern Xposed 的 LSPosed / 兼容框架。模块元数据声明最低 API 101、目标 API 102，代码依赖 API 102。
-- 仓库历史实测设备为小米 17 Pro Max（popsicle / 2509FPN0BC），Android 17 / API 37、HyperOS 4，副屏 976 × 596。已测试场景及宿主版本见[设备验证记录](docs/validation-2026-09-27.md)，不代表跨设备或跨固件完整兼容。
+- 仓库历史实测设备为小米 17 Pro Max（popsicle / 2509FPN0BC），Android 17 / API 37、HyperOS 4，副屏 976 × 596。实测结果不代表跨设备或跨固件完整兼容。
 - Hook 依赖宿主类和方法签名。系统、背屏中心、主题商店或小爱更新后，需要重新核验。
 - 主题商店含 AI 背屏资源与人脸录入数量兼容逻辑；人脸读取失败按未知处理。萌宠实际应用全链路仍待真机验证。
 
@@ -65,7 +65,7 @@
 
 Release 开启 R8 和资源收缩；配置签名后输出 `app/build/outputs/apk/release/app-release.apk`，未配置则为 `app-release-unsigned.apk`。签名从 `local.properties` 或同名环境变量读取 `RELEASE_STORE_FILE`、`RELEASE_STORE_PASSWORD`、`RELEASE_KEY_PASSWORD`，可选 `RELEASE_KEY_ALIAS`（默认 `hyperbackscreen`）。相对密钥路径基于 `app/`；未指定文件时检查 `app/release-key.jks`。显式指定密钥文件但配置不完整时构建报错。签名可用时 Debug 也使用该密钥，但保持不混淆；否则使用默认 Debug 签名。覆盖安装须与已安装版本证书一致。
 
-开发链路、配置键及维护约束见[工程说明](交接文档.md)，验证范围见[回归矩阵](docs/DEVICE_TEST_MATRIX.md)。编译通过不等于真机 Hook 正常。
+编译通过后仍需在目标设备和宿主版本上验证 Hook 行为。
 
 ## 许可证与致谢
 

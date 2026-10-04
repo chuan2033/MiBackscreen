@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -59,7 +58,6 @@ import hook.HyperBackscreen.ui.components.FloatingBottomBar
 import hook.HyperBackscreen.ui.components.FunctionCountBadge
 import hook.HyperBackscreen.ui.components.LocalUiFeedback
 import top.yukonga.miuix.kmp.basic.SnackbarHost
-import hook.HyperBackscreen.ui.components.ScrollGlassIconButton
 import hook.HyperBackscreen.ui.animation.crossAxisPagerGestures
 import hook.HyperBackscreen.ui.animation.CrossAxisPagerNestedScrollConnection
 import hook.HyperBackscreen.ui.animation.springToPage
@@ -446,16 +444,6 @@ private fun MainTabPage(
         drawRect(surfaceColor)
         drawContent()
     }
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val actionCovered by remember(listState, scrollBehavior, density) {
-        derivedStateOf {
-            // Short pages can collapse the large title without moving the list itself.
-            val threshold = with(density) { 8.dp.toPx() }
-            scrollBehavior.state.heightOffset < -threshold ||
-                listState.firstVisibleItemIndex > 0 ||
-                listState.firstVisibleItemScrollOffset > threshold
-        }
-    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -468,24 +456,26 @@ private fun MainTabPage(
                     scrollBehavior = scrollBehavior,
                     actions = {
                         val topAction = HomeNavigationPolicy.topActionFor(tab)
-                        ScrollGlassIconButton(
-                            image = when (topAction) {
-                                HomeNavigationPolicy.TopAction.RESTART -> MiuixIcons.Refresh
-                                HomeNavigationPolicy.TopAction.SETTINGS -> MiuixIcons.Settings
-                            },
-                            description = stringResource(when (topAction) {
-                                HomeNavigationPolicy.TopAction.RESTART -> R.string.restart_scope
-                                HomeNavigationPolicy.TopAction.SETTINGS -> R.string.settings_title
-                            }),
-                            backdrop = backdrop,
-                            covered = actionCovered,
+                        IconButton(
                             onClick = {
                                 when (topAction) {
                                     HomeNavigationPolicy.TopAction.RESTART -> onRestartClick()
                                     HomeNavigationPolicy.TopAction.SETTINGS -> onSettingsClick()
                                 }
                             }
-                        )
+                        ) {
+                            Icon(
+                                imageVector = when (topAction) {
+                                    HomeNavigationPolicy.TopAction.RESTART -> MiuixIcons.Refresh
+                                    HomeNavigationPolicy.TopAction.SETTINGS -> MiuixIcons.Settings
+                                },
+                                contentDescription = stringResource(when (topAction) {
+                                    HomeNavigationPolicy.TopAction.RESTART -> R.string.restart_scope
+                                    HomeNavigationPolicy.TopAction.SETTINGS -> R.string.settings_title
+                                }),
+                                tint = MiuixTheme.colorScheme.onSurface
+                            )
+                        }
                     }
                 )
             }

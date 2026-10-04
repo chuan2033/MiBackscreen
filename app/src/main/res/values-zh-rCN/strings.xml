@@ -99,7 +99,7 @@
 
     <!-- About Page -->
     <string name="about_developer_title">开发者</string>
-    <string name="about_project_url_title">项目地址</string>
+    <string name="about_module_url_title">模块地址</string>
     <string name="about_credits_title">引用</string>
     <string name="about_miuix_summary">本项目使用 Miuix UI 组件构建</string>
     <string name="about_miuix_lib">miuix-kotlin-multiplatform (Apache-2.0)</string>

@@ -1,7 +1,13 @@
 package hook.HyperBackscreen.ui.components
 
 import android.widget.Toast
-
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -91,6 +97,8 @@ internal fun AboutArrowPreference(
     summary: String?,
     modifier: Modifier = Modifier,
     url: String? = null,
+    @DrawableRes avatar: Int? = null,
+    startAction: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -103,10 +111,25 @@ internal fun AboutArrowPreference(
             else Toast.makeText(context, failedMessage, Toast.LENGTH_LONG).show()
         }
     }
+
+    val avatarPainter = avatar?.let { painterResource(it) }
+
     ArrowPreference(
         modifier = modifier,
         title = title,
         summary = summary,
+        startAction = startAction ?: if (avatarPainter != null) {
+            {
+                Image(
+                    painter = avatarPainter,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(HomeUiTokens.AboutAvatarSize)
+                        .clip(CircleShape)
+                )
+            }
+        } else null,
         onClick = {
             if (onClick != null) {
                 onClick()

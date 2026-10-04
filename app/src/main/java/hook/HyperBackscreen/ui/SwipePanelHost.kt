@@ -713,7 +713,20 @@ object SwipePanelHost {
         val strings = PanelStrings(activity, allowModuleResources = !restartRequired)
         val safeLeft = resolveSafeLeft(activity)
 
-        val root = FrameLayout(activity).apply {
+        val root = object : FrameLayout(activity) {
+            override fun onVisibilityChanged(changedView: View, visibility: Int) {
+                super.onVisibilityChanged(changedView, visibility)
+                if (visibility == View.VISIBLE || container !== this) return
+
+                // 宿主收起应用卡列表时只隐藏父容器；在可见性分发结束后释放面板。
+                post {
+                    if (container === this) {
+                        Log.d(TAG, "Panel released after host became hidden")
+                        removePanel(this)
+                    }
+                }
+            }
+        }.apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
