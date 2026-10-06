@@ -62,7 +62,6 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.preference.CheckboxLocation
 import top.yukonga.miuix.kmp.preference.CheckboxPreference
-import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
@@ -76,8 +75,6 @@ private data class InstalledAppItem(
 
 @Composable
 internal fun AppPickerPage(
-    disableDoubleTapWake: Boolean,
-    onDisableDoubleTapWakeChange: (Boolean) -> Unit,
     selectedPackages: String,
     onSelectedPackagesChange: (String) -> Unit,
     onBack: () -> Unit
@@ -164,17 +161,7 @@ internal fun AppPickerPage(
                     top = paddingValues.calculateTopPadding()
                 )
             ) {
-                item(key = "double_tap_wake_switch") {
-                    CardBlock(pressFeedbackType = PressFeedbackType.None) {
-                        SwitchPreference(
-                            checked = disableDoubleTapWake,
-                            onCheckedChange = onDisableDoubleTapWakeChange,
-                            title = stringResource(R.string.app_picker_disable_double_tap_wake_title)
-                        )
-                    }
-                }
                 item {
-                    Spacer(Modifier.height(12.dp))
                     InputField(
                         query = query,
                         onQueryChange = { query = it },

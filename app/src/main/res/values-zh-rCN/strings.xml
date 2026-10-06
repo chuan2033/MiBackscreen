@@ -1,5 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="home_battery_ring_title">背屏电量显示</string>
+    <string name="function_group_system">系统框架</string>
+    <string name="function_group_subscreen">背屏</string>
+    <string name="function_group_theme">主题壁纸</string>
+    <string name="function_group_voice">超级小爱</string>
+    <string name="function_battery_color_title">背屏电量颜色自定义</string>
+    <string name="function_battery_color_summary">未充电、充电中、低电量可分别设置；默认跟随系统</string>
+    <string name="battery_color_state_idle">未充电</string>
+    <string name="battery_color_state_charging">充电中</string>
+    <string name="battery_color_state_low">低电量</string>
+    <string name="battery_color_follow_system">跟随系统</string>
+    <string name="battery_color_state_title">电量状态</string>
+    <string name="battery_color_rgba_label">RGBA</string>
+    <string name="battery_color_hex_label">HEX</string>
+    <string name="battery_color_reset_system">恢复系统默认</string>
+    <string name="battery_color_unsupported_model">当前机型背屏尺寸与校准参数不一致，暂不支持背屏电量显示</string>
+    <string name="battery_color_invalid_value">颜色格式无效，请输入 #RRGGBB 或 #AARRGGBB</string>
+    <string name="home_root_permission_required">请授权本应用Root权限，部分功能依赖Root权限</string>
+    <string name="home_enable_18_pro_features_title">开启18pro系列新背屏功能</string>
     <string name="config_show_function_count_title">显示功能数量</string>
     <string name="config_show_function_count_summary">在底部功能标签上显示已开启的功能数量</string>
     <plurals name="enabled_function_count">
@@ -39,7 +58,7 @@
     <string name="log_share_title">分享日志</string>
     <string name="home_disable_long_press_title">禁用背屏长按切换壁纸</string>
     <string name="home_remove_wallpaper_limit_title">移除背屏壁纸数量限制</string>
-    <string name="home_remove_app_card_limit_title">移除背屏应用卡数量限制</string>
+    <string name="home_remove_app_card_limit_title">移除应用卡数量限制</string>
     <string name="home_fix_apply_title">修复背屏壁纸应用失败</string>
     <string name="home_fix_apply_summary">需搭配主题破解模块使用</string>
     <string name="home_status_activated">已激活</string>
@@ -85,14 +104,13 @@
     <string name="update_cancel">取消</string>
     <string name="config_disable_rear_cover_title">禁用背屏保护提示</string>
     <string name="config_disable_rear_cover_summary">屏蔽背屏保护弹窗提醒</string>
-    <string name="config_disable_double_tap_wake_title">禁用背屏双击唤醒</string>
-    <string name="app_picker_disable_double_tap_wake_title">指定App在前台时禁用背屏的双击唤醒</string>
+    <string name="config_disable_double_tap_wake_title">双击亮屏黑名单</string>
     <plurals name="config_disabled_apps_count">
         <item quantity="other">已添加 %1$d 个应用</item>
     </plurals>
     <string name="config_enable_pickup_title">取件码增强</string>
     <string name="config_enable_pickup_summary">识别到多个取件码时，可以进行筛选</string>
-    <string name="app_picker_title">选择应用</string>
+    <string name="app_picker_title">双击亮屏黑名单</string>
     <string name="app_picker_search_hint">搜索应用</string>
     <string name="app_picker_loading">正在读取应用...</string>
     <string name="app_picker_empty">没有匹配的应用</string>
@@ -131,12 +149,12 @@
     <!-- Restart Scope Dialog -->
     <string name="restart_title">重启作用域</string>
     <string name="restart_scope">重启作用域</string>
-    <string name="restart_system">系统</string>
+    <string name="restart_system">系统框架</string>
     <string name="restart_device_success">重启请求已发送</string>
     <string name="restart_device_failed">重启手机失败（可能未获取 root 权限）</string>
-    <string name="restart_voice_assist">小爱</string>
+    <string name="restart_voice_assist">超级小爱</string>
     <string name="restart_backscreen">背屏</string>
-    <string name="restart_theme_manager">主题商店</string>
+    <string name="restart_theme_manager">主题壁纸</string>
     <string name="restart_personal_assistant">智能助理</string>
     <string name="restart_success">停止指令已发送，请重新打开相关应用</string>
     <string name="restart_failed">停止应用失败（可能未获取 root 权限）</string>

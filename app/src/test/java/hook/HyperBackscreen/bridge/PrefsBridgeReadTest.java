@@ -6,6 +6,10 @@ import org.junit.Test;
 import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
+
+import hook.HyperBackscreen.common.Constants;
 
 import static org.junit.Assert.*;
 
@@ -13,6 +17,54 @@ public class PrefsBridgeReadTest {
     private static final String KEY = "disable_long_press_edit";
     private static final String PACKAGES = "double_tap_wake_disabled_packages";
     private static final String PENDING = "__pending_ui__";
+
+    @Test public void eighteenProDefaultsOnAndOfflineDisableSurvivesStaleRemote() {
+        MemoryPrefs local = new MemoryPrefs();
+        MemoryPrefs remote = new MemoryPrefs();
+        String key = Constants.KEY_ENABLE_18_PRO_FEATURES;
+        assertTrue(PrefsBridge.readForUi(local.prefs, null, key, PrefsBridge.DEFAULT_ENABLE_18_PRO_FEATURES));
+        assertTrue(PrefsBridge.writeEnable18ProFeatures(local.prefs, null, false));
+        remote.values.put(key, true);
+        assertFalse(PrefsBridge.readForUi(local.prefs, remote.prefs, key, true));
+        assertEquals(false, local.values.get(PENDING + key));
+        assertEquals(true, remote.values.get(key));
+    }
+
+    @Test public void eighteenProRemoteCommitFailureKeepsPreviousConfiguration() {
+        MemoryPrefs local = new MemoryPrefs();
+        MemoryPrefs remote = new MemoryPrefs();
+        String key = Constants.KEY_ENABLE_18_PRO_FEATURES;
+        local.values.put(key, true);
+        remote.values.put(key, true);
+        remote.commitSucceeds = false;
+        assertFalse(PrefsBridge.writeEnable18ProFeatures(local.prefs, remote.prefs, false));
+        assertEquals(true, local.values.get(key));
+        assertEquals(true, remote.values.get(key));
+        assertFalse(local.values.containsKey(PENDING + key));
+    }
+
+    @Test public void eighteenProCommittedWriteClearsPendingAndPreservesIndependentSettings() {
+        MemoryPrefs local = new MemoryPrefs();
+        MemoryPrefs remote = new MemoryPrefs();
+        String key = Constants.KEY_ENABLE_18_PRO_FEATURES;
+        local.values.put(PENDING + key, true);
+        local.values.put(Constants.KEY_ENABLE_PICKUP, true);
+        remote.values.put(Constants.KEY_ENABLE_PICKUP, true);
+        for (boolean enabled : new boolean[]{false, true}) {
+            assertTrue(PrefsBridge.writeEnable18ProFeatures(local.prefs, remote.prefs, enabled));
+            assertEquals(enabled, remote.values.get(key));
+            assertEquals(enabled, local.values.get(key));
+            assertFalse(local.values.containsKey(PENDING + key));
+            assertEquals(true, local.values.get(Constants.KEY_ENABLE_PICKUP));
+            assertEquals(true, remote.values.get(Constants.KEY_ENABLE_PICKUP));
+        }
+    }
+
+    @Test public void eighteenProOfflineDiskFailureIsReported() {
+        MemoryPrefs local = new MemoryPrefs();
+        local.commitSucceeds = false;
+        assertFalse(PrefsBridge.writeEnable18ProFeatures(local.prefs, null, false));
+    }
 
     @Test public void pendingFalseSurvivesStaleRemoteAndRepeatedReads() {
         MemoryPrefs local = new MemoryPrefs();
@@ -81,6 +133,7 @@ public class PrefsBridgeReadTest {
 
     /** Only the read/cache operations under test; unexpected API calls fail the test. */
     private static final class MemoryPrefs {
+        boolean commitSucceeds = true;
         final Map<String, Object> values = new HashMap<>();
         final SharedPreferences prefs = (SharedPreferences) Proxy.newProxyInstance(
                 SharedPreferences.class.getClassLoader(), new Class<?>[]{SharedPreferences.class},
@@ -93,11 +146,19 @@ public class PrefsBridgeReadTest {
 
         private SharedPreferences.Editor editor() {
             Map<String, Object> staged = new HashMap<>();
+            Set<String> removed = new HashSet<>();
             return (SharedPreferences.Editor) Proxy.newProxyInstance(
                     SharedPreferences.Editor.class.getClassLoader(), new Class<?>[]{SharedPreferences.Editor.class},
                     (proxy, method, args) -> switch (method.getName()) {
                         case "putBoolean", "putString" -> { staged.put((String) args[0], args[1]); yield proxy; }
-                        case "apply" -> { values.putAll(staged); yield null; }
+                        case "remove" -> { removed.add((String) args[0]); yield proxy; }
+                        case "apply" -> {
+                            removed.forEach(values::remove); values.putAll(staged); yield null;
+                        }
+                        case "commit" -> {
+                            if (commitSucceeds) { removed.forEach(values::remove); values.putAll(staged); }
+                            yield commitSucceeds;
+                        }
                         default -> throw new AssertionError(method.getName());
                     });
         }

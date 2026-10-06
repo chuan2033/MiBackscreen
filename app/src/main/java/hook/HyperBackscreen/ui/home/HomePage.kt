@@ -1,8 +1,12 @@
 package hook.HyperBackscreen.ui.home
 
 import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -11,6 +15,13 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlin.math.roundToInt
 import androidx.lifecycle.viewmodel.compose.viewModel
 import hook.HyperBackscreen.ui.about.LogExportState
@@ -32,6 +43,12 @@ import hook.HyperBackscreen.ui.util.currentDeviceName
 import hook.HyperBackscreen.ui.util.currentHyperOSVersion
 import hook.HyperBackscreen.ui.util.currentPackageVersion
 import hook.HyperBackscreen.ui.util.currentSystemVersion
+import hook.HyperBackscreen.ui.util.RootAccess
+import hook.HyperBackscreen.ui.theme.HomeUiTokens
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
@@ -42,6 +59,13 @@ internal fun HomePage(
     onDonateClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var rootGranted by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            rootGranted = runInterruptible(Dispatchers.IO) { RootAccess.isGranted() }
+        }
+    }
     val operation = LocalLogExportOperation.current
     val factory = remember(context.applicationContext, operation) { LogExportViewModel.Factory(context, operation) }
     val exporter: LogExportViewModel = viewModel(factory = factory)
@@ -69,6 +93,20 @@ internal fun HomePage(
         } catch (_: Exception) {
             popupShareFailed = true
         }
+    }
+
+    if (rootGranted == false) {
+        Text(
+            text = stringResource(R.string.home_root_permission_required),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp)
+                .background(MiuixTheme.colorScheme.error, RoundedCornerShape(HomeUiTokens.CardCornerRadius))
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .semantics { liveRegion = LiveRegionMode.Polite },
+            color = MiuixTheme.colorScheme.onError,
+            style = MiuixTheme.textStyles.body2
+        )
     }
 
     HomeStatusCard(

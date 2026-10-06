@@ -62,6 +62,7 @@ import hook.HyperBackscreen.common.BackgroundTasks;
 import hook.HyperBackscreen.common.RearScreenWakeMatcher;
 import hook.HyperBackscreen.common.ThemeResourceAccess;
 import hook.HyperBackscreen.ui.SwipePanelHost;
+import hook.HyperBackscreen.ui.battery.BatteryRingHost;
 import io.github.libxposed.api.XposedModule;
 
 public class ModuleMain extends XposedModule {
@@ -208,6 +209,7 @@ public class ModuleMain extends XposedModule {
                     installThemeNetworkDeviceSpoofHook(param.getClassLoader());
                     installThemeLegacyDownloadHook(param.getClassLoader());
                     installRearScreenApplyFixHook(param.getClassLoader());
+                    installAiCompanionReuseApplyHook(param.getClassLoader());
                     installThemeFaceEnrollmentHook(param.getClassLoader());
                     installThemeSettingsSelectionSyncHook(param.getClassLoader());
                     installThemeAiAppIndexSyncHooks(param.getClassLoader());
@@ -243,6 +245,7 @@ public class ModuleMain extends XposedModule {
                 chain -> {
                     Object result = chain.proceed();
                     if (result instanceof JSONObject environmentSignal) {
+                        if (!PrefsBridge.shouldEnable18ProFeatures(this)) return result;
                         environmentSignal.put("phoneDevice",
                                 Constants.PERSONAL_ASSISTANT_REAR_DEVICE);
                         environmentSignal.put("phoneModel",
@@ -528,7 +531,8 @@ public class ModuleMain extends XposedModule {
                             + Constants.SUBSCREEN_GUIDE_HIDDEN_METHOD,
                     chain -> {
                         Object key = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
-                        if (Constants.SUBSCREEN_APP_CARD_GUIDE_KEY.equals(key)) {
+                        if (Constants.SUBSCREEN_APP_CARD_GUIDE_KEY.equals(key)
+                                && PrefsBridge.shouldEnable18ProFeatures(this)) {
                             return false;
                         }
                         return chain.proceed();
@@ -699,9 +703,16 @@ public class ModuleMain extends XposedModule {
             hookMethodIfPresent(findDeclaredMethod(launcherClass, lifecycle),
                     Constants.SUBSCREEN_LAUNCHER_ACTIVITY_CLASS + "#" + lifecycle, chain -> {
                         SwipePanelHost.release((Activity) chain.getThisObject());
+                        BatteryRingHost.release((Activity) chain.getThisObject());
                         return chain.proceed();
                     });
         }
+        hookMethodIfPresent(findDeclaredMethod(launcherClass, "onResume"),
+                Constants.SUBSCREEN_LAUNCHER_ACTIVITY_CLASS + "#onResume", chain -> {
+                    Object result = chain.proceed();
+                    BatteryRingHost.show((Activity) chain.getThisObject(), this);
+                    return result;
+                });
         hookMethodIfPresent(
                 findDeclaredMethod(launcherClass, "dispatchTouchEvent", MotionEvent.class),
                 Constants.SUBSCREEN_LAUNCHER_ACTIVITY_CLASS + "#dispatchTouchEvent",
@@ -738,7 +749,8 @@ public class ModuleMain extends XposedModule {
                 findDeclaredMethod(Settings.Secure.class, "getInt",
                         ContentResolver.class, String.class, int.class),
                 "Settings.Secure#getInt(ContentResolver,String,int)",
-                chain -> AppWidgetFeatureGate.isSubscreenAppWidgetSecureKey(
+                chain -> PrefsBridge.shouldEnable18ProFeatures(this)
+                        && AppWidgetFeatureGate.isSubscreenAppWidgetSecureKey(
                         chain.getArgs().size() > 1 ? chain.getArgs().get(1) : null)
                         ? 1
                         : chain.proceed()
@@ -747,7 +759,8 @@ public class ModuleMain extends XposedModule {
                 findDeclaredMethod(Settings.Secure.class, "getInt",
                         ContentResolver.class, String.class),
                 "Settings.Secure#getInt(ContentResolver,String)",
-                chain -> AppWidgetFeatureGate.isSubscreenAppWidgetSecureKey(
+                chain -> PrefsBridge.shouldEnable18ProFeatures(this)
+                        && AppWidgetFeatureGate.isSubscreenAppWidgetSecureKey(
                         chain.getArgs().size() > 1 ? chain.getArgs().get(1) : null)
                         ? 1
                         : chain.proceed()
@@ -775,6 +788,7 @@ public class ModuleMain extends XposedModule {
                 Constants.SUBSCREEN_LAUNCHER_PANEL_GESTURE_CLASS + "#"
                         + Constants.SUBSCREEN_LAUNCHER_PANEL_GESTURE_METHOD,
                 chain -> {
+                    if (!PrefsBridge.shouldEnable18ProFeatures(this)) return chain.proceed();
                     Object event = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
                     if (event instanceof MotionEvent
                             && SwipePanelHost.handleLauncherGesture((MotionEvent) event)) {
@@ -1071,30 +1085,13 @@ public class ModuleMain extends XposedModule {
     }
 
     private void installThemeDeviceIdentityHooks(@NonNull ClassLoader classLoader) {
+        // 只保留 isSupportRearScreen 标志。device / version / model 不在 DeviceUtils 层全局改写：
+        // 那会让所有主题商店请求都声称自己是 18 Pro Max，普通背屏资源详情直接 404。
+        // 需要伪装的请求由 installThemeNetworkDeviceSpoofHook 按路径与 request_flag 精确注入。
         hookBooleanTrueIfPresent(
                 classLoader,
                 Constants.THEME_DEVICE_UTILS_CLASS,
                 "a");
-        hookStringReturnIfPresent(
-                classLoader,
-                Constants.THEME_DEVICE_UTILS_CLASS,
-                "y",
-                Constants.THEME_REAR_DEVICE);
-        hookStringReturnIfPresent(
-                classLoader,
-                Constants.THEME_DEVICE_UTILS_CLASS,
-                "cdj",
-                Constants.THEME_REAR_MODEL);
-        hookStringReturnIfPresent(
-                classLoader,
-                Constants.THEME_DEVICE_UTILS_CLASS,
-                "z",
-                Constants.THEME_REAR_VERSION);
-        hookStringReturnIfPresent(
-                classLoader,
-                Constants.THEME_ONLINE_SERVICE_CLASS,
-                "fnq8",
-                Constants.THEME_REAR_VERSION);
     }
 
     private void installThemeNetworkDeviceSpoofHook(@NonNull ClassLoader classLoader) {
@@ -1115,6 +1112,7 @@ public class ModuleMain extends XposedModule {
                 Constants.THEME_PARAM_INTERCEPTOR_CLASS + "#"
                         + Constants.THEME_NETWORK_REWRITE_METHOD,
                 chain -> {
+                    if (!PrefsBridge.shouldEnable18ProFeatures(this)) return chain.proceed();
                     Object request = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
                     Object params = chain.getArgs().size() > 1 ? chain.getArgs().get(1) : null;
                     if (shouldSpoofThemeAiAppRequest(request) && params instanceof Map<?, ?> rawMap) {
@@ -1133,11 +1131,25 @@ public class ModuleMain extends XposedModule {
     }
 
     private boolean shouldSpoofThemeAiAppRequest(@Nullable Object request) {
-        Object url = callMethodQuietly(request, "cdj");
-        String raw = String.valueOf(url);
-        return raw.contains(Constants.THEME_AI_APP_PAGE_PATH)
-                || raw.contains(Constants.THEME_AI_APP_SUBJECT_PATH)
-                || raw.contains(Constants.THEME_AI_APP_DETAIL_PATH);
+        if (request == null) {
+            return false;
+        }
+        String raw = asString(callMethodQuietly(request, "cdj"));
+        if (isEmpty(raw)) {
+            return false;
+        }
+        if (raw.contains(Constants.THEME_AI_APP_PAGE_PATH)
+                || raw.contains(Constants.THEME_AI_APP_SUBJECT_PATH)) {
+            return true;
+        }
+        // /native/page/v3/theme/{id} 是 AI 应用详情与普通背屏资源详情共用的接口，
+        // 只有 request_flag 为 1（AiAppPageApi）时才伪装；普通详情为 31，要放行真实机型参数。
+        if (raw.contains(Constants.THEME_AI_APP_DETAIL_PATH)) {
+            String flag = asString(callMethodQuietly(
+                    request, "s", Constants.THEME_AI_APP_REQUEST_FLAG_HEADER));
+            return Constants.THEME_AI_APP_REQUEST_FLAG_VALUE.equals(flag);
+        }
+        return false;
     }
 
     private void installThemeLegacyDownloadHook(@NonNull ClassLoader classLoader) {
@@ -1153,6 +1165,7 @@ public class ModuleMain extends XposedModule {
                 new Class[]{requestUrlClass},
                 Constants.THEME_NETWORK_HELPER_CLASS + "#f7l8",
                 chain -> {
+                    if (!PrefsBridge.shouldEnable18ProFeatures(this)) return chain.proceed();
                     Object requestUrl = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
                     if (isThemeRearDownloadRequest(requestUrl)) {
                         addThemeRearDownloadParams(requestUrl);
@@ -1162,9 +1175,12 @@ public class ModuleMain extends XposedModule {
                     }
                     Object result = chain.proceed();
                     if (isThemeRearDownloadRequest(requestUrl)) {
+                        String body = result instanceof String ? (String) result : null;
                         log(Log.DEBUG, Constants.LOG_TAG,
                                 "Theme AI app download response length="
-                                        + (result instanceof String ? ((String) result).length() : -1));
+                                        + (body == null ? -1 : body.length())
+                                        + ", body=" + (body == null ? "null"
+                                                : body.substring(0, Math.min(body.length(), 600))));
                     }
                     return result;
                 }
@@ -1176,11 +1192,38 @@ public class ModuleMain extends XposedModule {
         return String.valueOf(baseUrl).contains(Constants.THEME_DOWNLOAD_PATH);
     }
 
+    /**
+     * 下载地址接口按 device 决定资源可用性：真机会返回 BUSINESS_LOGIC_ERROR，客户端上报 300001。
+     * 宿主的 device 在 baseUrl 的查询串里，而 addParameter 只写参数表，最终 URL 会带两个 device，
+     * 服务端取到前一个真机值。这里直接改写 baseUrl 里的 device。
+     */
     private void addThemeRearDownloadParams(@Nullable Object requestUrl) {
-        callMethodQuietly(requestUrl, "addParameter", "device", Constants.THEME_REAR_DEVICE);
-        callMethodQuietly(requestUrl, "addParameter", "model", Constants.THEME_REAR_MODEL);
-        callMethodQuietly(requestUrl, "addParameter", "version", Constants.THEME_REAR_VERSION);
+        String baseUrl = asString(callMethodQuietly(requestUrl, "getBaseUrl"));
+        if (!isEmpty(baseUrl)) {
+            String rewritten = rewriteUrlParameter(
+                    baseUrl, "device", Constants.THEME_REAR_DEVICE);
+            if (!rewritten.equals(baseUrl)) {
+                callMethodQuietly(requestUrl, "setBaseUrl", rewritten);
+            }
+        }
+        Object existing = callMethodQuietly(
+                requestUrl, "getParameter", "isSupportRearScreen");
+        if (existing != null && "true".equalsIgnoreCase(String.valueOf(existing))) {
+            return;
+        }
         callMethodQuietly(requestUrl, "addParameter", "isSupportRearScreen", "true");
+    }
+
+    @NonNull
+    private static String rewriteUrlParameter(
+            @NonNull String url, @NonNull String key, @NonNull String value) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("([?&])" + key + "=[^&#]*")
+                .matcher(url);
+        if (matcher.find()) {
+            return matcher.replaceFirst("$1" + key + "=" + value);
+        }
+        return url + (url.contains("?") ? "&" : "?") + key + "=" + value;
     }
 
     @NonNull
@@ -1258,6 +1301,210 @@ public class ModuleMain extends XposedModule {
         );
     }
 
+    /**
+     * 背屏 AI 陪伴壁纸的重复应用。
+     *
+     * 详情页入口以 {@code isUpdate = false} 进入应用流程，宿主只在该标志为 true 时按
+     * (resId, applyId) 命中已有项并替换，否则按新 applyId 新增一行，「妙享背屏」里于是出现
+     * 多条同 resId 的记录。这里在 AI 陪伴场景把 applyId 对齐到已有项并改走替换分支；
+     * 普通壁纸保持宿主原行为，仍允许同一 resId 存在多个不同编辑版本。
+     */
+    private void installAiCompanionReuseApplyHook(@NonNull ClassLoader classLoader) {
+        Class<?> companionClass = findClass(
+                Constants.THEME_REAR_RES_OPERATION_COMPANION_CLASS, classLoader);
+        Class<?> itemClass = findClass(Constants.THEME_REAR_LIST_ITEM_CLASS, classLoader);
+        if (companionClass == null || itemClass == null) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "AI companion apply reuse target missing: "
+                            + Constants.THEME_REAR_RES_OPERATION_COMPANION_CLASS);
+            return;
+        }
+
+        Method applyEntry = findAiCompanionApplyEntry(companionClass, itemClass);
+        if (applyEntry == null) {
+            log(Log.WARN, Constants.LOG_TAG, "AI companion apply entry not found");
+            return;
+        }
+
+        hookMethodIfPresent(
+                applyEntry,
+                Constants.THEME_REAR_RES_OPERATION_COMPANION_CLASS + "#" + applyEntry.getName(),
+                chain -> {
+                    if (!PrefsBridge.shouldFixRearScreenApply(this)) {
+                        return chain.proceed();
+                    }
+                    List<Object> args = chain.getArgs();
+                    if (args.size() < 2) {
+                        return chain.proceed();
+                    }
+                    Object isUpdate = args.get(0);
+                    Object bean = args.get(1);
+                    if (!(isUpdate instanceof Boolean) || Boolean.TRUE.equals(isUpdate)) {
+                        return chain.proceed();
+                    }
+                    if (bean == null || !isAiCompanionItem(bean)) {
+                        return chain.proceed();
+                    }
+
+                    String currentApplyId = asString(callMethodQuietly(bean, "getApplyId"));
+                    String reusableApplyId = findReusedAiCompanionApplyId(bean, classLoader);
+                    if (reusableApplyId == null || reusableApplyId.equals(currentApplyId)) {
+                        return chain.proceed();
+                    }
+                    if (!alignAiCompanionApplyId(bean, currentApplyId, reusableApplyId)) {
+                        return chain.proceed();
+                    }
+
+                    List<Object> rewritten = new ArrayList<>(args);
+                    rewritten.set(0, Boolean.TRUE);
+                    log(Log.INFO, Constants.LOG_TAG,
+                            "AI companion apply reused existing id: resId="
+                                    + asString(callMethodQuietly(bean, "getResId"))
+                                    + ", " + currentApplyId + " -> " + reusableApplyId);
+                    return chain.proceed(rewritten.toArray());
+                }
+        );
+    }
+
+    @Nullable
+    private static Method findAiCompanionApplyEntry(
+            @NonNull Class<?> companionClass, @NonNull Class<?> itemClass) {
+        Method signatureMatch = null;
+        for (Method method : companionClass.getDeclaredMethods()) {
+            Class<?>[] parameterTypes = method.getParameterTypes();
+            if (parameterTypes.length < 3
+                    || parameterTypes[0] != boolean.class
+                    || parameterTypes[1] != itemClass) {
+                continue;
+            }
+            if (Constants.THEME_REAR_APPLY_ENTRY_METHOD.equals(method.getName())) {
+                return method;
+            }
+            if (signatureMatch == null) {
+                signatureMatch = method;
+            }
+        }
+        return signatureMatch;
+    }
+
+    private boolean isAiCompanionItem(@NonNull Object bean) {
+        if (Boolean.TRUE.equals(callMethodQuietly(bean, "isNFC"))) {
+            return false;
+        }
+        String resType = asString(callMethodQuietly(bean, "getResType"));
+        String resSubType = asString(callMethodQuietly(bean, "getResSubType"));
+        return Constants.THEME_REAR_AI_COMPANION_RES_TYPE.equals(resType)
+                || Constants.THEME_REAR_AI_COMPANION_RES_TYPE.equals(resSubType)
+                || Constants.THEME_REAR_AI_COMPANION_SUB_TYPE.equals(resSubType);
+    }
+
+    /**
+     * 取该 resId 已应用过的最近一条 applyId。宿主落库主键是 (resId, applyId)，
+     * 对齐后同 resId 不会再多出一行。
+     */
+    @Nullable
+    private String findReusedAiCompanionApplyId(
+            @NonNull Object bean, @NonNull ClassLoader classLoader) {
+        try {
+            String resId = asString(callMethod(bean, "getResId"));
+            if (isEmpty(resId)) {
+                return null;
+            }
+            Class<?> managerClass = findClass(
+                    Constants.THEME_REAR_DATA_MANAGER_CLASS, classLoader);
+            if (managerClass == null) {
+                return null;
+            }
+            Field companionField = findStaticCompanionField(
+                    managerClass, Constants.THEME_REAR_DATA_MANAGER_COMPANION_FIELD);
+            if (companionField == null) {
+                return null;
+            }
+            companionField.setAccessible(true);
+            Object companion = companionField.get(null);
+            if (companion == null) {
+                return null;
+            }
+            Object manager = callMethod(
+                    companion, Constants.THEME_REAR_DATA_MANAGER_GET_INSTANCE_METHOD);
+            List<?> items = callRearListGetter(manager);
+            if (items == null) {
+                return null;
+            }
+
+            String currentApplyId = asString(callMethodQuietly(bean, "getApplyId"));
+            String latestApplyId = null;
+            long latestValue = Long.MIN_VALUE;
+            for (Object item : items) {
+                if (item == null) {
+                    continue;
+                }
+                if (!resId.equals(asString(callMethodQuietly(item, "getResId")))) {
+                    continue;
+                }
+                String applyId = asString(callMethodQuietly(item, "getApplyId"));
+                if (isEmpty(applyId) || applyId.equals(currentApplyId)) {
+                    continue;
+                }
+                long value = parseApplyIdValue(applyId);
+                if (value > latestValue) {
+                    latestValue = value;
+                    latestApplyId = applyId;
+                }
+            }
+            return latestApplyId;
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "Find AI companion applyId failed", e);
+            return null;
+        }
+    }
+
+    /**
+     * 把 bean 上的 applyId 换成已有值。运行时路径由 applyId 实时拼出，但 mamlEditConfigPath
+     * 一类的字段是详情页带过来的绝对路径，需要同步改写，否则仍会落在新 applyId 的目录上。
+     */
+    private boolean alignAiCompanionApplyId(
+            @NonNull Object bean, @NonNull String fromApplyId, @NonNull String toApplyId) {
+        try {
+            if (!isEmpty(fromApplyId)) {
+                rewriteApplyIdPath(bean, "getMamlEditConfigPath", "setMamlEditConfigPath",
+                        fromApplyId, toApplyId);
+                rewriteApplyIdPath(bean, "getSnapshotPreviewPath", "setSnapshotPreviewPath",
+                        fromApplyId, toApplyId);
+                rewriteApplyIdPath(bean, "getResSnapshotPath", "setResSnapshotPath",
+                        fromApplyId, toApplyId);
+                rewriteApplyIdPath(bean, "getMetaSnapshotPath", "setMetaSnapshotPath",
+                        fromApplyId, toApplyId);
+            }
+            callMethod(bean, "setApplyId", toApplyId);
+            return true;
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "Align AI companion applyId failed", e);
+            return false;
+        }
+    }
+
+    private void rewriteApplyIdPath(
+            @NonNull Object bean,
+            @NonNull String getter,
+            @NonNull String setter,
+            @NonNull String fromApplyId,
+            @NonNull String toApplyId) throws Throwable {
+        String value = asString(callMethodQuietly(bean, getter));
+        if (isEmpty(value) || !value.contains(fromApplyId)) {
+            return;
+        }
+        callMethod(bean, setter, value.replace(fromApplyId, toApplyId));
+    }
+
+    private static long parseApplyIdValue(@NonNull String applyId) {
+        try {
+            return Long.parseLong(applyId);
+        } catch (NumberFormatException e) {
+            return applyId.hashCode();
+        }
+    }
+
     private void installThemeSettingsShortcutHook(@NonNull ClassLoader classLoader) {
         Class<?> entryConfigCompanionClass = findClass(
                 Constants.THEME_ENTRY_CONFIG_COMPANION_CLASS, classLoader);
@@ -1276,7 +1523,8 @@ public class ModuleMain extends XposedModule {
                 chain -> {
                     Object result = chain.proceed();
                     boolean showModuleShortcut = PrefsBridge.shouldShowThemeSettingsShortcut(this);
-                    Intent aiIntent = resolveRearScreenAiIntent(classLoader);
+                    Intent aiIntent = PrefsBridge.shouldEnable18ProFeatures(this)
+                            ? resolveRearScreenAiIntent(classLoader) : null;
                     if (!showModuleShortcut && aiIntent == null) {
                         return result;
                     }
@@ -1350,7 +1598,7 @@ public class ModuleMain extends XposedModule {
                 methodName,
                 new Class[]{},
                 className + "#" + methodName,
-                chain -> true
+                chain -> PrefsBridge.shouldEnable18ProFeatures(this) ? true : chain.proceed()
         );
     }
 
@@ -1370,7 +1618,7 @@ public class ModuleMain extends XposedModule {
                 methodName,
                 new Class[]{},
                 className + "#" + methodName,
-                chain -> value
+                chain -> PrefsBridge.shouldEnable18ProFeatures(this) ? value : chain.proceed()
         );
     }
 
@@ -1798,6 +2046,7 @@ public class ModuleMain extends XposedModule {
     }
 
     private void syncAiGeneratedAppCardsToSubscreenIndex() {
+        if (!PrefsBridge.shouldEnable18ProFeatures(this)) return;
         long now = SystemClock.elapsedRealtime();
         if (now - lastAiAppIndexSyncedAtElapsed < AI_APP_INDEX_SYNC_DEDUP_WINDOW_MS
                 || !aiIndexSyncRunning.compareAndSet(false, true)) return;
@@ -1817,6 +2066,7 @@ public class ModuleMain extends XposedModule {
     }
 
     private void syncAiGeneratedAppCardsToSubscreenIndexNow() {
+        if (!PrefsBridge.shouldEnable18ProFeatures(this)) return;
         File runtimeFile = new File(Constants.THEME_AI_APP_RUNTIME_FILE);
         File appInfoFile = new File(Constants.SUBSCREEN_APP_INFO_FILE);
         if (!runtimeFile.isFile()) {
@@ -1855,6 +2105,7 @@ public class ModuleMain extends XposedModule {
                 added++;
             }
 
+            if (!PrefsBridge.shouldEnable18ProFeatures(this)) return;
             if (added <= 0) {
                 grantAiAppIndexAccess(runtimeFile, appInfoFile, appInfoItems);
                 return;

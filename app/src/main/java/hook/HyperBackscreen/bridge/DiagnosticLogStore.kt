@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Bundle
 import hook.HyperBackscreen.common.Constants
+import hook.HyperBackscreen.common.BackgroundTasks
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -15,6 +16,25 @@ object DiagnosticLogStore {
     private const val PREVIOUS_FILE = "mibackscreen.log.1"
     private const val MAX_FILE_BYTES = 256 * 1024L
     private const val MAX_MESSAGE_CHARS = 600
+
+    @JvmStatic
+    fun recordLocalAsync(context: Context, message: String) {
+        val app = context.applicationContext
+        try {
+            BackgroundTasks.execute { appendLocal(app, message) }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            // Diagnostics share a bounded worker and must not block user actions.
+        }
+    }
+
+    @JvmStatic
+    fun recordRemoteAsync(context: Context, message: String) {
+        val app = context.applicationContext
+        try {
+            BackgroundTasks.execute { recordRemote(app, message) }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+        }
+    }
 
     @JvmStatic
     fun recordRemote(context: Context, message: String) {

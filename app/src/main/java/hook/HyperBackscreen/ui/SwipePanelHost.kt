@@ -178,6 +178,7 @@ object SwipePanelHost {
             val built = attachPanel(activity, decor)
             expandFromOriginatingCard(built, origin)
             Log.d(TAG, "Panel opened from card entry")
+            DiagnosticLogStore.recordRemoteAsync(activity, "quick_panel opened source=app_card")
         }
     }
 
@@ -513,6 +514,8 @@ object SwipePanelHost {
         if (dismissing) return
         dismissing = true
 
+        DiagnosticLogStore.recordRemoteAsync(root.context, "quick_panel dismiss_requested direction=${if (upward) "up" else "back"}")
+
         val card = panel
         if (card == null || card.height <= 0) {
             removePanel(root)
@@ -601,7 +604,7 @@ object SwipePanelHost {
 
     @JvmStatic
     fun release(activity: Activity) {
-        if (hostActivity.get() === activity) removePanel(container)
+        if (hostActivity.get() === activity) removePanel(container, "host_lifecycle")
     }
 
     @JvmStatic
@@ -722,7 +725,7 @@ object SwipePanelHost {
                 post {
                     if (container === this) {
                         Log.d(TAG, "Panel released after host became hidden")
-                        removePanel(this)
+                        removePanel(this, "host_hidden")
                     }
                 }
             }
@@ -988,12 +991,15 @@ object SwipePanelHost {
         }
     }
 
-    private fun removePanel(expectedRoot: FrameLayout?) {
+    private fun removePanel(expectedRoot: FrameLayout?, reason: String = "removed") {
         if (expectedRoot == null) {
             clearReferences()
             return
         }
         expectedRoot.animate().cancel()
+        if (container === expectedRoot) {
+            DiagnosticLogStore.recordRemoteAsync(expectedRoot.context, "quick_panel released reason=$reason")
+        }
         panel?.animate()?.cancel()
         val parent = expectedRoot.parent as? ViewGroup
         // 关闭手势由 Activity 级 dispatchTouchEvent hook 整体消费，父 ViewGroup 收不到 UP，

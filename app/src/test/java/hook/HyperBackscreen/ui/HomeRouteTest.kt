@@ -21,7 +21,7 @@ class HomeRouteTest {
     @Test
     fun savedRouteNamesRemainCompatible() {
         val restored = Json.decodeFromString<List<HomeRoute>>(
-            """["Main","Settings","License","AppPicker","Donate"]"""
+            """["Main","Settings","License","AppPicker","Donate","BatteryColor"]"""
         )
 
         assertEquals(HomeRoute.entries.toList(), restored)

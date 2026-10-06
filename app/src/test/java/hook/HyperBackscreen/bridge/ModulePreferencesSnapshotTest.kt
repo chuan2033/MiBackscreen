@@ -36,7 +36,7 @@ class ModulePreferencesSnapshotTest {
     @Test fun emptyCachePreservesAllExistingDefaults() {
         val cache = Cache()
         val snapshot = ModulePreferencesSnapshot.read(cache.preferences)
-        assertEquals(ModulePreferencesSnapshot(true, true, true, true, false, true, false, true, false, ""), snapshot)
+        assertEquals(ModulePreferencesSnapshot(true, true, true, true, false, true, false, true, false, "", true), snapshot)
         assertEquals(1, cache.reads)
         assertTrue(cache.values.isEmpty())
     }
@@ -47,6 +47,7 @@ class ModulePreferencesSnapshotTest {
             Constants.KEY_DISABLE_LONG_PRESS_EDIT to false,
             Constants.KEY_REMOVE_WALLPAPER_LIMIT to false,
             Constants.KEY_ENABLE_APP_CARD to false,
+            Constants.KEY_ENABLE_18_PRO_FEATURES to false,
             Constants.KEY_REMOVE_APP_CARD_LIMIT to false,
             Constants.KEY_FIX_REAR_SCREEN_APPLY to true,
             Constants.KEY_ENABLE_PICKUP to false,
@@ -56,7 +57,26 @@ class ModulePreferencesSnapshotTest {
             Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES to "selected.package",
         ))
         assertEquals(ModulePreferencesSnapshot(false, false, false, false, true, false, true, false, true,
-            "selected.package"), ModulePreferencesSnapshot.read(cache.preferences))
+            "selected.package", false), ModulePreferencesSnapshot.read(cache.preferences))
+    }
+
+    @Test fun pending18ProToggleIsObservedAndPreservesIndependentSettings() {
+        val cache = Cache()
+        val pending = PrefsBridge.PENDING_UI_PREFIX + Constants.KEY_ENABLE_18_PRO_FEATURES
+        cache.values[Constants.KEY_ENABLE_18_PRO_FEATURES] = true
+        val before = ModulePreferencesSnapshot.read(cache.preferences)
+        val snapshots = mutableListOf<ModulePreferencesSnapshot>()
+        ModulePreferencesSnapshot.observe(cache.preferences, Runnable {
+            snapshots += ModulePreferencesSnapshot.read(cache.preferences)
+        }).use {
+            cache.put(pending, false)
+            cache.put(Constants.KEY_ENABLE_18_PRO_FEATURES, false)
+            cache.values.remove(pending)
+            cache.changed(pending)
+            cache.put(Constants.KEY_ENABLE_18_PRO_FEATURES, true)
+        }
+        assertEquals(listOf(false, false, false, true), snapshots.map { it.enable18ProFeatures })
+        snapshots.forEach { assertEquals(before, it.copy(enable18ProFeatures = true)) }
     }
 
     @Test fun panelWritesRefreshAllThreeSwitchesWithoutServiceReconnect() {
@@ -74,6 +94,20 @@ class ModulePreferencesSnapshotTest {
         assertFalse(snapshots[1].removeWallpaperLimit)
         assertFalse(snapshots[2].removeAppCardLimit)
         assertTrue(cache.listeners.isEmpty())
+    }
+
+    @Test fun batteryRingPendingSettingIsObservedIndependently() {
+        val cache = Cache()
+        var snapshot = ModulePreferencesSnapshot.read(cache.preferences)
+        assertFalse(snapshot.enableBatteryRing)
+        val before = snapshot
+        ModulePreferencesSnapshot.observe(cache.preferences, Runnable {
+            snapshot = ModulePreferencesSnapshot.read(cache.preferences)
+        }).use {
+            cache.put(PrefsBridge.PENDING_UI_PREFIX + Constants.KEY_ENABLE_BATTERY_RING, true)
+            assertTrue(snapshot.enableBatteryRing)
+            assertEquals(before, snapshot.copy(enableBatteryRing = false))
+        }
     }
 
     @Test fun lateServiceReconciliationRefreshesPickupToggle() {

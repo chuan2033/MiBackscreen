@@ -1,5 +1,6 @@
 package hook.HyperBackscreen.ui
 
+import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,6 +54,9 @@ import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.ui.about.AboutPage
 import hook.HyperBackscreen.ui.about.DonatePage
 import hook.HyperBackscreen.ui.about.LicensePage
+import hook.HyperBackscreen.ui.battery.BatteryRingGeometry
+import hook.HyperBackscreen.ui.battery.BatteryColorPage
+import hook.HyperBackscreen.ui.battery.BatteryColorSlot
 import hook.HyperBackscreen.ui.components.BlurredBar
 import hook.HyperBackscreen.ui.components.FloatingBottomBar
 import hook.HyperBackscreen.ui.components.FunctionCountBadge
@@ -125,16 +129,21 @@ private data class RestartScopeItem(
     val packageName: String
 )
 
+// 顺序与功能页分组保持一致：系统框架、背屏、主题壁纸、超级小爱；智能助理没有对应分组，列在最后。
 private val restartScopeItems = listOf(
     RestartScopeItem(R.string.restart_system, Constants.SYSTEM_PACKAGE),
-    RestartScopeItem(R.string.restart_voice_assist, Constants.VOICE_ASSIST_PACKAGE),
     RestartScopeItem(R.string.restart_backscreen, Constants.TARGET_PACKAGE),
     RestartScopeItem(R.string.restart_theme_manager, Constants.THEME_STORE_PACKAGE),
+    RestartScopeItem(R.string.restart_voice_assist, Constants.VOICE_ASSIST_PACKAGE),
     RestartScopeItem(R.string.restart_personal_assistant, Constants.PERSONAL_ASSISTANT_PACKAGE)
 )
 
 @Composable
 internal fun HomeScreen(
+    enableBatteryRing: Boolean,
+    onEnableBatteryRingChange: (Boolean) -> Unit,
+    enable18ProFeatures: Boolean,
+    onEnable18ProFeaturesChange: (Boolean) -> Unit,
     disableLongPress: Boolean,
     removeWallpaperLimit: Boolean,
     removeAppCardLimit: Boolean,
@@ -163,7 +172,6 @@ internal fun HomeScreen(
     onCheckUpdatesChange: (Boolean) -> Unit,
     onEnableAppCardChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
-    onDisableDoubleTapWakeChange: (Boolean) -> Unit,
     onDoubleTapWakeDisabledPackagesChange: (String) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
     onRestartScopes: (List<String>) -> Unit,
@@ -172,9 +180,16 @@ internal fun HomeScreen(
     themeSettingsShortcut: Boolean,
     onThemeSettingsShortcutChange: (Boolean) -> Unit,
     enablePickup: Boolean,
-    onEnablePickupChange: (Boolean) -> Unit
+    onEnablePickupChange: (Boolean) -> Unit,
+    batteryColorIdle: String,
+    batteryColorCharging: String,
+    batteryColorLow: String,
+    onBatteryColorChange: (BatteryColorSlot, String) -> Unit
 ) {
     val enabledFunctionCount = countEnabledFunctions(
+        enableBatteryRing = enableBatteryRing,
+        batteryRingSupported = BatteryRingGeometry.isCalibratedDevice(Build.DEVICE),
+        enable18ProFeatures = enable18ProFeatures,
         disableLongPress = disableLongPress,
         removeWallpaperLimit = removeWallpaperLimit,
         removeAppCardLimit = removeAppCardLimit,
@@ -247,13 +262,22 @@ internal fun HomeScreen(
                     HomeRoute.License -> LicensePage(onBack = navigateBack)
                     HomeRoute.Donate -> DonatePage(onBack = navigateBack)
                     HomeRoute.AppPicker -> AppPickerPage(
-                        disableDoubleTapWake = disableDoubleTapWake,
-                        onDisableDoubleTapWakeChange = onDisableDoubleTapWakeChange,
                         selectedPackages = doubleTapWakeDisabledPackages,
                         onSelectedPackagesChange = onDoubleTapWakeDisabledPackagesChange,
                         onBack = navigateBack
                     )
+                    HomeRoute.BatteryColor -> BatteryColorPage(
+                        idleColor = batteryColorIdle,
+                        chargingColor = batteryColorCharging,
+                        lowColor = batteryColorLow,
+                        onColorChange = onBatteryColorChange,
+                        onBack = navigateBack
+                    )
                     HomeRoute.Main -> MainContent(
+                        enableBatteryRing = enableBatteryRing,
+                        onEnableBatteryRingChange = onEnableBatteryRingChange,
+                        enable18ProFeatures = enable18ProFeatures,
+                        onEnable18ProFeaturesChange = onEnable18ProFeaturesChange,
                         enabledFunctionCount = enabledFunctionCount,
                         selected = selected,
                         homeListState = homeListState,
@@ -295,7 +319,8 @@ internal fun HomeScreen(
                         themeSettingsShortcut = themeSettingsShortcut,
                         onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
                         enablePickup = enablePickup,
-                        onEnablePickupChange = onEnablePickupChange
+                        onEnablePickupChange = onEnablePickupChange,
+                        onBatteryColorClick = { openDetail(HomeRoute.BatteryColor) }
                     )
                 }
             }
@@ -413,6 +438,10 @@ private fun SettingsPage(
 
 @Composable
 private fun MainTabPage(
+    enableBatteryRing: Boolean,
+    onEnableBatteryRingChange: (Boolean) -> Unit,
+    enable18ProFeatures: Boolean,
+    onEnable18ProFeaturesChange: (Boolean) -> Unit,
     tab: HomeNavigationPolicy.Tab,
     listState: LazyListState,
     moduleActivated: Boolean,
@@ -432,6 +461,7 @@ private fun MainTabPage(
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onEnablePickupChange: (Boolean) -> Unit,
     onAddDisabledAppsClick: () -> Unit,
+    onBatteryColorClick: () -> Unit,
     onLicenseClick: () -> Unit,
     onRestartClick: () -> Unit,
     onSettingsClick: () -> Unit
@@ -450,8 +480,10 @@ private fun MainTabPage(
         containerColor = MiuixTheme.colorScheme.surface,
         topBar = {
             BlurredBar(backdrop) {
+                val tabLabelRes = navItems.first { it.tab == tab }.labelRes
                 TopAppBar(
-                    title = stringResource(navItems.first { it.tab == tab }.labelRes),
+                    title = stringResource(tabLabelRes),
+                    largeTitle = stringResource(tabLabelRes),
                     color = Color.Transparent,
                     scrollBehavior = scrollBehavior,
                     actions = {
@@ -498,6 +530,9 @@ private fun MainTabPage(
                     top = innerPadding.calculateTopPadding()
                 )
             ) {
+                item(key = "top_spacer") {
+                    Spacer(Modifier.height(12.dp))
+                }
                 when (tab) {
                     HomeNavigationPolicy.Tab.HOME -> item {
                         HomePage(
@@ -508,6 +543,10 @@ private fun MainTabPage(
                     }
                     HomeNavigationPolicy.Tab.FUNCTION -> item {
                         FunctionPage(
+                            enableBatteryRing = enableBatteryRing,
+                            onEnableBatteryRingChange = onEnableBatteryRingChange,
+                            enable18ProFeatures = enable18ProFeatures,
+                            onEnable18ProFeaturesChange = onEnable18ProFeaturesChange,
                             disableLongPress = disableLongPress,
                             removeWallpaperLimit = removeWallpaperLimit,
                             removeAppCardLimit = removeAppCardLimit,
@@ -521,7 +560,8 @@ private fun MainTabPage(
                             onFixRearScreenApplyChange = onFixRearScreenApplyChange,
                             onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                             onEnablePickupChange = onEnablePickupChange,
-                            onAddDisabledAppsClick = onAddDisabledAppsClick
+                            onAddDisabledAppsClick = onAddDisabledAppsClick,
+                            onBatteryColorClick = onBatteryColorClick
                         )
                     }
                     HomeNavigationPolicy.Tab.ABOUT -> item {
@@ -542,6 +582,10 @@ private fun MainTabPage(
 
 @Composable
 private fun MainContent(
+    enableBatteryRing: Boolean,
+    onEnableBatteryRingChange: (Boolean) -> Unit,
+    enable18ProFeatures: Boolean,
+    onEnable18ProFeaturesChange: (Boolean) -> Unit,
     enabledFunctionCount: Int,
     selected: HomeNavigationPolicy.Tab,
     homeListState: LazyListState,
@@ -583,7 +627,8 @@ private fun MainContent(
     themeSettingsShortcut: Boolean,
     onThemeSettingsShortcutChange: (Boolean) -> Unit,
     enablePickup: Boolean,
-    onEnablePickupChange: (Boolean) -> Unit
+    onEnablePickupChange: (Boolean) -> Unit,
+    onBatteryColorClick: () -> Unit
 ) {
     val surfaceColor = MiuixTheme.colorScheme.surface
     val bottomBarBackdrop = rememberLayerBackdrop {
@@ -649,6 +694,10 @@ private fun MainContent(
         ) { page ->
             val tab = navItems[page].tab
             MainTabPage(
+                enableBatteryRing = enableBatteryRing,
+                onEnableBatteryRingChange = onEnableBatteryRingChange,
+                enable18ProFeatures = enable18ProFeatures,
+                onEnable18ProFeaturesChange = onEnable18ProFeaturesChange,
                 tab = tab,
                 listState = when (tab) {
                     HomeNavigationPolicy.Tab.HOME -> homeListState
@@ -672,6 +721,7 @@ private fun MainContent(
                 onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                 onEnablePickupChange = onEnablePickupChange,
                 onAddDisabledAppsClick = onAddDisabledAppsClick,
+                onBatteryColorClick = onBatteryColorClick,
                 onLicenseClick = onLicenseClick,
                 onRestartClick = { showRestartDialog = true },
                 onSettingsClick = onSettingsClick

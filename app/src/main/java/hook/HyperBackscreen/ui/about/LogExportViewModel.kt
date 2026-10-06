@@ -51,7 +51,7 @@ internal class LogExportViewModel(
 
     fun start() {
         if (job?.isActive == true) return
-        mutableState.value = LogExportState.Running(0, 10)
+        mutableState.value = LogExportState.Running(0, FeedbackLogExporter.TOTAL_STEPS)
         job = viewModelScope.launch {
             val file = try {
                 withContext(Dispatchers.IO) {

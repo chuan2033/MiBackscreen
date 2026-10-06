@@ -81,4 +81,36 @@ class PickupSelectionRepositoryTest {
         assertEquals(0, store.commits)
         assertEquals(0, store.refreshes)
     }
+
+    @Test fun recordsPendingAndRefreshFailureWithoutPickupContents() {
+        val events = mutableListOf<String>()
+        val store = Store().apply { result = PickupSaveResult.Pending }
+        val repository = PickupSelectionRepository(store) { events.add(it) }
+        repository.save(payload, mapOf(group.identity to setOf("10-11")))
+        assertTrue(events.any { it.contains("save result=Pending") })
+        assertFalse(events.any { it.contains("refresh") })
+        store.result = PickupSaveResult.Synced
+        store.refreshOk = false
+        repository.save(payload, mapOf(group.identity to setOf("10-11")))
+        assertTrue(events.any { it.contains("refresh result=failed") })
+        assertTrue(events.any { it.contains("save result=RefreshFailed") })
+        assertFalse(events.any { it.contains("10-11") || it.contains("test station") })
+    }
+
+    @Test fun failedDiagnosticSinkDoesNotChangeSaveOrRefresh() {
+        val store = Store()
+        val repository = PickupSelectionRepository(store) { throw IllegalStateException("disk full") }
+        assertEquals(PickupSaveResult.Synced, repository.save(payload, mapOf(group.identity to emptySet())))
+        assertEquals(1, store.commits)
+        assertEquals(1, store.refreshes)
+    }
+
+    @Test fun rejectedSelectionIsRecordedAndNeverCommitted() {
+        val events = mutableListOf<String>()
+        val store = Store()
+        val repository = PickupSelectionRepository(store) { events.add(it) }
+        assertEquals(PickupSaveResult.Failed, repository.save(payload, emptyMap()))
+        assertTrue(events.any { it.contains("save result=Failed") })
+        assertEquals(0, store.commits)
+    }
 }

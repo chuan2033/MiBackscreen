@@ -16,12 +16,19 @@ internal data class ModulePreferencesSnapshot(
     val themeSettingsShortcut: Boolean,
     val disableDoubleTapWake: Boolean,
     val doubleTapWakeDisabledPackages: String,
+    val enable18ProFeatures: Boolean,
+    val enableBatteryRing: Boolean = false,
+    val batteryColorIdle: String = "",
+    val batteryColorCharging: String = "",
+    val batteryColorLow: String = "",
 ) {
     companion object {
         private val keys = setOf(
             Constants.KEY_DISABLE_LONG_PRESS_EDIT,
             Constants.KEY_REMOVE_WALLPAPER_LIMIT,
             Constants.KEY_ENABLE_APP_CARD,
+            Constants.KEY_ENABLE_18_PRO_FEATURES,
+            Constants.KEY_ENABLE_BATTERY_RING,
             Constants.KEY_REMOVE_APP_CARD_LIMIT,
             Constants.KEY_FIX_REAR_SCREEN_APPLY,
             Constants.KEY_ENABLE_PICKUP,
@@ -29,6 +36,9 @@ internal data class ModulePreferencesSnapshot(
             Constants.KEY_THEME_SETTINGS_SHORTCUT,
             Constants.KEY_DISABLE_DOUBLE_TAP_WAKE,
             Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,
+            Constants.KEY_BATTERY_COLOR_IDLE,
+            Constants.KEY_BATTERY_COLOR_CHARGING,
+            Constants.KEY_BATTERY_COLOR_LOW,
         )
 
         /** One in-memory snapshot, with no Binder call or cache write during observation. */
@@ -43,6 +53,8 @@ internal data class ModulePreferencesSnapshot(
                 disableLongPress = boolean(Constants.KEY_DISABLE_LONG_PRESS_EDIT, PrefsBridge.DEFAULT_DISABLE_LONG_PRESS_EDIT),
                 removeWallpaperLimit = boolean(Constants.KEY_REMOVE_WALLPAPER_LIMIT, PrefsBridge.DEFAULT_REMOVE_WALLPAPER_LIMIT),
                 enableAppCard = boolean(Constants.KEY_ENABLE_APP_CARD, PrefsBridge.DEFAULT_ENABLE_APP_CARD),
+                enable18ProFeatures = boolean(Constants.KEY_ENABLE_18_PRO_FEATURES, PrefsBridge.DEFAULT_ENABLE_18_PRO_FEATURES),
+                enableBatteryRing = boolean(Constants.KEY_ENABLE_BATTERY_RING, PrefsBridge.DEFAULT_ENABLE_BATTERY_RING),
                 removeAppCardLimit = boolean(Constants.KEY_REMOVE_APP_CARD_LIMIT, PrefsBridge.DEFAULT_REMOVE_APP_CARD_LIMIT),
                 fixRearScreenApply = boolean(Constants.KEY_FIX_REAR_SCREEN_APPLY, PrefsBridge.DEFAULT_FIX_REAR_SCREEN_APPLY),
                 enablePickup = boolean(Constants.KEY_ENABLE_PICKUP, PrefsBridge.DEFAULT_ENABLE_PICKUP),
@@ -51,6 +63,12 @@ internal data class ModulePreferencesSnapshot(
                 disableDoubleTapWake = boolean(Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, PrefsBridge.DEFAULT_DISABLE_DOUBLE_TAP_WAKE),
                 doubleTapWakeDisabledPackages = value(Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES) as? String
                     ?: PrefsBridge.DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,
+                batteryColorIdle = value(Constants.KEY_BATTERY_COLOR_IDLE) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_COLOR,
+                batteryColorCharging = value(Constants.KEY_BATTERY_COLOR_CHARGING) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_COLOR,
+                batteryColorLow = value(Constants.KEY_BATTERY_COLOR_LOW) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_COLOR,
             )
         }
 

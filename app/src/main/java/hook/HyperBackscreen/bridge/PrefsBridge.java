@@ -24,6 +24,10 @@ public final class PrefsBridge {
     public static final boolean DEFAULT_DISABLE_LONG_PRESS_EDIT = true;
     public static final boolean DEFAULT_REMOVE_WALLPAPER_LIMIT = true;
     public static final boolean DEFAULT_ENABLE_APP_CARD = true;
+    public static final boolean DEFAULT_ENABLE_18_PRO_FEATURES = true;
+    public static final boolean DEFAULT_ENABLE_BATTERY_RING = false;
+    /** 背屏电量显示颜色覆盖，空字符串表示跟随系统（SystemUI 电池资源色）。 */
+    public static final String DEFAULT_BATTERY_COLOR = "";
     public static final boolean DEFAULT_REMOVE_APP_CARD_LIMIT = true;
     public static final boolean DEFAULT_FIX_REAR_SCREEN_APPLY = false;
     private static final boolean DEFAULT_FLOATING_NAV_BAR = false;
@@ -41,6 +45,33 @@ public final class PrefsBridge {
     public static final String DEFAULT_PICKUP_ISLAND_SELECTION = "";
 
     private PrefsBridge() {
+    }
+
+    /** Capture before UI reads refresh the local cache. Never reconcile during diagnostics. */
+    @NonNull
+    public static String buildSyncDiagnosticReport(@NonNull Context context) {
+        XposedService service = ModuleApp.getService();
+        java.util.Map<String, ?> localValues;
+        try {
+            localValues = new java.util.HashMap<>(local(context).getAll());
+        } catch (Throwable error) {
+            return "local_snapshot_error=" + error.getClass().getSimpleName() + "\n";
+        }
+        java.util.Map<String, ?> remoteValues = null;
+        String remoteError = service == null ? "service_disconnected" : "none";
+        try {
+            if (service != null) {
+                SharedPreferences preferences = service.getRemotePreferences(Constants.PREF_GROUP);
+                if (preferences != null) remoteValues = new java.util.HashMap<>(preferences.getAll());
+                else remoteError = "preferences_unavailable";
+            }
+        } catch (Throwable error) {
+            remoteError = error.getClass().getSimpleName();
+        }
+        return "service_connected=" + (service != null)
+                + "\nservice_reconciliation_finished=" + ModuleApp.isPreferenceServiceReady()
+                + "\nremote_read_error=" + remoteError
+                + "\n" + PreferenceSyncReport.build(localValues, remoteValues);
     }
 
     /** 被 Hook 进程（如背屏）里 ModuleApp 服务通常为 null，此时用 XposedModule 实例取远程偏好。 */
@@ -111,6 +142,8 @@ public final class PrefsBridge {
                     .putBoolean(PENDING_UI_PREFIX + key, value)
                     .apply();
         }
+        DiagnosticLogStore.recordLocalAsync(context, "preference_write key=" + key
+                + " value=" + value + " destination=" + (remote != null ? "remote_apply_requested" : "local_pending"));
     }
 
     private static String readStringForUi(@NonNull Context context, @NonNull String key, @NonNull String def) {
@@ -149,6 +182,8 @@ public final class PrefsBridge {
                     .putString(PENDING_UI_PREFIX + key, value)
                     .apply();
         }
+        DiagnosticLogStore.recordLocalAsync(context, "preference_write key=" + key
+                + " destination=" + (remote != null ? "remote_apply_requested" : "local_pending"));
     }
 
     /**
@@ -195,6 +230,72 @@ public final class PrefsBridge {
 
     public static void writeRemoveWallpaperLimitFromUi(@NonNull Context context, boolean enabled) {
         writeFromUi(context, Constants.KEY_REMOVE_WALLPAPER_LIMIT, enabled);
+    }
+
+    public static boolean readEnable18ProFeaturesForUi(@NonNull Context context) {
+        return readForUi(context, Constants.KEY_ENABLE_18_PRO_FEATURES, DEFAULT_ENABLE_18_PRO_FEATURES);
+    }
+
+    public static boolean readEnableBatteryRingForUi(@NonNull Context context) {
+        return readForUi(context, Constants.KEY_ENABLE_BATTERY_RING, DEFAULT_ENABLE_BATTERY_RING);
+    }
+
+    public static void writeEnableBatteryRingFromUi(@NonNull Context context, boolean enabled) {
+        writeFromUi(context, Constants.KEY_ENABLE_BATTERY_RING, enabled);
+    }
+
+    public static boolean shouldEnableBatteryRing(@NonNull XposedModule module) {
+        return readForHook(module, Constants.KEY_ENABLE_BATTERY_RING, DEFAULT_ENABLE_BATTERY_RING);
+    }
+
+    /** 电量颜色覆盖（UI 侧）：空字符串表示跟随系统。 */
+    @NonNull
+    public static String readBatteryColorForUi(@NonNull Context context, @NonNull String key) {
+        return readStringForUi(context, key, DEFAULT_BATTERY_COLOR);
+    }
+
+    public static void writeBatteryColorFromUi(@NonNull Context context,
+                                               @NonNull String key,
+                                               @NonNull String value) {
+        writeStringFromUi(context, key, value);
+    }
+
+    /** 电量颜色覆盖（Hook 侧）：空字符串表示跟随系统。 */
+    @NonNull
+    public static String readBatteryColor(@NonNull XposedModule module, @NonNull String key) {
+        return readStringForHook(module, key, DEFAULT_BATTERY_COLOR);
+    }
+
+    public static boolean writeEnable18ProFeaturesFromUi(@NonNull Context context, boolean enabled) {
+        try {
+            SharedPreferences remotePrefs = remote();
+            boolean saved = writeEnable18ProFeatures(local(context), remotePrefs, enabled);
+            DiagnosticLogStore.recordLocalAsync(context, "preference_write key=" + Constants.KEY_ENABLE_18_PRO_FEATURES
+                    + " value=" + enabled + " saved=" + saved
+                    + " destination=" + (remotePrefs != null ? "remote_commit" : "local_pending"));
+            return saved;
+        } catch (RuntimeException error) {
+            Log.w(TAG, "Failed to save 18 Pro features", error);
+            return false;
+        }
+    }
+
+    /** Complete the remote write before refreshing hosts that cache their capabilities. */
+    @SuppressLint("ApplySharedPref")
+    static boolean writeEnable18ProFeatures(@NonNull SharedPreferences localPrefs,
+                                            @Nullable SharedPreferences remotePrefs, boolean enabled) {
+        String key = Constants.KEY_ENABLE_18_PRO_FEATURES;
+        if (remotePrefs == null) {
+            return localPrefs.edit().putBoolean(key, enabled)
+                    .putBoolean(PENDING_UI_PREFIX + key, enabled).commit();
+        }
+        if (!remotePrefs.edit().putBoolean(key, enabled).commit()) return false;
+        localPrefs.edit().putBoolean(key, enabled).remove(PENDING_UI_PREFIX + key).apply();
+        return true;
+    }
+
+    public static boolean shouldEnable18ProFeatures(@NonNull XposedModule module) {
+        return readForHook(module, Constants.KEY_ENABLE_18_PRO_FEATURES, DEFAULT_ENABLE_18_PRO_FEATURES);
     }
 
     public static boolean readEnableAppCardForUi(@NonNull Context context) {
@@ -527,6 +628,8 @@ public final class PrefsBridge {
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_LONG_PRESS_EDIT);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_PICKUP);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_APP_CARD);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_18_PRO_FEATURES);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_BATTERY_RING);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REMOVE_APP_CARD_LIMIT);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_FIX_REAR_SCREEN_APPLY);
@@ -535,12 +638,17 @@ public final class PrefsBridge {
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_THEME_SETTINGS_SHORTCUT);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_PICKUP_ISLAND_SELECTION);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_IDLE);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_CHARGING);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_LOW);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT, DEFAULT_REMOVE_WALLPAPER_LIMIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_APP_CARD_LIMIT, DEFAULT_REMOVE_APP_CARD_LIMIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_PICKUP, DEFAULT_ENABLE_PICKUP);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_APP_CARD, DEFAULT_ENABLE_APP_CARD);
+            syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_18_PRO_FEATURES, DEFAULT_ENABLE_18_PRO_FEATURES);
+            syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_BATTERY_RING, DEFAULT_ENABLE_BATTERY_RING);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_REAR_SCREEN_COVER, DEFAULT_DISABLE_REAR_SCREEN_COVER);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, DEFAULT_DISABLE_DOUBLE_TAP_WAKE);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_THEME_SETTINGS_SHORTCUT, DEFAULT_THEME_SETTINGS_SHORTCUT);
@@ -554,8 +662,28 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_PICKUP_ISLAND_SELECTION,
                     DEFAULT_PICKUP_ISLAND_SELECTION);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_COLOR_IDLE,
+                    DEFAULT_BATTERY_COLOR);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_COLOR_CHARGING,
+                    DEFAULT_BATTERY_COLOR);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_COLOR_LOW,
+                    DEFAULT_BATTERY_COLOR);
+            long pending = localPrefs.getAll().keySet().stream()
+                    .filter(key -> key.startsWith(PENDING_UI_PREFIX) || key.startsWith(PENDING_PANEL_PREFIX))
+                    .count();
+            DiagnosticLogStore.recordLocalAsync(context, "preference_reconciliation finished pending_count=" + pending);
         } catch (Throwable e) {
             Log.w(TAG, "Failed to sync prefs on service available", e);
+            DiagnosticLogStore.recordLocalAsync(context, "preference_reconciliation failed error=" + e.getClass().getSimpleName());
         }
     }
 

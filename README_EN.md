@@ -8,6 +8,8 @@ A Xiaomi rear-screen module using Modern Xposed. The `feat/18pro-max-rear-screen
 
 | Feature | Default | Behavior |
 | --- | --- | --- |
+| Rear-screen battery ring | Off | Shows battery level around the Xiaomi 17 Pro Max camera contour in 1% steps; green while charging, red below 20% when not charging, otherwise white |
+| 18 Pro features | On | Controls AI rear-screen entries, 18 Pro device and download request parameters, rear-screen app-card unlocking, Personal Assistant store adaptation and AI app-card index synchronization |
 | Disable long-press wallpaper editing | On | Prevents entering the rear-screen editor |
 | Remove wallpaper limit | On | Removes Theme Manager's 15-wallpaper limit |
 | Rear-screen app cards / remove card limit | On / On | Adds MiBackscreen to the stock swipe-up list; tap it to open the quick panel |
@@ -19,7 +21,11 @@ A Xiaomi rear-screen module using Modern Xposed. The `feat/18pro-max-rear-screen
 
 Appearance settings include system/light/dark themes, dynamic colors, standard or floating navigation, and liquid glass. Floating navigation and liquid glass default off; bottom-bar blur and launch-time update checks default on.
 
-The Functions tab shows an enabled-function count (1–7) by default and hides the badge when all functions are off. Each function switch counts once, including the double-tap wake master switch in the app picker; selected apps do not add to the count. Hide it through Settings → Appearance → Show enabled function count. All three navigation styles support the badge.
+Functions includes an "18 Pro features" switch. Changing it requests a force-stop of Rear Screen Center, Theme Manager and Personal Assistant; reopening them refreshes their capabilities. When off, hosts use their original entry and capability checks. Downloaded and applied content and add-on resources remain. Pickup codes, long press and count limits still follow their own switches. Disable the add-on in KSU/Magisk and reboot to remove its resource mounts.
+
+The battery ring is calibrated for the 976 x 596 popsicle rear display. It starts at the bottom center and passes the right, top and left centers before closing at 100%. Colors come from SystemUI battery resources when available. The battery progress line is drawn over the existing wallpaper. Changing the switch refreshes Rear Screen Center. The drawing layer is released when leaving the rear launcher, and transitions stop while its window is hidden.
+
+The Functions tab shows an enabled-function count (1–9) by default and hides the badge when all functions are off. Each function switch counts once, including the battery ring, 18 Pro features and the double-tap wake master switch in the app picker; selected apps do not add to the count. Hide it through Settings → Appearance → Show enabled function count. All three navigation styles support the badge.
 
 Open the quick panel through the stock MiBackscreen card; swipe up from its bottom to close it. Its three switches control long press, wallpaper limits and app-card limits; failed writes roll back. Offline changes in the module app remain pending until the LSPosed service reconnects. Pending does not mean applied in the host.
 
@@ -48,7 +54,7 @@ A warning about `vendor.display.builtin_presentation=0` indicates that rear-disp
 
 Immediately after reproduction, open Home → Logs and generate a ZIP before reapplying wallpapers or restarting hosts. Closing the progress card does not cancel the task. Share manually when ready; failures can be retried and nothing is sent automatically.
 
-Schema 6 includes device/host versions, settings, hook status, pickup selections, filtered logs, system diagnostics, resource paths and metadata, editConfig text, and Theme Manager's `rearScreen.db` with WAL/SHM copies. The AI database contributes schema information only. Wallpaper image/video bytes are not copied. Archives may contain pickup codes, app selections and other private information; inspect them before sharing.
+Schema 7 includes device/host versions, settings, hook status, pickup selections, filtered logs, system diagnostics, resource paths and metadata, editConfig text, and Theme Manager's `rearScreen.db` with WAL/SHM copies. It also includes both AI app-card indexes with an ID comparison, local/remote/pending preference snapshots, appearance settings, and persistent events for panel lifecycle, preference synchronization, pickup saves and refresh requests. The AI database contributes schema information only. Wallpaper image/video bytes are not copied. Archives may contain pickup codes, app selections and other private information; inspect them before sharing.
 
 Complete collection requires root and a `su -M` implementation. Reports record permission failures, timeouts and missing files; a generated ZIP does not guarantee complete collection. Submit reproduction steps, expected/actual behavior, versions and relevant screenshots through [Issues](https://github.com/chuan2033/MiBackscreen/issues), attaching a reviewed archive when needed.
 

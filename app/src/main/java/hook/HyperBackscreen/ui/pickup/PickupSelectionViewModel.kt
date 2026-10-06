@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import hook.HyperBackscreen.bridge.PrefsBridge
+import hook.HyperBackscreen.bridge.DiagnosticLogStore
 import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.common.PickupCodes
 import kotlinx.coroutines.CancellationException
@@ -42,14 +43,26 @@ internal fun initialVisibleCodes(group: PickupGroup, stored: String): Set<String
 /** Serialize UI read/modify/write transactions across Activity instances. No preference format changes. */
 private val selectionWriteLock = Any()
 
-internal class PickupSelectionRepository(private val store: PickupSelectionStore) {
-    fun load(payload: PickupPayload): Map<String, Set<String>> = synchronized(selectionWriteLock) {
-        val stored = store.read()
-        payload.groups.associate { it.identity to initialVisibleCodes(it, stored) }
+internal class PickupSelectionRepository(
+    private val store: PickupSelectionStore,
+    private val diagnostic: (String) -> Unit = {},
+) {
+    private fun record(message: String) {
+        try { diagnostic(message) } catch (_: Exception) { }
     }
 
-    fun save(payload: PickupPayload, selections: Map<String, Set<String>>): PickupSaveResult =
+    fun load(payload: PickupPayload): Map<String, Set<String>> = try {
         synchronized(selectionWriteLock) {
+            val stored = store.read()
+            payload.groups.associate { it.identity to initialVisibleCodes(it, stored) }
+        }.also { record("pickup load result=loaded groups=${payload.groups.size} codes=${payload.codeCount}") }
+    } catch (error: Exception) {
+        record("pickup load result=failed error=${error.javaClass.simpleName}")
+        throw error
+    }
+
+    fun save(payload: PickupPayload, selections: Map<String, Set<String>>): PickupSaveResult = try {
+        val result = synchronized(selectionWriteLock) {
             var encoded = store.read()
             for (group in payload.groups) {
                 val selected = selections[group.identity] ?: return@synchronized PickupSaveResult.Failed
@@ -67,8 +80,21 @@ internal class PickupSelectionRepository(private val store: PickupSelectionStore
             // Complete the refresh in this transaction even if the Activity has since closed.
             if (result == PickupSaveResult.Synced && !refresh()) PickupSaveResult.RefreshFailed else result
         }
+        record("pickup save result=$result groups=${payload.groups.size} selected_count=${selections.values.sumOf { it.size }}")
+        result
+    } catch (error: Exception) {
+        record("pickup save result=failed error=${error.javaClass.simpleName}")
+        throw error
+    }
 
-    fun refresh(): Boolean = try { store.refresh() } catch (_: Exception) { false }
+    fun refresh(): Boolean = try {
+        store.refresh().also {
+            record("pickup refresh result=${if (it) "request_sent" else "failed"}")
+        }
+    } catch (error: Exception) {
+        record("pickup refresh result=failed error=${error.javaClass.simpleName}")
+        false
+    }
 
     companion object {
         fun forContext(context: Context): PickupSelectionRepository {
@@ -85,7 +111,7 @@ internal class PickupSelectionRepository(private val store: PickupSelectionStore
                         .setPackage(Constants.VOICE_ASSIST_PACKAGE))
                     return true
                 }
-            })
+            }, { message -> DiagnosticLogStore.appendLocal(app, message) })
         }
     }
 }

@@ -11,6 +11,12 @@ public final class Constants {
     public static final String KEY_DISABLE_LONG_PRESS_EDIT = "disable_long_press_edit";
     public static final String KEY_REMOVE_WALLPAPER_LIMIT = "remove_wallpaper_limit";
     public static final String KEY_ENABLE_APP_CARD = "enable_app_card";
+    public static final String KEY_ENABLE_18_PRO_FEATURES = "enable_18_pro_features";
+    public static final String KEY_ENABLE_BATTERY_RING = "enable_battery_ring";
+    // 背屏电量显示颜色覆盖，格式 #AARRGGBB；空字符串表示跟随系统（SystemUI 电池资源色）。
+    public static final String KEY_BATTERY_COLOR_IDLE = "battery_color_idle";
+    public static final String KEY_BATTERY_COLOR_CHARGING = "battery_color_charging";
+    public static final String KEY_BATTERY_COLOR_LOW = "battery_color_low";
     public static final String KEY_REMOVE_APP_CARD_LIMIT = "remove_app_card_limit";
     public static final String KEY_FIX_REAR_SCREEN_APPLY = "fix_rear_screen_apply";
     public static final String KEY_FLOATING_NAV_BAR = "floating_nav_bar";
@@ -100,6 +106,10 @@ public final class Constants {
     public static final String THEME_AI_APP_PAGE_PATH = "/native/page/v3/AI_GENERATED_APP";
     public static final String THEME_AI_APP_SUBJECT_PATH = "/native/page/v3/subjects/";
     public static final String THEME_AI_APP_DETAIL_PATH = "/native/page/v3/theme/";
+    // AI 应用详情与普通背屏资源详情共用 /native/page/v3/theme/{id}，只有请求头能区分：
+    // AiAppPageApi 带 request_flag:1，DetailRequestInterface（普通详情）带 request_flag:31。
+    public static final String THEME_AI_APP_REQUEST_FLAG_HEADER = "request_flag";
+    public static final String THEME_AI_APP_REQUEST_FLAG_VALUE = "1";
     public static final String THEME_DOWNLOAD_PATH = "/download/v2/";
     public static final String THEME_REAR_DEVICE = "madrid";
     public static final String THEME_REAR_MODEL = "Xiaomi 18 Pro Max";
@@ -147,6 +157,18 @@ public final class Constants {
             "b4deb767-f817-4376-b965-dd037e21953b";
     public static final String AI_MATE_LUMI_PREVIEW_PATH =
             "/product/etc/precust_theme/theme/.data/preview/theme/9374c6eb-7742-496e-8180-683e9da0e9ea/preview_rearscreen_0.png";
+
+    // 背屏 AI 陪伴壁纸在详情页「再次应用」时不带已有 applyId，宿主返回的列表里又没有该项，
+    // 于是按新 applyId 再插一行，同一 resId 在「妙享背屏」里累积多条。
+    // 应用入口是 Companion.q(isUpdate, bean, cacheHelper, continuation)，isUpdate 为 true 时
+    // 宿主按 (resId, applyId) 命中已有项做替换，这里只对 AI 陪伴场景把 applyId 对齐到已有项。
+    public static final String THEME_REAR_RES_OPERATION_COMPANION_CLASS =
+            "com.rearScreen.manager.RearScreenResOperationHelper$Companion";
+    public static final String THEME_REAR_LIST_ITEM_CLASS =
+            "com.rearScreen.bean.RearScreenListItemBean";
+    public static final String THEME_REAR_APPLY_ENTRY_METHOD = "q";
+    public static final String THEME_REAR_AI_COMPANION_RES_TYPE = "ai-mate";
+    public static final String THEME_REAR_AI_COMPANION_SUB_TYPE = "ai";
 
     // Z1.t: old gesture class
     public static final String HOOK_CLASS = "Z1.t";

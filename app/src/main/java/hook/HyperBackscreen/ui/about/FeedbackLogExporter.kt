@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.app.LocaleManager
+import android.content.res.Configuration
 import android.os.Build
 import androidx.core.content.FileProvider
 import hook.HyperBackscreen.BuildConfig
@@ -16,6 +18,7 @@ import hook.HyperBackscreen.ui.util.RearDisplayCompatibility
 import hook.HyperBackscreen.ui.util.currentDeviceName
 import hook.HyperBackscreen.ui.util.currentHyperOSVersion
 import hook.HyperBackscreen.ui.util.currentSystemVersion
+import hook.HyperBackscreen.ui.util.ThemePrefs
 import java.io.File
 import java.io.FileOutputStream
 import java.io.ByteArrayOutputStream
@@ -28,8 +31,10 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 internal object FeedbackLogExporter {
+    const val TOTAL_STEPS = 12
     private const val COMMAND_TIMEOUT_SECONDS = 20L
-    private const val FEEDBACK_SCHEMA_VERSION = 6
+    private const val FEEDBACK_SCHEMA_VERSION = 7
+    private const val MAX_AI_INDEX_BYTES = 2 * 1024 * 1024
     private const val MAX_LSPOSED_OUTPUT_BYTES = 256 * 1024
     private const val MAX_LOGCAT_OUTPUT_BYTES = 1024 * 1024
     private const val MAX_HOST_LOG_OUTPUT_BYTES = 1024 * 1024
@@ -50,6 +55,8 @@ internal object FeedbackLogExporter {
         var partial: File? = null
         return try {
             val appContext = context.applicationContext
+            val configSync = PrefsBridge.buildSyncDiagnosticReport(appContext)
+            val appearance = buildAppearanceReport(appContext)
             val directory = File(appContext.cacheDir, "feedback")
             if (!directory.exists() && !directory.mkdirs()) return null
             directory.listFiles()
@@ -62,23 +69,30 @@ internal object FeedbackLogExporter {
             val partialOutput = File(directory, "MiBackscreen-feedback-$timestamp.partial").also { partial = it }
             val databaseDirectory = File(directory, "database-$timestamp")
             staging = databaseDirectory
-            onProgress(0, 10)
-            val lsposedLog = collectLsposedLog().also { onProgress(1, 10) }
-            val logcat = collectLogcat().also { onProgress(2, 10) }
-            val rearScreenState = collectRearScreenState().also { onProgress(3, 10) }
-            val rearScreenFiles = collectRearScreenFiles().also { onProgress(4, 10) }
-            val rearScreenResourceReport = collectRearScreenResourceReport().also { onProgress(5, 10) }
-            val themeManagerFiles = collectThemeManagerFiles().also { onProgress(6, 10) }
-            val systemDiagnostics = collectSystemDiagnostics().also { onProgress(7, 10) }
-            val hostLog = collectSubScreenCenterLog().also { onProgress(8, 10) }
-            val databaseSnapshot = collectDatabaseSnapshot(databaseDirectory).also { onProgress(9, 10) }
+            onProgress(0, TOTAL_STEPS)
+            val lsposedLog = collectLsposedLog().also { onProgress(1, TOTAL_STEPS) }
+            val logcat = collectLogcat().also { onProgress(2, TOTAL_STEPS) }
+            val rearScreenState = collectRearScreenState().also { onProgress(3, TOTAL_STEPS) }
+            val rearScreenFiles = collectRearScreenFiles().also { onProgress(4, TOTAL_STEPS) }
+            val rearScreenResourceReport = collectRearScreenResourceReport().also { onProgress(5, TOTAL_STEPS) }
+            val themeManagerFiles = collectThemeManagerFiles().also { onProgress(6, TOTAL_STEPS) }
+            val systemDiagnostics = collectSystemDiagnostics().also { onProgress(7, TOTAL_STEPS) }
+            val hostLog = collectSubScreenCenterLog().also { onProgress(8, TOTAL_STEPS) }
+            val databaseSnapshot = collectDatabaseSnapshot(databaseDirectory).also { onProgress(9, TOTAL_STEPS) }
             val pickupState = buildPickupState(appContext, lsposedLog, logcat)
+            val aiRuntime = collectAiIndex("rearScreenAiApp_Theme/runtimeAiApp.json").also { onProgress(10, TOTAL_STEPS) }
+            val aiAppInfo = collectAiIndex("subscreencenter/config/appInfo.json").also { onProgress(11, TOTAL_STEPS) }
 
             try {
                 ZipOutputStream(FileOutputStream(partialOutput)).use { zip ->
                     zip.addText("feedback-info.txt", buildFeedbackInfo())
                     zip.addText("device.txt", buildDeviceReport(appContext))
                     zip.addText("config.txt", buildConfigReport(appContext))
+                    zip.addText("config-sync.txt", configSync)
+                    zip.addText("appearance.txt", appearance)
+                    zip.addText("ai-app-index/runtimeAiApp.txt", aiRuntime)
+                    zip.addText("ai-app-index/appInfo.txt", aiAppInfo)
+                    zip.addText("ai-app-index/comparison.txt", AiAppIndexReport.build(aiRuntime, aiAppInfo))
                     zip.addText("hook-status.txt", buildHookStatus(lsposedLog))
                     zip.addText("pickup-state.txt", pickupState)
                     zip.addText("system-diagnostics.txt", systemDiagnostics)
@@ -101,11 +115,13 @@ internal object FeedbackLogExporter {
             }
             check(partialOutput.renameTo(output)) { "Unable to finish feedback archive" }
             DiagnosticLogStore.appendLocal(appContext, "feedback archive created: ${output.name}")
-            onProgress(10, 10)
+            onProgress(TOTAL_STEPS, TOTAL_STEPS)
             output
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            DiagnosticLogStore.appendLocal(context.applicationContext,
+                "feedback export failed: ${error.javaClass.simpleName}")
             null
         } finally {
             partial?.delete()
@@ -117,7 +133,7 @@ internal object FeedbackLogExporter {
         appendLine("feedback_schema=$FEEDBACK_SCHEMA_VERSION")
         appendLine("capture_time=${SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US).format(Date())}")
         appendLine("capture_hint=Generate this archive immediately after reproducing the issue, before reapplying the wallpaper or restarting related apps.")
-        appendLine("privacy_hint=This archive contains rear-screen configuration, resource paths, editConfig text, file metadata, filtered system logs, and the Theme Manager rear-screen database. User wallpaper image/video bytes are not copied.")
+        appendLine("privacy_hint=This archive contains local/remote/pending preferences, app lists, pickup selections, appearance settings, AI app indexes, resource paths, editConfig text, file metadata, diagnostic events, filtered system logs, and the Theme Manager rear-screen database. User wallpaper image/video bytes are not copied.")
         appendLine("missing_data_hint=Each root-backed report records collection errors when root access is unavailable.")
     }
 
@@ -172,6 +188,8 @@ internal object FeedbackLogExporter {
         appendLine("disable_long_press_edit=${PrefsBridge.readDisableLongPressForUi(context)}")
         appendLine("remove_wallpaper_limit=${PrefsBridge.readRemoveWallpaperLimitForUi(context)}")
         appendLine("enable_app_card=${PrefsBridge.readEnableAppCardForUi(context)}")
+        appendLine("enable_18_pro_features=${PrefsBridge.readEnable18ProFeaturesForUi(context)}")
+        appendLine("enable_battery_ring=${PrefsBridge.readEnableBatteryRingForUi(context)}")
         appendLine("remove_app_card_limit=${PrefsBridge.readRemoveAppCardLimitForUi(context)}")
         appendLine("enable_pickup=${PrefsBridge.readEnablePickupForUi(context)}")
         appendLine("fix_rear_screen_apply=${PrefsBridge.readFixRearScreenApplyForUi(context)}")
@@ -182,10 +200,53 @@ internal object FeedbackLogExporter {
         appendLine("pickup_island_selection=${PrefsBridge.readPickupIslandSelectionForUi(context)}")
         appendLine("floating_nav_bar=${PrefsBridge.readFloatingNavBar(context)}")
         appendLine("liquid_glass=${PrefsBridge.readLiquidGlass(context)}")
+        appendLine("bottom_bar_blur=${PrefsBridge.readBottomBarBlur(context)}")
+        appendLine("show_function_count=${PrefsBridge.readShowFunctionCount(context)}")
+        appendLine("check_updates=${PrefsBridge.readCheckUpdates(context)}")
         appendLine("launcher_icon_hidden=${LauncherIconController.isHidden(context)}")
         appendLine("${RearDisplayCompatibility.BUILTIN_PRESENTATION_PROPERTY}=${RearDisplayCompatibility.builtinPresentationValue() ?: "unknown"}")
         appendLine("rear_display_hidden_warning=${RearDisplayCompatibility.isBuiltinPresentationDisabled()}")
     }
+
+    private fun buildAppearanceReport(context: Context): String = buildString {
+        val config = context.resources.configuration
+        val metrics = context.resources.displayMetrics
+        val theme = ThemePrefs.getThemeMode(context)
+        val systemDark = config.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        val locales = context.getSystemService(LocaleManager::class.java)
+        appendLine("theme_mode=${theme.name}")
+        appendLine("theme_mode_index=${theme.index}")
+        appendLine("system_dark=$systemDark")
+        appendLine("effective_dark=${theme.resolve(systemDark)}")
+        appendLine("dynamic_colors=${theme.usesDynamicColors}")
+        appendLine("application_locales=${locales?.applicationLocales?.toLanguageTags().orEmpty().ifEmpty { "follow_system" }}")
+        appendLine("system_locales=${locales?.systemLocales?.toLanguageTags() ?: "unknown"}")
+        appendLine("effective_locales=${config.locales.toLanguageTags()}")
+        appendLine("font_scale=${config.fontScale}")
+        appendLine("density_dpi=${metrics.densityDpi}")
+        appendLine("screen_width_dp=${config.screenWidthDp}")
+        appendLine("screen_height_dp=${config.screenHeightDp}")
+        appendLine("orientation=${config.orientation}")
+        appendLine("layout_direction=${config.layoutDirection}")
+        appendLine("floating_nav_bar=${PrefsBridge.readFloatingNavBar(context)}")
+        appendLine("liquid_glass=${PrefsBridge.readLiquidGlass(context)}")
+        appendLine("bottom_bar_blur=${PrefsBridge.readBottomBarBlur(context)}")
+        appendLine("show_function_count=${PrefsBridge.readShowFunctionCount(context)}")
+        appendLine("check_updates=${PrefsBridge.readCheckUpdates(context)}")
+        appendLine("launcher_icon_hidden=${LauncherIconController.isHidden(context)}")
+    }
+
+    private fun collectAiIndex(relativePath: String): String = runRootCommand(
+        "user_id=\$(am get-current-user 2>/dev/null); " +
+            "case \"\$user_id\" in ''|*[!0-9]*) echo 'CURRENT_USER_UNAVAILABLE'; exit 1;; esac; " +
+            "f=\"/data/system/theme_magic/users/\$user_id/$relativePath\"; " +
+            "if [ ! -f \"\$f\" ]; then echo \"MISSING: \$f\"; " +
+            "elif [ ! -r \"\$f\" ]; then echo \"UNREADABLE: \$f\"; " +
+            "else bytes=\$(wc -c < \"\$f\"); " +
+            "if [ \"\$bytes\" -gt $MAX_AI_INDEX_BYTES ]; then echo \"TOO_LARGE: \$f bytes=\$bytes limit=$MAX_AI_INDEX_BYTES\"; " +
+            "else head -c ${MAX_AI_INDEX_BYTES + 1} \"\$f\"; fi; fi",
+        MAX_AI_INDEX_BYTES + 1024,
+    )
 
     private fun buildHookStatus(lsposedLog: String): String {
         val statusLines = lsposedLog.lineSequence().filter { line ->

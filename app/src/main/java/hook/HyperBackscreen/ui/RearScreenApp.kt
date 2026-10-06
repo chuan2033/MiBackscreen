@@ -36,9 +36,11 @@ import hook.HyperBackscreen.app.ModuleApp
 import hook.HyperBackscreen.bridge.PrefsBridge
 import hook.HyperBackscreen.bridge.ModulePreferencesSnapshot
 import hook.HyperBackscreen.common.Constants
+import hook.HyperBackscreen.common.PackageListCodec
 import hook.HyperBackscreen.ui.updater.UpdateChecker
 import hook.HyperBackscreen.ui.updater.UpdateDialog
 import hook.HyperBackscreen.ui.updater.UpdateInfo
+import hook.HyperBackscreen.ui.battery.BatteryColorSlot
 import hook.HyperBackscreen.ui.util.AppLanguage
 import hook.HyperBackscreen.ui.util.RearDisplayCompatibility
 import hook.HyperBackscreen.ui.util.ThemeMode
@@ -82,6 +84,20 @@ internal fun RearScreenApp() {
         }
     }
 
+    var enable18ProFeatures by remember {
+        mutableStateOf(PrefsBridge.readEnable18ProFeaturesForUi(context))
+    }
+    var saving18ProFeatures by remember { mutableStateOf(false) }
+    var enableBatteryRing by remember { mutableStateOf(PrefsBridge.readEnableBatteryRingForUi(context)) }
+    var batteryColorIdle by remember {
+        mutableStateOf(PrefsBridge.readBatteryColorForUi(context, Constants.KEY_BATTERY_COLOR_IDLE))
+    }
+    var batteryColorCharging by remember {
+        mutableStateOf(PrefsBridge.readBatteryColorForUi(context, Constants.KEY_BATTERY_COLOR_CHARGING))
+    }
+    var batteryColorLow by remember {
+        mutableStateOf(PrefsBridge.readBatteryColorForUi(context, Constants.KEY_BATTERY_COLOR_LOW))
+    }
     var disableLongPress by remember {
         mutableStateOf(PrefsBridge.readDisableLongPressForUi(context))
     }
@@ -167,6 +183,11 @@ internal fun RearScreenApp() {
             scope.launch {
                 if (disposed) return@launch
                 val values = ModulePreferencesSnapshot.read(preferences)
+                enable18ProFeatures = values.enable18ProFeatures
+                enableBatteryRing = values.enableBatteryRing
+                batteryColorIdle = values.batteryColorIdle
+                batteryColorCharging = values.batteryColorCharging
+                batteryColorLow = values.batteryColorLow
                 disableLongPress = values.disableLongPress
                 removeWallpaperLimit = values.removeWallpaperLimit
                 enableAppCard = values.enableAppCard
@@ -232,6 +253,34 @@ internal fun RearScreenApp() {
     MiuixTheme(colors = appColors) {
       CompositionLocalProvider(LocalUiFeedback provides feedback) {
         HomeScreen(
+            enableBatteryRing = enableBatteryRing,
+            onEnableBatteryRingChange = { value ->
+                enableBatteryRing = value
+                PrefsBridge.writeEnableBatteryRingFromUi(context, value)
+                refreshScopes(Constants.TARGET_PACKAGE)
+            },
+            enable18ProFeatures = enable18ProFeatures,
+            onEnable18ProFeaturesChange = { newValue ->
+                if (!saving18ProFeatures) {
+                    saving18ProFeatures = true
+                    scope.launch {
+                        try {
+                            val saved = withContext(Dispatchers.IO) {
+                                PrefsBridge.writeEnable18ProFeaturesFromUi(context, newValue)
+                            }
+                            if (saved) {
+                                enable18ProFeatures = newValue
+                                refreshScopes(Constants.TARGET_PACKAGE, Constants.THEME_STORE_PACKAGE,
+                                    Constants.PERSONAL_ASSISTANT_PACKAGE)
+                            } else {
+                                feedback.show(saveFailed)
+                            }
+                        } finally {
+                            saving18ProFeatures = false
+                        }
+                    }
+                }
+            },
             disableLongPress = disableLongPress,
             removeWallpaperLimit = removeWallpaperLimit,
             removeAppCardLimit = removeAppCardLimit,
@@ -244,6 +293,9 @@ internal fun RearScreenApp() {
             checkUpdates = checkUpdates,
             enableAppCard = enableAppCard,
             enablePickup = enablePickup,
+            batteryColorIdle = batteryColorIdle,
+            batteryColorCharging = batteryColorCharging,
+            batteryColorLow = batteryColorLow,
             disableRearScreenCover = disableRearScreenCover,
             disableDoubleTapWake = disableDoubleTapWake,
             doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
@@ -301,17 +353,32 @@ internal fun RearScreenApp() {
                 enablePickup = newValue
                 PrefsBridge.writeEnablePickupFromUi(context, newValue)
             },
+            onBatteryColorChange = { slot, value ->
+                val key = when (slot) {
+                    BatteryColorSlot.IDLE -> Constants.KEY_BATTERY_COLOR_IDLE
+                    BatteryColorSlot.CHARGING -> Constants.KEY_BATTERY_COLOR_CHARGING
+                    BatteryColorSlot.LOW -> Constants.KEY_BATTERY_COLOR_LOW
+                }
+                when (slot) {
+                    BatteryColorSlot.IDLE -> batteryColorIdle = value
+                    BatteryColorSlot.CHARGING -> batteryColorCharging = value
+                    BatteryColorSlot.LOW -> batteryColorLow = value
+                }
+                PrefsBridge.writeBatteryColorFromUi(context, key, value)
+            },
             onDisableRearScreenCoverChange = { newValue ->
                 disableRearScreenCover = newValue
                 PrefsBridge.writeDisableRearScreenCoverFromUi(context, newValue)
             },
-            onDisableDoubleTapWakeChange = { newValue ->
-                disableDoubleTapWake = newValue
-                PrefsBridge.writeDisableDoubleTapWakeFromUi(context, newValue)
-            },
             onDoubleTapWakeDisabledPackagesChange = { newValue ->
                 doubleTapWakeDisabledPackages = newValue
                 PrefsBridge.writeDoubleTapWakeDisabledPackagesFromUi(context, newValue)
+                // 名单非空即启用，清空名单自动关闭。
+                val enabled = PackageListCodec.parse(newValue).isNotEmpty()
+                if (disableDoubleTapWake != enabled) {
+                    disableDoubleTapWake = enabled
+                    PrefsBridge.writeDisableDoubleTapWakeFromUi(context, enabled)
+                }
             },
             onLauncherIconHiddenChange = { newValue ->
                 if (LauncherIconController.setHidden(context, newValue)) {

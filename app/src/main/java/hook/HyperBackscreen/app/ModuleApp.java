@@ -11,6 +11,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import hook.HyperBackscreen.bridge.PrefsBridge;
+import hook.HyperBackscreen.bridge.DiagnosticLogStore;
 import io.github.libxposed.service.XposedService;
 import io.github.libxposed.service.XposedServiceHelper;
 
@@ -25,6 +26,11 @@ public class ModuleApp extends Application {
     @Nullable
     public static XposedService getService() {
         return service;
+    }
+
+    public static boolean isPreferenceServiceReady() {
+        XposedService current = service;
+        return current != null && readyService == current;
     }
 
     /** Provider/Binder worker only: wait for binding AND preference reconciliation, without polling. */
@@ -76,6 +82,7 @@ public class ModuleApp extends Application {
             public void onServiceBind(@NonNull XposedService s) {
                 readyService = null;
                 service = s;
+                DiagnosticLogStore.recordLocalAsync(appContext, "preference_service connected");
                 // 服务就绪后对齐本地与远程偏好，并通知 UI 刷新开关状态
                 PrefsBridge.syncOnServiceAvailable(appContext, s);
                 readyService = s;
@@ -86,6 +93,7 @@ public class ModuleApp extends Application {
             public void onServiceDied(@NonNull XposedService s) {
                 readyService = null;
                 service = null;
+                DiagnosticLogStore.recordLocalAsync(appContext, "preference_service disconnected");
                 notifyServiceListeners();
             }
         });

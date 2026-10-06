@@ -343,6 +343,9 @@ private fun PickupCodesPage(payload: PickupPayload, onBack: () -> Unit) {
                     top = paddingValues.calculateTopPadding()
                 )
             ) {
+                item(key = "top_spacer") {
+                    Spacer(Modifier.height(12.dp))
+                }
                 if (payload.codeCount == 0) {
                     item {
                         Column(
