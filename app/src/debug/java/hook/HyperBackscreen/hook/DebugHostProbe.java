@@ -126,15 +126,13 @@ public final class DebugHostProbe {
         if (instance == null) throw new IllegalStateException("Missing launcher singleton");
         List<?> source = (List<?>) manager.getDeclaredMethod("c").invoke(instance);
         long before = source.stream().filter(x -> PanelAppCard.isModuleEntry(loader, x)).count();
-        if (before != 0) throw new IllegalStateException("Module entry leaked into c()");
+        if (before > 1) throw new IllegalStateException("Duplicate module entry in c()");
         manager.getDeclaredMethod("d", Consumer.class).invoke(instance, (Consumer<Object>) value -> {
             List<?> list = (List<?>) value;
             long count = list.stream().filter(x -> PanelAppCard.isModuleEntry(loader, x)).count();
-            if (count != 1) { Log.e(Constants.LOG_TAG, "PROBE FAIL dispatch module count=" + count); return; }
-            List<Object> clean = PanelAppCard.withoutModuleEntry(loader, list);
-            boolean ok = clean != null && clean.size() == list.size() - 1;
+            if (count > 1) { Log.e(Constants.LOG_TAG, "PROBE FAIL dispatch module count=" + count); return; }
             Log.i(Constants.LOG_TAG, "PROBE cards source=" + source.size() + " dispatch="
-                    + list.size() + " module=" + count + " saveStrip=" + ok);
+                    + list.size() + " module=" + count);
         });
     }
 

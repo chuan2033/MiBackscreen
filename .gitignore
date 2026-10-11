@@ -14,6 +14,7 @@ captures/
 *.keystore
 **/build/
 **/.cxx/
+.tmp/
 .tmp-modules_config.db
 .tmp-miuix-src/
 

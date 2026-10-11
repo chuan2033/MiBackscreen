@@ -2,6 +2,8 @@ package hook.HyperBackscreen.ui.battery
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.graphics.Paint as AndroidPaint
+import android.graphics.Typeface
 import android.os.Build
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
@@ -43,7 +45,9 @@ import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -111,7 +115,9 @@ internal fun BatteryColorPage(
     idleColor: String,
     chargingColor: String,
     lowColor: String,
+    percentPosition: BatteryPercentPosition,
     onColorChange: (BatteryColorSlot, String) -> Unit,
+    onPercentPositionChange: (BatteryPercentPosition) -> Unit,
     onBack: () -> Unit
 ) {
     val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
@@ -206,6 +212,7 @@ internal fun BatteryColorPage(
                         geometry = rearScreenGeometry,
                         slot = selected,
                         color = resolveSlotColor(selected, rawFor(selected)),
+                        percentPosition = percentPosition,
                         wallpaper = wallpaper,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -219,6 +226,16 @@ internal fun BatteryColorPage(
                     CardBlock(pressFeedbackType = PressFeedbackType.None) {
                         val currentRaw = rawFor(selected)
                         val custom = parseBatteryColor(currentRaw)
+                        WindowDropdownPreference(
+                            items = BatteryPercentPosition.entries.map { stringResource(it.labelRes) },
+                            selectedIndex = percentPosition.ordinal,
+                            title = stringResource(R.string.battery_percent_position_title),
+                            summary = stringResource(percentPosition.labelRes),
+                            onSelectedIndexChange = { index ->
+                                BatteryPercentPosition.entries.getOrNull(index)
+                                    ?.let(onPercentPositionChange)
+                            }
+                        )
                         WindowDropdownPreference(
                             items = BatteryColorSlot.entries.map { stringResource(it.labelRes) },
                             selectedIndex = selected.ordinal,
@@ -263,6 +280,7 @@ private fun BatteryRearScreenPreview(
     geometry: BatteryRingGeometry.Profile,
     slot: BatteryColorSlot,
     color: Color,
+    percentPosition: BatteryPercentPosition,
     wallpaper: ImageBitmap?,
     modifier: Modifier = Modifier
 ) {
@@ -277,6 +295,14 @@ private fun BatteryRearScreenPreview(
     val context = LocalContext.current
     val lensMain = remember(geometry) { decodeDrawable(context, mainLensRes(geometry)) }
     val lensSecondary = remember(geometry) { decodeDrawable(context, secondaryLensRes(geometry)) }
+    val percentPaint = remember {
+        AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+            textAlign = AndroidPaint.Align.CENTER
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textSize = 38f
+            setShadowLayer(4f, 0f, 1.5f, 0x99000000.toInt())
+        }
+    }
     val panelColor = MiuixTheme.colorScheme.surfaceContainerHighest
     val outlineColor = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.12f)
     // 面板圆角轮廓：壁纸底图按它裁剪，和纯色回退共用同一形状。
@@ -366,6 +392,19 @@ private fun BatteryRearScreenPreview(
                 color = color,
                 style = Stroke(width = BatteryRingGeometry.STROKE_WIDTH, cap = StrokeCap.Round)
             )
+            geometry.percentTextAnchor(percentPosition)?.let { anchor ->
+                percentPaint.color = color.toArgb()
+                val metrics = percentPaint.fontMetrics
+                val baseline = anchor.y - (metrics.ascent + metrics.descent) / 2f
+                drawIntoCanvas { canvas ->
+                    canvas.nativeCanvas.drawText(
+                        "${slot.previewPercent}%",
+                        anchor.x + PreviewContentOffsetX,
+                        baseline,
+                        percentPaint
+                    )
+                }
+            }
         }
     }
 }

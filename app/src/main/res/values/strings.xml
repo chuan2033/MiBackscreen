@@ -7,6 +7,12 @@
     <string name="function_group_voice">Super Xiao Ai</string>
     <string name="function_battery_color_title">Edit battery display colors</string>
     <string name="function_battery_color_summary">Set colors for idle, charging and low battery; follows the system by default</string>
+    <string name="auto_wallpaper_interval_title">Rotate rear-screen wallpaper</string>
+    <string name="auto_wallpaper_interval_summary">%1$s; counts down while the rear screen is visible</string>
+    <string name="auto_wallpaper_interval_off">Off</string>
+    <string name="auto_wallpaper_interval_one_minute">Every 1 minute</string>
+    <string name="auto_wallpaper_interval_five_minutes">Every 5 minutes</string>
+    <string name="auto_wallpaper_interval_fifteen_minutes">Every 15 minutes</string>
     <string name="battery_color_state_idle">Not charging</string>
     <string name="battery_color_state_charging">Charging</string>
     <string name="battery_color_state_low">Low battery</string>
@@ -15,6 +21,10 @@
     <string name="battery_color_rgba_label">RGBA</string>
     <string name="battery_color_hex_label">HEX</string>
     <string name="battery_color_reset_system">Reset to system</string>
+    <string name="battery_percent_position_title">Battery percentage</string>
+    <string name="battery_percent_position_off">Hidden</string>
+    <string name="battery_percent_position_left">Between cameras, left</string>
+    <string name="battery_percent_position_right">Between cameras, right</string>
     <string name="battery_color_unsupported_model">This model\'s rear screen differs from the calibrated geometry; the battery display is not supported yet</string>
     <string name="battery_color_invalid_value">Invalid color. Use #RRGGBB or #AARRGGBB</string>
     <string name="home_root_permission_required">Please grant this app Root access. Some features require Root access.</string>
@@ -28,7 +38,7 @@
     <string name="app_picker_load_failed">Could not load apps. Your selections have been kept. Tap Retry to try again.</string>
     <string name="app_picker_unavailable">No enabled apps are visible to the system query. Check app-list access in system settings and retry. Existing selections are kept.</string>
     <string name="app_picker_partial">Some selected apps are currently unavailable or hidden from this list. You can still deselect them.</string>
-    <string name="ai_rear_screen_title">AI rear screen</string>
+    <string name="ai_rear_screen_title">AI Companion</string>
     <string name="activity_open_failed">Could not open this page. Check that the required app is installed and enabled, then retry.</string>
     <string name="pickup_title">Pickup codes</string>
     <plurals name="pickup_count">
@@ -85,8 +95,8 @@
     <string name="config_module_entry_title">Module entry</string>
     <string name="config_module_entry_disabled">Disabled</string>
     <string name="config_module_entry_theme_settings">Rear screen settings</string>
-    <string name="config_enable_app_card_title">Rear screen app cards</string>
-    <string name="config_enable_app_card_summary">Enable rear screen app cards and the module card entry</string>
+    <string name="config_enable_app_card_title">Add to My app cards</string>
+    <string name="config_enable_app_card_summary">Restore the MiBackscreen quick panel entry</string>
     <string name="config_hide_launcher_icon">Hide home screen icon</string>
     <string name="config_floating_bar_title">Floating Bar</string>
     <string name="config_floating_bar_summary">Use a floating-style bottom bar</string>
@@ -138,13 +148,16 @@
     <!-- Swipe-up Panel -->
     <string name="panel_title">Rear Screen Quick Panel</string>
     <string name="panel_restart_required">Please restart the rear screen scope</string>
-    <string name="panel_disable_long_press_title">Disable long-press wallpaper switching</string>
-    <string name="panel_disable_long_press_on">Factory long-press switching is disabled</string>
-    <string name="panel_disable_long_press_off">Factory long-press behavior is enabled</string>
-    <string name="panel_remove_limit_title">Remove rear wallpaper count limit</string>
+    <string name="panel_disable_long_press_title">Disable rear screen long press to switch wallpaper</string>
+    <string name="panel_disable_long_press_on">Rear screen long-press wallpaper switching is disabled</string>
+    <string name="panel_disable_long_press_off">Rear screen long-press wallpaper switching uses the default behavior</string>
+    <string name="panel_remove_limit_title">Remove rear screen wallpaper count limit</string>
     <string name="panel_remove_limit_on">The 15-wallpaper limit is removed</string>
     <string name="panel_remove_limit_off">The default 15-wallpaper limit is active</string>
-    <string name="panel_remove_app_card_limit_title">Remove rear screen app card count limit</string>
+    <string name="panel_battery_ring_title">Rear-screen battery</string>
+    <string name="panel_battery_ring_on">Rear-screen battery is shown</string>
+    <string name="panel_battery_ring_off">Rear-screen battery is hidden</string>
+    <string name="panel_remove_app_card_limit_title">Remove app card count limit</string>
     <string name="panel_remove_app_card_limit_on">The 15-app-card limit is removed</string>
     <string name="panel_remove_app_card_limit_off">The default 15-app-card limit is active</string>
     <string name="panel_save_failed">Save failed; change this setting in the main app</string>

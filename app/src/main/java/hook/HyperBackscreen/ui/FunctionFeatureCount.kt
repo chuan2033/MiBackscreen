@@ -11,6 +11,7 @@ internal fun countEnabledFunctions(
     enablePickup: Boolean,
     enable18ProFeatures: Boolean,
     enableBatteryRing: Boolean = false,
+    autoWallpaperEnabled: Boolean = false,
     // 非校准机型不显示背屏电量显示开关，计数也要跟着排除。
     batteryRingSupported: Boolean = true,
 ): Int = listOf(
@@ -23,4 +24,5 @@ internal fun countEnabledFunctions(
     enablePickup,
     enable18ProFeatures,
     enableBatteryRing && batteryRingSupported,
+    autoWallpaperEnabled,
 ).count { it }

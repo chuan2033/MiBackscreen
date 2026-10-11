@@ -12,5 +12,13 @@ final class SizeCappedList extends ArrayList<Object> {
         this.cappedSize = cappedSize;
     }
 
+    ArrayList<Object> fullCopy() {
+        ArrayList<Object> items = new ArrayList<>();
+        for (int i = 0; i < super.size(); i++) {
+            items.add(super.get(i));
+        }
+        return items;
+    }
+
     @Override public int size() { return Math.min(super.size(), cappedSize); }
 }

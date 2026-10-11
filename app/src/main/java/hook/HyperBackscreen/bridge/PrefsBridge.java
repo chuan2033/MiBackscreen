@@ -10,9 +10,12 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 import hook.HyperBackscreen.app.ModuleApp;
 import hook.HyperBackscreen.common.Constants;
 import hook.HyperBackscreen.common.RearScreenWakeMatcher;
+import hook.HyperBackscreen.hook.AutoWallpaperRotationPolicy;
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.service.XposedService;
 
@@ -20,6 +23,8 @@ public final class PrefsBridge {
     private static final String TAG = Constants.LOG_TAG + ":PrefsBridge";
     private static final String PENDING_PANEL_PREFIX = "__pending_panel__";
     static final String PENDING_UI_PREFIX = "__pending_ui__";
+    private static final ConcurrentHashMap<String, Boolean> sRemoteBooleanOverrides =
+            new ConcurrentHashMap<>();
 
     public static final boolean DEFAULT_DISABLE_LONG_PRESS_EDIT = true;
     public static final boolean DEFAULT_REMOVE_WALLPAPER_LIMIT = true;
@@ -28,6 +33,8 @@ public final class PrefsBridge {
     public static final boolean DEFAULT_ENABLE_BATTERY_RING = false;
     /** 背屏电量显示颜色覆盖，空字符串表示跟随系统（SystemUI 电池资源色）。 */
     public static final String DEFAULT_BATTERY_COLOR = "";
+    public static final String DEFAULT_BATTERY_PERCENT_POSITION = "off";
+    public static final String DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES = "0";
     public static final boolean DEFAULT_REMOVE_APP_CARD_LIMIT = true;
     public static final boolean DEFAULT_FIX_REAR_SCREEN_APPLY = false;
     private static final boolean DEFAULT_FLOATING_NAV_BAR = false;
@@ -126,6 +133,17 @@ public final class PrefsBridge {
         return localPrefs.getBoolean(key, def);
     }
 
+    public static void setRemoteBooleanOverride(@NonNull String key, boolean value) {
+        sRemoteBooleanOverrides.put(key, value);
+    }
+
+    private static boolean readRemoteBooleanWithOverride(@NonNull String key, boolean def) {
+        Boolean override = sRemoteBooleanOverrides.get(key);
+        if (override != null) return override;
+        SharedPreferences prefs = remotePrefsFromModule();
+        return prefs != null ? prefs.getBoolean(key, def) : def;
+    }
+
     /** UI 双写；服务未连接时保存待同步值，重连后补交到 RemotePreferences。 */
     private static void writeFromUi(@NonNull Context context, @NonNull String key, boolean value) {
         SharedPreferences localPrefs = local(context);
@@ -144,6 +162,30 @@ public final class PrefsBridge {
         }
         DiagnosticLogStore.recordLocalAsync(context, "preference_write key=" + key
                 + " value=" + value + " destination=" + (remote != null ? "remote_apply_requested" : "local_pending"));
+    }
+
+    private static boolean writeFromUiCommitted(@NonNull Context context, @NonNull String key, boolean value) {
+        SharedPreferences localPrefs = local(context);
+        SharedPreferences remote = remote();
+        boolean saved = false;
+        if (remote != null) {
+            saved = remote.edit().putBoolean(key, value).commit();
+            SharedPreferences.Editor editor = localPrefs.edit().putBoolean(key, value);
+            if (saved) {
+                editor.remove(PENDING_UI_PREFIX + key);
+            } else {
+                editor.putBoolean(PENDING_UI_PREFIX + key, value);
+            }
+            editor.apply();
+        } else {
+            localPrefs.edit()
+                    .putBoolean(key, value)
+                    .putBoolean(PENDING_UI_PREFIX + key, value)
+                    .apply();
+        }
+        DiagnosticLogStore.recordLocalAsync(context, "preference_write key=" + key
+                + " value=" + value + " destination=" + (saved ? "remote_commit" : "local_pending"));
+        return saved;
     }
 
     private static String readStringForUi(@NonNull Context context, @NonNull String key, @NonNull String def) {
@@ -220,8 +262,8 @@ public final class PrefsBridge {
         return readForUi(context, Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT);
     }
 
-    public static void writeDisableLongPressFromUi(@NonNull Context context, boolean disabled) {
-        writeFromUi(context, Constants.KEY_DISABLE_LONG_PRESS_EDIT, disabled);
+    public static boolean writeDisableLongPressFromUi(@NonNull Context context, boolean disabled) {
+        return writeFromUiCommitted(context, Constants.KEY_DISABLE_LONG_PRESS_EDIT, disabled);
     }
 
     public static boolean readRemoveWallpaperLimitForUi(@NonNull Context context) {
@@ -240,8 +282,8 @@ public final class PrefsBridge {
         return readForUi(context, Constants.KEY_ENABLE_BATTERY_RING, DEFAULT_ENABLE_BATTERY_RING);
     }
 
-    public static void writeEnableBatteryRingFromUi(@NonNull Context context, boolean enabled) {
-        writeFromUi(context, Constants.KEY_ENABLE_BATTERY_RING, enabled);
+    public static boolean writeEnableBatteryRingFromUi(@NonNull Context context, boolean enabled) {
+        return writeFromUiCommitted(context, Constants.KEY_ENABLE_BATTERY_RING, enabled);
     }
 
     public static boolean shouldEnableBatteryRing(@NonNull XposedModule module) {
@@ -260,10 +302,56 @@ public final class PrefsBridge {
         writeStringFromUi(context, key, value);
     }
 
+    @NonNull
+    public static String readBatteryPercentPositionForUi(@NonNull Context context) {
+        return readStringForUi(
+                context,
+                Constants.KEY_BATTERY_PERCENT_POSITION,
+                DEFAULT_BATTERY_PERCENT_POSITION);
+    }
+
+    public static void writeBatteryPercentPositionFromUi(@NonNull Context context,
+                                                         @NonNull String value) {
+        writeStringFromUi(context, Constants.KEY_BATTERY_PERCENT_POSITION, value);
+    }
+
     /** 电量颜色覆盖（Hook 侧）：空字符串表示跟随系统。 */
     @NonNull
     public static String readBatteryColor(@NonNull XposedModule module, @NonNull String key) {
         return readStringForHook(module, key, DEFAULT_BATTERY_COLOR);
+    }
+
+    @NonNull
+    public static String readBatteryPercentPosition(@NonNull XposedModule module) {
+        return readStringForHook(
+                module,
+                Constants.KEY_BATTERY_PERCENT_POSITION,
+                DEFAULT_BATTERY_PERCENT_POSITION);
+    }
+
+    @NonNull
+    public static String readAutoWallpaperIntervalForUi(@NonNull Context context) {
+        return AutoWallpaperRotationPolicy.normalizePreferenceValue(readStringForUi(
+                context,
+                Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES,
+                DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES));
+    }
+
+    public static void writeAutoWallpaperIntervalFromUi(
+            @NonNull Context context,
+            @NonNull String value
+    ) {
+        writeStringFromUi(
+                context,
+                Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES,
+                AutoWallpaperRotationPolicy.normalizePreferenceValue(value));
+    }
+
+    public static int readAutoWallpaperIntervalMinutes(@NonNull XposedModule module) {
+        return AutoWallpaperRotationPolicy.parseIntervalMinutes(readStringForHook(
+                module,
+                Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES,
+                DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES));
     }
 
     public static boolean writeEnable18ProFeaturesFromUi(@NonNull Context context, boolean enabled) {
@@ -304,6 +392,40 @@ public final class PrefsBridge {
 
     public static void writeEnableAppCardFromUi(@NonNull Context context, boolean enabled) {
         writeFromUi(context, Constants.KEY_ENABLE_APP_CARD, enabled);
+    }
+
+    public static boolean requestInstallAppCardFromUi(@NonNull Context context) {
+        SharedPreferences localPrefs = local(context);
+        SharedPreferences remotePrefs = remote();
+        if (remotePrefs == null) {
+            localPrefs.edit()
+                    .putBoolean(Constants.KEY_ENABLE_APP_CARD, true)
+                    .putBoolean(Constants.KEY_APP_CARD_INSTALL_REQUEST, true)
+                    .putBoolean(PENDING_UI_PREFIX + Constants.KEY_ENABLE_APP_CARD, true)
+                    .putBoolean(PENDING_UI_PREFIX + Constants.KEY_APP_CARD_INSTALL_REQUEST, true)
+                    .apply();
+            DiagnosticLogStore.recordLocalAsync(context,
+                    "app_card_install_request destination=local_pending");
+            return false;
+        }
+        boolean saved = remotePrefs.edit()
+                .putBoolean(Constants.KEY_ENABLE_APP_CARD, true)
+                .putBoolean(Constants.KEY_APP_CARD_INSTALL_REQUEST, true)
+                .commit();
+        SharedPreferences.Editor editor = localPrefs.edit()
+                .putBoolean(Constants.KEY_ENABLE_APP_CARD, true)
+                .putBoolean(Constants.KEY_APP_CARD_INSTALL_REQUEST, true);
+        if (saved) {
+            editor.remove(PENDING_UI_PREFIX + Constants.KEY_ENABLE_APP_CARD)
+                    .remove(PENDING_UI_PREFIX + Constants.KEY_APP_CARD_INSTALL_REQUEST);
+        } else {
+            editor.putBoolean(PENDING_UI_PREFIX + Constants.KEY_ENABLE_APP_CARD, true)
+                    .putBoolean(PENDING_UI_PREFIX + Constants.KEY_APP_CARD_INSTALL_REQUEST, true);
+        }
+        editor.apply();
+        DiagnosticLogStore.recordLocalAsync(context,
+                "app_card_install_request destination=" + (saved ? "remote_commit" : "local_pending"));
+        return saved;
     }
 
     public static boolean readRemoveAppCardLimitForUi(@NonNull Context context) {
@@ -462,7 +584,10 @@ public final class PrefsBridge {
     }
 
     public static boolean shouldBlockLongPressEdit(@NonNull XposedModule module) {
-        return readForHook(module, Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT);
+        Boolean override = sRemoteBooleanOverrides.get(Constants.KEY_DISABLE_LONG_PRESS_EDIT);
+        return override != null
+                ? override
+                : readForHook(module, Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT);
     }
 
     public static boolean shouldRemoveWallpaperLimit(@NonNull XposedModule module) {
@@ -471,6 +596,27 @@ public final class PrefsBridge {
 
     public static boolean shouldEnableAppCard(@NonNull XposedModule module) {
         return readForHook(module, Constants.KEY_ENABLE_APP_CARD, DEFAULT_ENABLE_APP_CARD);
+    }
+
+    public static boolean shouldInstallAppCard(@NonNull XposedModule module) {
+        try {
+            SharedPreferences prefs = module.getRemotePreferences(Constants.PREF_GROUP);
+            return prefs != null && prefs.getBoolean(Constants.KEY_APP_CARD_INSTALL_REQUEST, false);
+        } catch (Throwable e) {
+            Log.w(TAG, "Failed to read app card install request", e);
+            return false;
+        }
+    }
+
+    public static void clearAppCardInstallRequest(@NonNull XposedModule module) {
+        try {
+            SharedPreferences prefs = module.getRemotePreferences(Constants.PREF_GROUP);
+            if (prefs != null) {
+                prefs.edit().putBoolean(Constants.KEY_APP_CARD_INSTALL_REQUEST, false).commit();
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "Failed to clear app card install request", e);
+        }
     }
 
     public static boolean shouldRemoveAppCardLimit(@NonNull XposedModule module) {
@@ -521,10 +667,9 @@ public final class PrefsBridge {
     }
 
     public static boolean readDisableLongPressForRemote() {
-        SharedPreferences prefs = remotePrefsFromModule();
-        return prefs != null
-                ? prefs.getBoolean(Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT)
-                : DEFAULT_DISABLE_LONG_PRESS_EDIT;
+        return readRemoteBooleanWithOverride(
+                Constants.KEY_DISABLE_LONG_PRESS_EDIT,
+                DEFAULT_DISABLE_LONG_PRESS_EDIT);
     }
 
     public static boolean requestDisableLongPressWrite(@NonNull Context context, boolean disabled) {
@@ -532,21 +677,47 @@ public final class PrefsBridge {
     }
 
     public static boolean readRemoveWallpaperLimitForRemote() {
-        SharedPreferences prefs = remotePrefsFromModule();
-        return prefs != null
-                ? prefs.getBoolean(Constants.KEY_REMOVE_WALLPAPER_LIMIT, DEFAULT_REMOVE_WALLPAPER_LIMIT)
-                : DEFAULT_REMOVE_WALLPAPER_LIMIT;
+        return readRemoteBooleanWithOverride(
+                Constants.KEY_REMOVE_WALLPAPER_LIMIT,
+                DEFAULT_REMOVE_WALLPAPER_LIMIT);
     }
 
     public static boolean requestRemoveWallpaperLimitWrite(@NonNull Context context, boolean enabled) {
         return requestPanelPreferenceWrite(context, Constants.KEY_REMOVE_WALLPAPER_LIMIT, enabled);
     }
 
-    public static boolean readRemoveAppCardLimitForRemote() {
+    public static boolean readEnableBatteryRingForRemote() {
+        return readRemoteBooleanWithOverride(
+                Constants.KEY_ENABLE_BATTERY_RING,
+                DEFAULT_ENABLE_BATTERY_RING);
+    }
+
+    @NonNull
+    public static String readBatteryColorForRemote(@NonNull String key) {
         SharedPreferences prefs = remotePrefsFromModule();
-        return prefs != null
-                ? prefs.getBoolean(Constants.KEY_REMOVE_APP_CARD_LIMIT, DEFAULT_REMOVE_APP_CARD_LIMIT)
-                : DEFAULT_REMOVE_APP_CARD_LIMIT;
+        if (prefs == null) return DEFAULT_BATTERY_COLOR;
+        String value = prefs.getString(key, DEFAULT_BATTERY_COLOR);
+        return value == null ? DEFAULT_BATTERY_COLOR : value;
+    }
+
+    @NonNull
+    public static String readBatteryPercentPositionForRemote() {
+        SharedPreferences prefs = remotePrefsFromModule();
+        if (prefs == null) return DEFAULT_BATTERY_PERCENT_POSITION;
+        String value = prefs.getString(
+                Constants.KEY_BATTERY_PERCENT_POSITION,
+                DEFAULT_BATTERY_PERCENT_POSITION);
+        return value == null ? DEFAULT_BATTERY_PERCENT_POSITION : value;
+    }
+
+    public static boolean requestEnableBatteryRingWrite(@NonNull Context context, boolean enabled) {
+        return requestPanelPreferenceWrite(context, Constants.KEY_ENABLE_BATTERY_RING, enabled);
+    }
+
+    public static boolean readRemoveAppCardLimitForRemote() {
+        return readRemoteBooleanWithOverride(
+                Constants.KEY_REMOVE_APP_CARD_LIMIT,
+                DEFAULT_REMOVE_APP_CARD_LIMIT);
     }
 
     public static boolean requestRemoveAppCardLimitWrite(@NonNull Context context, boolean enabled) {
@@ -564,8 +735,12 @@ public final class PrefsBridge {
                     Constants.PANEL_PREFERENCE_METHOD_SET,
                     key,
                     extras);
-            return result != null
+            boolean accepted = result != null
                     && result.getBoolean(Constants.EXTRA_PREFERENCE_ACCEPTED, false);
+            if (accepted) {
+                setRemoteBooleanOverride(key, value);
+            }
+            return accepted;
         } catch (Throwable e) {
             Log.w(TAG, "Failed to request panel preference write for " + key, e);
             return false;
@@ -575,6 +750,7 @@ public final class PrefsBridge {
     static boolean isPanelWritableKey(@Nullable String key) {
         return Constants.KEY_DISABLE_LONG_PRESS_EDIT.equals(key)
                 || Constants.KEY_REMOVE_WALLPAPER_LIMIT.equals(key)
+                || Constants.KEY_ENABLE_BATTERY_RING.equals(key)
                 || Constants.KEY_REMOVE_APP_CARD_LIMIT.equals(key);
     }
 
@@ -624,10 +800,12 @@ public final class PrefsBridge {
             SharedPreferences remotePrefs = service.getRemotePreferences(Constants.PREF_GROUP);
             flushPanelPreference(context, Constants.KEY_DISABLE_LONG_PRESS_EDIT);
             flushPanelPreference(context, Constants.KEY_REMOVE_WALLPAPER_LIMIT);
+            flushPanelPreference(context, Constants.KEY_ENABLE_BATTERY_RING);
             flushPanelPreference(context, Constants.KEY_REMOVE_APP_CARD_LIMIT);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_LONG_PRESS_EDIT);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_PICKUP);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_APP_CARD);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_APP_CARD_INSTALL_REQUEST);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_18_PRO_FEATURES);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_BATTERY_RING);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT);
@@ -641,12 +819,18 @@ public final class PrefsBridge {
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_IDLE);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_CHARGING);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_LOW);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_POSITION);
+            flushUiStringPreference(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT, DEFAULT_REMOVE_WALLPAPER_LIMIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_APP_CARD_LIMIT, DEFAULT_REMOVE_APP_CARD_LIMIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_PICKUP, DEFAULT_ENABLE_PICKUP);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_APP_CARD, DEFAULT_ENABLE_APP_CARD);
+            syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_APP_CARD_INSTALL_REQUEST, false);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_18_PRO_FEATURES, DEFAULT_ENABLE_18_PRO_FEATURES);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_BATTERY_RING, DEFAULT_ENABLE_BATTERY_RING);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_REAR_SCREEN_COVER, DEFAULT_DISABLE_REAR_SCREEN_COVER);
@@ -677,6 +861,16 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_BATTERY_COLOR_LOW,
                     DEFAULT_BATTERY_COLOR);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_PERCENT_POSITION,
+                    DEFAULT_BATTERY_PERCENT_POSITION);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES,
+                    DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES);
             long pending = localPrefs.getAll().keySet().stream()
                     .filter(key -> key.startsWith(PENDING_UI_PREFIX) || key.startsWith(PENDING_PANEL_PREFIX))
                     .count();

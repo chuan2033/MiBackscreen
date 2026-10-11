@@ -1,6 +1,7 @@
 package hook.HyperBackscreen.ui.battery
 
 import android.graphics.Path
+import android.graphics.PointF
 import android.graphics.RectF
 import kotlin.math.abs
 
@@ -107,6 +108,14 @@ internal object BatteryRingGeometry {
         fun contourPath(): Path = contourPathProvider()
 
         fun moduleBounds(): RectF = moduleBoundsProvider()
+
+        fun percentTextAnchor(position: BatteryPercentPosition): PointF? {
+            if (position == BatteryPercentPosition.OFF) return null
+            val bounds = moduleBounds()
+            val offset = bounds.width() * 0.22f
+            val x = bounds.centerX() + if (position == BatteryPercentPosition.LEFT) -offset else offset
+            return PointF(x, bounds.centerY())
+        }
 
         fun matchesSize(width: Int, height: Int): Boolean {
             return abs(width - referenceWidth.toInt()) <= 1 &&

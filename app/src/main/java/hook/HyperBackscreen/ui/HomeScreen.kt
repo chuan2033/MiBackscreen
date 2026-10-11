@@ -57,6 +57,7 @@ import hook.HyperBackscreen.ui.about.LicensePage
 import hook.HyperBackscreen.ui.battery.BatteryRingGeometry
 import hook.HyperBackscreen.ui.battery.BatteryColorPage
 import hook.HyperBackscreen.ui.battery.BatteryColorSlot
+import hook.HyperBackscreen.ui.battery.BatteryPercentPosition
 import hook.HyperBackscreen.ui.components.BlurredBar
 import hook.HyperBackscreen.ui.components.FloatingBottomBar
 import hook.HyperBackscreen.ui.components.FunctionCountBadge
@@ -147,6 +148,7 @@ internal fun HomeScreen(
     disableLongPress: Boolean,
     removeWallpaperLimit: Boolean,
     removeAppCardLimit: Boolean,
+    autoWallpaperInterval: AutoWallpaperInterval,
     fixRearScreenApply: Boolean,
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
@@ -163,6 +165,7 @@ internal fun HomeScreen(
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
     onRemoveAppCardLimitChange: (Boolean) -> Unit,
+    onAutoWallpaperIntervalChange: (AutoWallpaperInterval) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
@@ -184,7 +187,9 @@ internal fun HomeScreen(
     batteryColorIdle: String,
     batteryColorCharging: String,
     batteryColorLow: String,
-    onBatteryColorChange: (BatteryColorSlot, String) -> Unit
+    batteryPercentPosition: BatteryPercentPosition,
+    onBatteryColorChange: (BatteryColorSlot, String) -> Unit,
+    onBatteryPercentPositionChange: (BatteryPercentPosition) -> Unit
 ) {
     val enabledFunctionCount = countEnabledFunctions(
         enableBatteryRing = enableBatteryRing,
@@ -193,6 +198,7 @@ internal fun HomeScreen(
         disableLongPress = disableLongPress,
         removeWallpaperLimit = removeWallpaperLimit,
         removeAppCardLimit = removeAppCardLimit,
+        autoWallpaperEnabled = autoWallpaperInterval != AutoWallpaperInterval.OFF,
         fixRearScreenApply = fixRearScreenApply,
         disableRearScreenCover = disableRearScreenCover,
         disableDoubleTapWake = disableDoubleTapWake,
@@ -270,7 +276,9 @@ internal fun HomeScreen(
                         idleColor = batteryColorIdle,
                         chargingColor = batteryColorCharging,
                         lowColor = batteryColorLow,
+                        percentPosition = batteryPercentPosition,
                         onColorChange = onBatteryColorChange,
+                        onPercentPositionChange = onBatteryPercentPositionChange,
                         onBack = navigateBack
                     )
                     HomeRoute.Main -> MainContent(
@@ -287,6 +295,7 @@ internal fun HomeScreen(
                         disableLongPress = disableLongPress,
                         removeWallpaperLimit = removeWallpaperLimit,
                         removeAppCardLimit = removeAppCardLimit,
+                        autoWallpaperInterval = autoWallpaperInterval,
                         fixRearScreenApply = fixRearScreenApply,
                         floatingNavBar = floatingNavBar,
                         liquidGlass = liquidGlass,
@@ -301,6 +310,7 @@ internal fun HomeScreen(
                         onDisableLongPressChange = onDisableLongPressChange,
                         onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
                         onRemoveAppCardLimitChange = onRemoveAppCardLimitChange,
+                        onAutoWallpaperIntervalChange = onAutoWallpaperIntervalChange,
                         onFixRearScreenApplyChange = onFixRearScreenApplyChange,
                         onFloatingNavBarChange = onFloatingNavBarChange,
                         onLiquidGlassChange = onLiquidGlassChange,
@@ -448,6 +458,7 @@ private fun MainTabPage(
     disableLongPress: Boolean,
     removeWallpaperLimit: Boolean,
     removeAppCardLimit: Boolean,
+    autoWallpaperInterval: AutoWallpaperInterval,
     fixRearScreenApply: Boolean,
     disableRearScreenCover: Boolean,
     doubleTapWakeDisabledPackages: String,
@@ -457,6 +468,7 @@ private fun MainTabPage(
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
     onRemoveAppCardLimitChange: (Boolean) -> Unit,
+    onAutoWallpaperIntervalChange: (AutoWallpaperInterval) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onEnablePickupChange: (Boolean) -> Unit,
@@ -550,6 +562,7 @@ private fun MainTabPage(
                             disableLongPress = disableLongPress,
                             removeWallpaperLimit = removeWallpaperLimit,
                             removeAppCardLimit = removeAppCardLimit,
+                            autoWallpaperInterval = autoWallpaperInterval,
                             fixRearScreenApply = fixRearScreenApply,
                             disableRearScreenCover = disableRearScreenCover,
                             doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
@@ -557,6 +570,7 @@ private fun MainTabPage(
                             onDisableLongPressChange = onDisableLongPressChange,
                             onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
                             onRemoveAppCardLimitChange = onRemoveAppCardLimitChange,
+                            onAutoWallpaperIntervalChange = onAutoWallpaperIntervalChange,
                             onFixRearScreenApplyChange = onFixRearScreenApplyChange,
                             onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                             onEnablePickupChange = onEnablePickupChange,
@@ -595,6 +609,7 @@ private fun MainContent(
     disableLongPress: Boolean,
     removeWallpaperLimit: Boolean,
     removeAppCardLimit: Boolean,
+    autoWallpaperInterval: AutoWallpaperInterval,
     fixRearScreenApply: Boolean,
     floatingNavBar: Boolean,
     liquidGlass: Boolean,
@@ -609,6 +624,7 @@ private fun MainContent(
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
     onRemoveAppCardLimitChange: (Boolean) -> Unit,
+    onAutoWallpaperIntervalChange: (AutoWallpaperInterval) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFloatingNavBarChange: (Boolean) -> Unit,
     onLiquidGlassChange: (Boolean) -> Unit,
@@ -708,6 +724,7 @@ private fun MainContent(
                 disableLongPress = disableLongPress,
                 removeWallpaperLimit = removeWallpaperLimit,
                 removeAppCardLimit = removeAppCardLimit,
+                autoWallpaperInterval = autoWallpaperInterval,
                 fixRearScreenApply = fixRearScreenApply,
                 disableRearScreenCover = disableRearScreenCover,
                 doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
@@ -717,6 +734,7 @@ private fun MainContent(
                 onDisableLongPressChange = onDisableLongPressChange,
                 onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
                 onRemoveAppCardLimitChange = onRemoveAppCardLimitChange,
+                onAutoWallpaperIntervalChange = onAutoWallpaperIntervalChange,
                 onFixRearScreenApplyChange = onFixRearScreenApplyChange,
                 onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                 onEnablePickupChange = onEnablePickupChange,

@@ -7,12 +7,14 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.common.PackageListCodec
+import hook.HyperBackscreen.ui.AutoWallpaperInterval
 import hook.HyperBackscreen.ui.battery.BatteryRingGeometry
 import hook.HyperBackscreen.ui.components.AnimatedPreferenceVisibility
 import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.components.CollapsibleFunctionGroup
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 @Composable
@@ -25,6 +27,7 @@ internal fun FunctionPage(
     disableLongPress: Boolean,
     removeWallpaperLimit: Boolean,
     removeAppCardLimit: Boolean,
+    autoWallpaperInterval: AutoWallpaperInterval,
     fixRearScreenApply: Boolean,
     disableRearScreenCover: Boolean,
     doubleTapWakeDisabledPackages: String,
@@ -32,6 +35,7 @@ internal fun FunctionPage(
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
     onRemoveAppCardLimitChange: (Boolean) -> Unit,
+    onAutoWallpaperIntervalChange: (AutoWallpaperInterval) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onEnablePickupChange: (Boolean) -> Unit,
@@ -101,6 +105,19 @@ internal fun FunctionPage(
                     checked = removeAppCardLimit,
                     onCheckedChange = onRemoveAppCardLimitChange,
                     title = stringResource(R.string.home_remove_app_card_limit_title)
+                )
+                WindowDropdownPreference(
+                    items = AutoWallpaperInterval.entries.map { stringResource(it.labelRes) },
+                    selectedIndex = autoWallpaperInterval.ordinal,
+                    title = stringResource(R.string.auto_wallpaper_interval_title),
+                    summary = stringResource(
+                        R.string.auto_wallpaper_interval_summary,
+                        stringResource(autoWallpaperInterval.labelRes),
+                    ),
+                    onSelectedIndexChange = { index ->
+                        AutoWallpaperInterval.entries.getOrNull(index)
+                            ?.let(onAutoWallpaperIntervalChange)
+                    }
                 )
             }
 

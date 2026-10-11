@@ -11,6 +11,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PathMeasure
+import android.graphics.Typeface
 import android.os.BatteryManager
 import android.os.Build
 import android.view.View
@@ -23,33 +24,117 @@ import io.github.libxposed.api.XposedModule
 
 object BatteryRingHost {
     private var ring: BatteryRingView? = null
+    private var syncReceiver: BroadcastReceiver? = null
+    private var syncReceiverActivity: Activity? = null
 
     @JvmStatic
     fun show(activity: Activity, module: XposedModule) {
-        release(activity)
+        ensureSyncReceiver(activity)
+        removeRing(activity)
         if (!PrefsBridge.shouldEnableBatteryRing(module)) return
+        showEnabled(
+            activity = activity,
+            colors = {
+                BatteryColorOverrides(
+                    idle = PrefsBridge.readBatteryColor(module, Constants.KEY_BATTERY_COLOR_IDLE),
+                    charging = PrefsBridge.readBatteryColor(module, Constants.KEY_BATTERY_COLOR_CHARGING),
+                    low = PrefsBridge.readBatteryColor(module, Constants.KEY_BATTERY_COLOR_LOW),
+                )
+            },
+            percentPosition = {
+                BatteryPercentPosition.fromPref(PrefsBridge.readBatteryPercentPosition(module))
+            },
+        )
+    }
+
+    @JvmStatic
+    fun sync(activity: Activity) {
+        setEnabled(activity, PrefsBridge.readEnableBatteryRingForRemote())
+    }
+
+    @JvmStatic
+    fun setEnabled(activity: Activity, enabled: Boolean) {
+        ensureSyncReceiver(activity)
+        removeRing(activity)
+        PrefsBridge.setRemoteBooleanOverride(Constants.KEY_ENABLE_BATTERY_RING, enabled)
+        if (!enabled) return
+        showEnabled(
+            activity = activity,
+            colors = {
+                BatteryColorOverrides(
+                    idle = PrefsBridge.readBatteryColorForRemote(Constants.KEY_BATTERY_COLOR_IDLE),
+                    charging = PrefsBridge.readBatteryColorForRemote(Constants.KEY_BATTERY_COLOR_CHARGING),
+                    low = PrefsBridge.readBatteryColorForRemote(Constants.KEY_BATTERY_COLOR_LOW),
+                )
+            },
+            percentPosition = {
+                BatteryPercentPosition.fromPref(PrefsBridge.readBatteryPercentPositionForRemote())
+            },
+        )
+    }
+
+    private fun showEnabled(
+        activity: Activity,
+        colors: () -> BatteryColorOverrides,
+        percentPosition: () -> BatteryPercentPosition,
+    ) {
         val geometry = BatteryRingGeometry.forDevice(Build.DEVICE) ?: return
         // The contour is calibrated for the rear panel, not the front camera cutout.
         if (activity.display?.displayId != 1) return
         val parent = activity.window.decorView as? ViewGroup ?: return
         ring?.let { (it.parent as? ViewGroup)?.removeView(it) }
         // 覆盖色在挂载时读一次；改颜色后重新进入背屏桌面即可生效，绘制线程不再读偏好。
-        val overrides = BatteryColorOverrides(
-            idle = PrefsBridge.readBatteryColor(module, Constants.KEY_BATTERY_COLOR_IDLE),
-            charging = PrefsBridge.readBatteryColor(module, Constants.KEY_BATTERY_COLOR_CHARGING),
-            low = PrefsBridge.readBatteryColor(module, Constants.KEY_BATTERY_COLOR_LOW),
-        )
-        val view = BatteryRingView(activity, geometry, overrides)
+        val view = BatteryRingView(activity, geometry, colors(), percentPosition())
         ring = view
         parent.addView(view, ViewGroup.LayoutParams(-1, -1))
     }
 
     @JvmStatic
     fun release(activity: Activity) {
+        removeRing(activity)
+        if (syncReceiverActivity === activity) {
+            syncReceiver?.let { runCatching { activity.unregisterReceiver(it) } }
+            syncReceiver = null
+            syncReceiverActivity = null
+        }
+    }
+
+    private fun removeRing(activity: Activity) {
         val view = ring ?: return
         if (view.context !== activity) return
         (view.parent as? ViewGroup)?.removeView(view)
         ring = null
+    }
+
+    private fun ensureSyncReceiver(activity: Activity) {
+        if (syncReceiverActivity === activity && syncReceiver != null) return
+        syncReceiverActivity?.let { old ->
+            syncReceiver?.let { receiver -> runCatching { old.unregisterReceiver(receiver) } }
+        }
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action == Constants.ACTION_SYNC_BATTERY_RING) {
+                    val key = intent.getStringExtra(Constants.EXTRA_PREFERENCE_KEY)
+                    val value = intent.getBooleanExtra(Constants.EXTRA_PREFERENCE_VALUE, false)
+                    if (key == Constants.KEY_ENABLE_BATTERY_RING) {
+                        setEnabled(activity, value)
+                    } else if (key == Constants.KEY_DISABLE_LONG_PRESS_EDIT) {
+                        PrefsBridge.setRemoteBooleanOverride(key, value)
+                    } else {
+                        sync(activity)
+                    }
+                }
+            }
+        }
+        runCatching {
+            activity.registerReceiver(
+                receiver,
+                IntentFilter(Constants.ACTION_SYNC_BATTERY_RING),
+                Context.RECEIVER_EXPORTED,
+            )
+            syncReceiver = receiver
+            syncReceiverActivity = activity
+        }
     }
 
     @JvmStatic
@@ -67,6 +152,7 @@ private class BatteryRingView(
     context: Context,
     private val geometry: BatteryRingGeometry.Profile,
     private val overrides: BatteryColorOverrides,
+    private val percentPosition: BatteryPercentPosition,
 ) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -76,6 +162,13 @@ private class BatteryRingView(
     private val contour = geometry.contourPath()
     private val measure = PathMeasure(contour, true)
     private val progress = Path()
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textSize = 38f
+        setShadowLayer(4f, 0f, 1.5f, 0x99000000.toInt())
+    }
     private val systemUiResources = runCatching {
         context.packageManager.getResourcesForApplication("com.android.systemui")
     }.getOrNull()
@@ -160,22 +253,30 @@ private class BatteryRingView(
         val current = state ?: return
         // A rotated or inset window must not place a calibrated ring over unrelated content.
         if (!geometry.matchesSize(width, height)) return
-        if (displayedPercent <= 0f) return
         // 用户覆盖色优先；未覆盖时沿用 SystemUI 电池资源色，取不到再回落默认三色。
-        paint.color = overrides.overrideFor(current) ?: colors.getOrPut(current.colorRole) {
+        val color = overrides.overrideFor(current) ?: colors.getOrPut(current.colorRole) {
             runCatching {
                 val resources = systemUiResources ?: return@getOrPut current.fallbackColor
                 val id = resources.getIdentifier(current.colorRole, "color", "com.android.systemui")
                 if (id == 0) current.fallbackColor else resources.getColor(id, null)
             }.getOrDefault(current.fallbackColor)
         }
-        paint.strokeWidth = BatteryRingGeometry.STROKE_WIDTH
-        if (displayedPercent >= 100f) {
-            canvas.drawPath(contour, paint)
-        } else {
-            progress.reset()
-            measure.getSegment(0f, measure.length * displayedPercent / 100f, progress, true)
-            canvas.drawPath(progress, paint)
+        if (displayedPercent > 0f) {
+            paint.color = color
+            paint.strokeWidth = BatteryRingGeometry.STROKE_WIDTH
+            if (displayedPercent >= 100f) {
+                canvas.drawPath(contour, paint)
+            } else {
+                progress.reset()
+                measure.getSegment(0f, measure.length * displayedPercent / 100f, progress, true)
+                canvas.drawPath(progress, paint)
+            }
+        }
+        geometry.percentTextAnchor(percentPosition)?.let { anchor ->
+            textPaint.color = color
+            val metrics = textPaint.fontMetrics
+            val baseline = anchor.y - (metrics.ascent + metrics.descent) / 2f
+            canvas.drawText("${current.percent}%", anchor.x, baseline, textPaint)
         }
     }
 }

@@ -11,12 +11,16 @@ public final class Constants {
     public static final String KEY_DISABLE_LONG_PRESS_EDIT = "disable_long_press_edit";
     public static final String KEY_REMOVE_WALLPAPER_LIMIT = "remove_wallpaper_limit";
     public static final String KEY_ENABLE_APP_CARD = "enable_app_card";
+    public static final String KEY_APP_CARD_INSTALL_REQUEST = "app_card_install_request";
     public static final String KEY_ENABLE_18_PRO_FEATURES = "enable_18_pro_features";
     public static final String KEY_ENABLE_BATTERY_RING = "enable_battery_ring";
     // 背屏电量显示颜色覆盖，格式 #AARRGGBB；空字符串表示跟随系统（SystemUI 电池资源色）。
     public static final String KEY_BATTERY_COLOR_IDLE = "battery_color_idle";
     public static final String KEY_BATTERY_COLOR_CHARGING = "battery_color_charging";
     public static final String KEY_BATTERY_COLOR_LOW = "battery_color_low";
+    public static final String KEY_BATTERY_PERCENT_POSITION = "battery_percent_position";
+    public static final String KEY_AUTO_WALLPAPER_INTERVAL_MINUTES =
+            "auto_wallpaper_interval_minutes";
     public static final String KEY_REMOVE_APP_CARD_LIMIT = "remove_app_card_limit";
     public static final String KEY_FIX_REAR_SCREEN_APPLY = "fix_rear_screen_apply";
     public static final String KEY_FLOATING_NAV_BAR = "floating_nav_bar";
@@ -34,6 +38,12 @@ public final class Constants {
     public static final String KEY_PICKUP_ISLAND_SELECTION = "pickup_island_selection";
     public static final String PANEL_PREFERENCE_AUTHORITY = MODULE_PACKAGE + ".PanelPreferences";
     public static final String PANEL_PREFERENCE_METHOD_SET = "set_panel_preference";
+    public static final String ACTION_SYNC_BATTERY_RING =
+            MODULE_PACKAGE + ".action.SYNC_BATTERY_RING";
+    public static final String ACTION_SYNC_AUTO_WALLPAPER =
+            MODULE_PACKAGE + ".action.SYNC_AUTO_WALLPAPER";
+    public static final String EXTRA_PREFERENCE_KEY = "preference_key";
+    public static final String EXTRA_INTERVAL_MINUTES = "interval_minutes";
     public static final String PANEL_DIAGNOSTIC_METHOD_APPEND = "append_diagnostic";
     public static final String EXTRA_PREFERENCE_VALUE = "preference_value";
     public static final String EXTRA_PREFERENCE_ACCEPTED = "preference_accepted";
@@ -89,6 +99,12 @@ public final class Constants {
             "com.rearScreen.subscreen.RearScreenAiAppController";
     public static final String THEME_REAR_SCREEN_SETTING_MODULE_COMPANION_CLASS =
             "com.personalizedEditor.helper.settings.RearScreenSettingModule$Companion";
+    public static final String THEME_REAR_PRESET_REPOSITORY_CLASS =
+            "com.rearScreen.repository.RearScreenPresetRepository";
+    public static final String THEME_SETTING_HELPER_COMPANION_CLASS =
+            "com.personalizedEditor.helper.SettingHelper$Companion";
+    public static final String THEME_MIUI_UTILS_CLASS =
+            "com.android.thememanager.basemodule.utils.MiuiUtils";
     public static final String THEME_REAR_SCREEN_AI_APP_ACTIVITY =
             "com.rearScreen.aiapp.activity.RearScreenAiAppListActivity";
     public static final String THEME_AI_REAR_SCREEN_LIST_ACTIVITY =
@@ -142,12 +158,33 @@ public final class Constants {
     public static final String THEME_RIGHTS_DIR_DEFAULT = "/data/system/theme/rights/";
     public static final String THEME_MAGIC_REAR_SCREEN_DIR =
             "/data/system/theme_magic/users/0/rearScreen";
+    public static final String THEME_MAGIC_APP_CARD_DIR =
+            "/data/system/theme_magic/users/0/back_screen_card";
     public static final String THEME_MAGIC_AI_APP_DIR =
             "/data/system/theme_magic/users/0/rearScreenAiApp_Theme";
+    public static final String THEME_MAGIC_MIBACKSCREEN_RESOURCE_DIR =
+            "/data/system/theme_magic/users/0/mibackscreen_18";
     public static final String THEME_AI_APP_RUNTIME_FILE =
             THEME_MAGIC_AI_APP_DIR + "/runtimeAiApp.json";
     public static final String SUBSCREEN_APP_INFO_FILE =
             "/data/system/theme_magic/users/0/subscreencenter/config/appInfo.json";
+    public static final String MODULE_PANEL_CARD_RES_ID = "mibackscreen_quick_panel";
+    public static final String MODULE_PANEL_CARD_ROOT =
+            THEME_MAGIC_APP_CARD_DIR + "/" + MODULE_PANEL_CARD_RES_ID;
+    public static final String MODULE_PANEL_CARD_RESOURCE =
+            MODULE_PANEL_CARD_ROOT + "/rearscreen";
+    public static final String MODULE_PANEL_CARD_DESCRIPTION =
+            MODULE_PANEL_CARD_ROOT + "/description.xml";
+    public static final String MODULE_PANEL_CARD_META =
+            MODULE_PANEL_CARD_ROOT + "/meta.json";
+    public static final String MODULE_PANEL_CARD_ICON =
+            MODULE_PANEL_CARD_ROOT + "/app/app_icon.png";
+    public static final String MODULE_PANEL_CARD_PREVIEW_LIGHT =
+            MODULE_PANEL_CARD_ROOT + "/preview/preview_rearscreen_0.png";
+    public static final String MODULE_PANEL_CARD_PREVIEW_DARK =
+            MODULE_PANEL_CARD_ROOT + "/preview/preview_rearscreen_dark_0.png";
+    public static final String MODULE_PANEL_CARD_INSTALL_MARK =
+            "/data/system/theme_magic/users/0/subscreencenter/config/mibackscreen_quick_panel.installed";
     public static final long AI_MATE_BLANK_SNAPSHOT_MAX_BYTES = 256L * 1024L;
     public static final String AI_MATE_PEEKO_RES_ID =
             "317d9477-3731-4636-b526-15f914647826";
@@ -169,6 +206,16 @@ public final class Constants {
     public static final String THEME_REAR_APPLY_ENTRY_METHOD = "q";
     public static final String THEME_REAR_AI_COMPANION_RES_TYPE = "ai-mate";
     public static final String THEME_REAR_AI_COMPANION_SUB_TYPE = "ai";
+    public static final String THEME_REAR_AI_WALLPAPER_CATEGORY_TYPE = "ai";
+    public static final String THEME_REAR_GROUP_PHOTO_RES_TYPE = "groupPhoto";
+    public static final String THEME_REAR_PHONE_CASE_RES_TYPE = "phoneCase";
+    public static final String THEME_REAR_TEMPLATE_NORMAL_PRODUCT_DIR =
+            "/product/media/rearscreen/template/normal";
+    public static final String THEME_REAR_TEMPLATE_NORMAL_SYSTEM_DIR =
+            "/system/media/rearscreen/template/normal";
+    public static final String THEME_REAR_TEMPLATE_NORMAL_DATA_DIR =
+            THEME_MAGIC_MIBACKSCREEN_RESOURCE_DIR + "/template/normal";
+    public static final String THEME_REAR_CMF_FALLBACK = "BK";
 
     // Z1.t: old gesture class
     public static final String HOOK_CLASS = "Z1.t";
@@ -195,6 +242,12 @@ public final class Constants {
     public static final String HOOK_METHOD_SAVE_USER_SELECTION = "I";
     // RELEASE-1.0.2609181659：写 user_select 的方法从 I() 变为 J()。
     public static final String HOOK_METHOD_SAVE_USER_SELECTION_18PRO = "J";
+    // RELEASE-1.0.2609181659：MainPanel 生命周期与原生壁纸列表切换入口。
+    public static final String HOOK_METHOD_MAIN_PANEL_RESUME = "E";
+    public static final String HOOK_METHOD_MAIN_PANEL_PAUSE = "D";
+    public static final String HOOK_METHOD_MAIN_PANEL_DESTROY = "C";
+    public static final String HOOK_METHOD_MAIN_PANEL_AOD_CHANGED = "B";
+    public static final String HOOK_METHOD_AUTO_WALLPAPER_SWITCH = "f";
     // RELEASE-1.0.2605272226
     public static final String HOOK_FIELD_WIDGET_LIST = "i";
     public static final String HOOK_FIELD_SELECTED_INDEX = "l";
@@ -203,6 +256,8 @@ public final class Constants {
     public static final String HOOK_FIELD_WIDGET_LIST_OS4 = "j";
     public static final String HOOK_FIELD_SELECTED_INDEX_OS4 = "m";
     public static final String HOOK_FIELD_PREVIEW_INDEX_OS4 = "l";
+    public static final String HOOK_FIELD_MAIN_PANEL_EDITING = "n";
+    public static final String HOOK_FIELD_MAIN_PANEL_STATE = "s";
     public static final String HOOK_FIELD_WIDGET_BEAN = "c";
     public static final String HOOK_FIELD_WIDGET_ID = "a";
     public static final String SECURE_THEME_REAR_WIDGET = "theme_rear_widget";
@@ -229,6 +284,9 @@ public final class Constants {
     public static final String SUBSCREEN_APP_LIST_GETTER_METHOD = "c";
     public static final String SUBSCREEN_APP_LIST_DISPATCH_METHOD = "d";
     public static final String SUBSCREEN_APP_LIST_SAVE_METHOD = "e";
+    public static final String SUBSCREEN_APP_LIST_LISTENER_CLASS = "e2.f";
+    public static final String SUBSCREEN_APP_LIST_LISTENER_METHOD = "a";
+    public static final String SUBSCREEN_APP_LIST_LISTENER_KIND_FIELD = "a";
     public static final String SUBSCREEN_ON_TRANSACT_METHOD = "onTransact";
     public static final int SUBSCREEN_INSERT_APP_WIDGET_TRANSACTION = 11;
     public static final int SUBSCREEN_APP_CARD_LIMIT = 15;
@@ -239,12 +297,16 @@ public final class Constants {
     public static final String SUBSCREEN_LAUNCHER_ENTRY_CLASS = "e2.a";
     public static final String SUBSCREEN_LAUNCHER_ENTRY_NAME_FIELD = "a";
     public static final String SUBSCREEN_LAUNCHER_ENTRY_NAME_MAP_FIELD = "c";
+    public static final String SUBSCREEN_LAUNCHER_ENTRY_MTZ_FIELD = "d";
     public static final String SUBSCREEN_LAUNCHER_ENTRY_ICON_FIELD = "e";
     public static final String SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_LIGHT_FIELD = "g";
     public static final String SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_DARK_FIELD = "h";
+    public static final String SUBSCREEN_LAUNCHER_ENTRY_RES_ID_FIELD = "i";
+    public static final String SUBSCREEN_LAUNCHER_ENTRY_GAME_FIELD = "j";
     public static final String SUBSCREEN_LAUNCHER_ENTRY_BIND_APP_FIELD = "l";
     public static final String SUBSCREEN_LAUNCHER_ENTRY_CARD_TYPE_FIELD = "k";
     public static final String SUBSCREEN_LAUNCHER_ENTRY_INTENT_FIELD = "m";
+    public static final String SUBSCREEN_LAUNCHER_ENTRY_PRESET_FIELD = "o";
     // 条目点击由 e2.o.g(...)（onBindViewHolder）每次绑定 new 出来的 e2.l 处理，
     // e2.l.b 就是绑定的 e2.a 条目。
     public static final String SUBSCREEN_LAUNCHER_HOLDER_CLASS = "e2.l";
@@ -252,6 +314,7 @@ public final class Constants {
     public static final String SUBSCREEN_LAUNCHER_HOLDER_CLICK_METHOD = "onClick";
     // 0 只是"不等于 3"：k == 3 会走引导/NFC 分支而不是启动 Intent。
     public static final int SUBSCREEN_LAUNCHER_ENTRY_ACTIVITY_CARD_TYPE = 0;
+    public static final int SUBSCREEN_LAUNCHER_ENTRY_LOCAL_CARD_TYPE = 1;
     // 图标与预览图都是 Glide 按路径加载的，跨包读不到模块资源，
     // 所以模块图标先渲染成 PNG 落到宿主 cache 目录再引用。尺寸对齐官方卡片资源：
     // app_icon 为满幅不透明正方形（裁成圆形后是实心圆），preview 为整块背屏 976×596。
@@ -273,6 +336,13 @@ public final class Constants {
             "com.miui.personalassistant.backscreen.store.model.BackScreenStorePageResponse";
     public static final String PERSONAL_ASSISTANT_PRESET_PARSER_CLASS = "s5.a";
     public static final String PERSONAL_ASSISTANT_PRESET_PARSE_METHOD = "b";
+    public static final String PERSONAL_ASSISTANT_PRESET_JSON_PATH =
+            "/data/system/theme_magic/users/0/mibackscreen_18/appcard/default/rearScreen.json";
+    public static final String PERSONAL_ASSISTANT_PRESET_JSON_CLASS =
+            "com.miui.personalassistant.backscreen.store.model.PresetJson";
+    public static final String PERSONAL_ASSISTANT_PRESET_CATEGORY_CLASS =
+            "com.miui.personalassistant.backscreen.store.model.PresetCategory";
+    public static final String PERSONAL_ASSISTANT_GSON_CLASS = "com.google.gson.Gson";
     public static final String PERSONAL_ASSISTANT_REAR_DEVICE = "madrid";
     public static final String PERSONAL_ASSISTANT_REAR_MODEL = "Xiaomi 18 Pro Max";
 

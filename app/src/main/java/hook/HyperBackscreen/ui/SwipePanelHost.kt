@@ -8,6 +8,7 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.SystemClock
 import android.text.TextUtils
 import android.util.Log
@@ -31,6 +32,8 @@ import hook.HyperBackscreen.bridge.PrefsBridge
 import hook.HyperBackscreen.bridge.DiagnosticLogStore
 import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.common.BackgroundTasks
+import hook.HyperBackscreen.ui.battery.BatteryRingGeometry
+import hook.HyperBackscreen.ui.battery.BatteryRingHost
 import android.os.Handler
 import android.os.Looper
 import java.lang.ref.WeakReference
@@ -59,7 +62,6 @@ object SwipePanelHost {
     private const val SETTLE_MIN_MS = 100L
     private const val SETTLE_MAX_MS = 320L
     private const val ROW_TITLE_TEXT_SP = 16f
-    private const val ROW_SUMMARY_TEXT_SP = 13f
 
     @Volatile
     private var loadedModule = ModuleUpdateState(null, BuildConfig.VERSION_CODE.toLong())
@@ -647,9 +649,9 @@ object SwipePanelHost {
                 launcherGestureDismissDistance = 0f
                 launcherGestureFromBottom = event.y > card.height * BOTTOM_SWIPE_REGION_RATIO
                 if (launcherGestureFromBottom) {
-                    Log.d(TAG, "launcher gesture captured for panel dismissal")
+                    Log.d(TAG, "launcher gesture armed for panel dismissal")
                 }
-                return launcherGestureFromBottom
+                return false
             }
 
             MotionEvent.ACTION_MOVE -> {
@@ -666,8 +668,9 @@ object SwipePanelHost {
                 if (launcherGestureDraggingUp) {
                     launcherGestureDismissDistance = max(0f, -dy)
                     applyLauncherDismissProgress(card, launcherGestureDismissDistance)
+                    return true
                 }
-                return true
+                return false
             }
 
             MotionEvent.ACTION_UP -> {
@@ -687,7 +690,7 @@ object SwipePanelHost {
                 launcherGestureFromBottom = false
                 launcherGestureDraggingUp = false
                 launcherGestureDismissDistance = 0f
-                return true
+                return wasDragging
             }
 
             MotionEvent.ACTION_CANCEL -> {
@@ -797,15 +800,12 @@ object SwipePanelHost {
 
         val disableInitial = PrefsBridge.readDisableLongPressForRemote()
         val removeInitial = PrefsBridge.readRemoveWallpaperLimitForRemote()
-        val removeAppCardInitial = PrefsBridge.readRemoveAppCardLimitForRemote()
+        val batteryRingInitial = PrefsBridge.readEnableBatteryRingForRemote()
         content.addView(
             switchRow(
                 activity = activity,
                 dark = dark,
                 title = strings.disableTitle,
-                summaryOn = strings.disableOn,
-                summaryOff = strings.disableOff,
-                saveFailed = strings.saveFailed,
                 initial = disableInitial,
                 onChange = { PrefsBridge.requestDisableLongPressWrite(activity, it) },
             ),
@@ -815,25 +815,22 @@ object SwipePanelHost {
                 activity = activity,
                 dark = dark,
                 title = strings.removeTitle,
-                summaryOn = strings.removeOn,
-                summaryOff = strings.removeOff,
-                saveFailed = strings.saveFailed,
                 initial = removeInitial,
                 onChange = { PrefsBridge.requestRemoveWallpaperLimitWrite(activity, it) },
             ),
         )
-        content.addView(
-            switchRow(
-                activity = activity,
-                dark = dark,
-                title = strings.removeAppCardTitle,
-                summaryOn = strings.removeAppCardOn,
-                summaryOff = strings.removeAppCardOff,
-                saveFailed = strings.saveFailed,
-                initial = removeAppCardInitial,
-                onChange = { PrefsBridge.requestRemoveAppCardLimitWrite(activity, it) },
-            ),
-        )
+        if (BatteryRingGeometry.isCalibratedDevice(Build.DEVICE)) {
+            content.addView(
+                switchRow(
+                    activity = activity,
+                    dark = dark,
+                    title = strings.batteryRingTitle,
+                    initial = batteryRingInitial,
+                    onChange = { PrefsBridge.requestEnableBatteryRingWrite(activity, it) },
+                    onSaved = { BatteryRingHost.setEnabled(activity, it) },
+                ),
+            )
+        }
         content.addView(
             Space(activity).apply {
                 layoutParams = LinearLayout.LayoutParams(
@@ -883,15 +880,17 @@ object SwipePanelHost {
         activity: Activity,
         dark: Boolean,
         title: String,
-        summaryOn: String,
-        summaryOff: String,
-        saveFailed: String,
         initial: Boolean,
         onChange: (Boolean) -> Boolean,
+        onSaved: (Boolean) -> Unit = {},
     ): LinearLayout {
         val row = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            )
             minimumHeight = dp(activity, 64).toInt()
             setPadding(
                 dp(activity, 12).toInt(),
@@ -903,17 +902,6 @@ object SwipePanelHost {
             isFocusable = true
         }
 
-        val summary = TextView(activity).apply {
-            text = if (initial) summaryOn else summaryOff
-            textSize = ROW_SUMMARY_TEXT_SP
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.END
-            setTextColor(
-                if (dark) Color.argb(0x99, 255, 255, 255)
-                else Color.argb(0x99, 0, 0, 0),
-            )
-            setPadding(0, dp(activity, 1).toInt(), 0, 0)
-        }
         val texts = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -928,7 +916,6 @@ object SwipePanelHost {
                     setTextColor(if (dark) Color.WHITE else Color.BLACK)
                 },
             )
-            addView(summary)
         }
 
         val toggle = MiuixStyleSwitch(activity, dark).apply {
@@ -947,18 +934,19 @@ object SwipePanelHost {
             saving = true
             toggle.isEnabled = false
             row.isEnabled = false
+            texts.isEnabled = false
             fun complete(saved: Boolean) {
                 saving = false
                 toggle.isEnabled = true
                 row.isEnabled = true
+                texts.isEnabled = true
                 if (saved) {
-                    summary.text = if (checked) summaryOn else summaryOff
+                    onSaved(checked)
                     Log.d(TAG, "Panel switch saved: $title=$checked")
                 } else {
                     reverting = true
                     toggle.isChecked = !checked
                     reverting = false
-                    summary.text = saveFailed
                     Log.w(TAG, "Panel switch write rejected: $title")
                 }
             }
@@ -977,9 +965,14 @@ object SwipePanelHost {
             }
         }
 
-        row.setOnClickListener { toggle.toggle() }
         row.addView(texts)
         row.addView(toggle)
+        fun requestToggle() {
+            if (saving || !toggle.isEnabled) return
+            toggle.toggle()
+        }
+        row.setOnClickListener { requestToggle() }
+        texts.setOnClickListener { requestToggle() }
         return row
     }
 
@@ -1076,16 +1069,9 @@ object SwipePanelHost {
             R.string.panel_restart_required,
             if (chinese) "请重启背屏作用域" else "Please restart the rear screen scope",
         )
-        val disableTitle = get(R.string.panel_disable_long_press_title, if (chinese) "禁用背屏长按切换壁纸" else "Disable long-press wallpaper switching")
-        val disableOn = get(R.string.panel_disable_long_press_on, if (chinese) "当前已禁用原厂长按切换壁纸" else "Factory long-press switching is disabled")
-        val disableOff = get(R.string.panel_disable_long_press_off, if (chinese) "当前恢复原厂长按行为" else "Factory long-press behavior is enabled")
-        val removeTitle = get(R.string.panel_remove_limit_title, if (chinese) "去除背屏壁纸数量限制" else "Remove rear wallpaper count limit")
-        val removeOn = get(R.string.panel_remove_limit_on, if (chinese) "当前已去除15张上限" else "The 15-wallpaper limit is removed")
-        val removeOff = get(R.string.panel_remove_limit_off, if (chinese) "当前保持默认15张上限" else "The default 15-wallpaper limit is active")
-        val removeAppCardTitle = get(R.string.panel_remove_app_card_limit_title, if (chinese) "移除背屏应用卡数量限制" else "Remove rear screen app card count limit")
-        val removeAppCardOn = get(R.string.panel_remove_app_card_limit_on, if (chinese) "当前已去除15个应用卡上限" else "The 15-app-card limit is removed")
-        val removeAppCardOff = get(R.string.panel_remove_app_card_limit_off, if (chinese) "当前保持默认15个应用卡上限" else "The default 15-app-card limit is active")
-        val saveFailed = get(R.string.panel_save_failed, if (chinese) "保存失败，请在主应用中修改" else "Save failed; change this setting in the main app")
+        val disableTitle = get(R.string.panel_disable_long_press_title, if (chinese) "禁用背屏长按切换壁纸" else "Disable rear screen long press to switch wallpaper")
+        val removeTitle = get(R.string.panel_remove_limit_title, if (chinese) "移除背屏壁纸数量限制" else "Remove rear screen wallpaper count limit")
+        val batteryRingTitle = get(R.string.panel_battery_ring_title, if (chinese) "背屏电量显示" else "Rear-screen battery")
     }
 
     /**

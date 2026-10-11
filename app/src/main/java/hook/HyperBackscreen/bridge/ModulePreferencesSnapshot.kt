@@ -21,6 +21,8 @@ internal data class ModulePreferencesSnapshot(
     val batteryColorIdle: String = "",
     val batteryColorCharging: String = "",
     val batteryColorLow: String = "",
+    val batteryPercentPosition: String = PrefsBridge.DEFAULT_BATTERY_PERCENT_POSITION,
+    val autoWallpaperIntervalMinutes: String = PrefsBridge.DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES,
 ) {
     companion object {
         private val keys = setOf(
@@ -39,6 +41,8 @@ internal data class ModulePreferencesSnapshot(
             Constants.KEY_BATTERY_COLOR_IDLE,
             Constants.KEY_BATTERY_COLOR_CHARGING,
             Constants.KEY_BATTERY_COLOR_LOW,
+            Constants.KEY_BATTERY_PERCENT_POSITION,
+            Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES,
         )
 
         /** One in-memory snapshot, with no Binder call or cache write during observation. */
@@ -69,6 +73,10 @@ internal data class ModulePreferencesSnapshot(
                     ?: PrefsBridge.DEFAULT_BATTERY_COLOR,
                 batteryColorLow = value(Constants.KEY_BATTERY_COLOR_LOW) as? String
                     ?: PrefsBridge.DEFAULT_BATTERY_COLOR,
+                batteryPercentPosition = value(Constants.KEY_BATTERY_PERCENT_POSITION) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_PERCENT_POSITION,
+                autoWallpaperIntervalMinutes = value(Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES) as? String
+                    ?: PrefsBridge.DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES,
             )
         }
 

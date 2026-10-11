@@ -187,9 +187,11 @@ internal object FeedbackLogExporter {
     private fun buildConfigReport(context: Context): String = buildString {
         appendLine("disable_long_press_edit=${PrefsBridge.readDisableLongPressForUi(context)}")
         appendLine("remove_wallpaper_limit=${PrefsBridge.readRemoveWallpaperLimitForUi(context)}")
+        appendLine("auto_wallpaper_interval_minutes=${PrefsBridge.readAutoWallpaperIntervalForUi(context)}")
         appendLine("enable_app_card=${PrefsBridge.readEnableAppCardForUi(context)}")
         appendLine("enable_18_pro_features=${PrefsBridge.readEnable18ProFeaturesForUi(context)}")
         appendLine("enable_battery_ring=${PrefsBridge.readEnableBatteryRingForUi(context)}")
+        appendLine("battery_percent_position=${PrefsBridge.readBatteryPercentPositionForUi(context)}")
         appendLine("remove_app_card_limit=${PrefsBridge.readRemoveAppCardLimitForUi(context)}")
         appendLine("enable_pickup=${PrefsBridge.readEnablePickupForUi(context)}")
         appendLine("fix_rear_screen_apply=${PrefsBridge.readFixRearScreenApplyForUi(context)}")
@@ -310,7 +312,7 @@ internal object FeedbackLogExporter {
     private fun collectLogcat(): String = runRootCommand(
         // 全量 logcat 在日志较多的设备上可能超过采集超时；限制为各缓冲区最近 20000 行。
         "logcat -b all -d -v threadtime -t 20000 2>/dev/null " +
-            "| grep -Eai 'MiBackscreen|subscreencenter|SubScreen|MainPanel|PersistenceManager|RearScreen|rear_screen|theme_rear_widget|theme_magic|MAML|\\.mrc|AndroidRuntime|personalassistant|Personal assistant|BackScreenStore|appcard|AI_GENERATED_APP|rearScreenAiApp|Peeko|Lumi|mibackscreen_18_personalization' " +
+            "| grep -Eai 'MiBackscreen|subscreencenter|SubScreen|MainPanel|PersistenceManager|RearScreen|rear_screen|theme_rear_widget|theme_magic|MAML|\\.mrc|AndroidRuntime|personalassistant|Personal assistant|BackScreenStore|appcard|AI_GENERATED_APP|rearScreenAiApp|AIWallpaper|AI wallpaper|AI合照|合照|保护壳|phonecase|DIY|diy|native/page/v3|request_flag|Theme request diagnostic|Peeko|Lumi|自定义形象|mibackscreen_18_personalization' " +
             "| tail -c $MAX_LOGCAT_OUTPUT_BYTES",
         MAX_LOGCAT_OUTPUT_BYTES,
     )
@@ -444,6 +446,12 @@ internal object FeedbackLogExporter {
             "rearScreen.db",
             "rearScreen.db-wal",
             "rearScreen.db-shm",
+            "rearScreenAiApp.db",
+            "rearScreenAiApp.db-wal",
+            "rearScreenAiApp.db-shm",
+            "ai_database.db",
+            "ai_database.db-wal",
+            "ai_database.db-shm",
         )
         val stagedNames = databaseNames.flatMap { name ->
             listOf("credential-$name", "device-$name")
@@ -461,7 +469,7 @@ internal object FeedbackLogExporter {
             "user_id=\$(am get-current-user 2>/dev/null); " +
                 "[ -n \"\$user_id\" ] || user_id=0; " +
                 "dest=$destinationPath; " +
-                "for name in rearScreen.db rearScreen.db-wal rearScreen.db-shm; do " +
+                "for name in rearScreen.db rearScreen.db-wal rearScreen.db-shm rearScreenAiApp.db rearScreenAiApp.db-wal rearScreenAiApp.db-shm ai_database.db ai_database.db-wal ai_database.db-shm; do " +
                 "src=\"/data/user/\$user_id/com.android.thememanager/databases/\$name\"; " +
                 "if [ -f \"\$src\" ]; then cat \"\$src\" > \"\$dest/credential-\$name\"; fi; " +
                 "src=\"/data/user_de/\$user_id/com.android.thememanager/databases/\$name\"; " +
@@ -481,12 +489,25 @@ internal object FeedbackLogExporter {
                 "if [ ! -f \"\$db\" ]; then echo 'MISSING: rearScreenAiApp.db'; " +
                 "elif command -v sqlite3 >/dev/null 2>&1; then " +
                 "sqlite3 -header -separator '|' \"\$db\" \"PRAGMA user_version; SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name;\" 2>&1; " +
+                "else echo 'sqlite3 unavailable; inspect the included database snapshot.'; fi; " +
+                "echo; echo '=== ai_database schema ==='; " +
+                "db=\"/data/user/\$user_id/com.android.thememanager/databases/ai_database.db\"; " +
+                "if [ ! -f \"\$db\" ]; then db=\"/data/user_de/\$user_id/com.android.thememanager/databases/ai_database.db\"; fi; " +
+                "if [ ! -f \"\$db\" ]; then echo 'MISSING: ai_database.db'; " +
+                "elif command -v sqlite3 >/dev/null 2>&1; then " +
+                "sqlite3 -header -separator '|' \"\$db\" \"PRAGMA user_version; SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name;\" 2>&1; " +
                 "else echo 'sqlite3 unavailable; inspect the included database snapshot.'; fi " +
                 "| tail -c $MAX_DATABASE_REPORT_OUTPUT_BYTES",
             MAX_DATABASE_REPORT_OUTPUT_BYTES,
         )
         val files = destination.listFiles()
-            ?.filter { it.isFile && it.name.contains("rearScreen.db") && it.length() > 0L }
+            ?.filter { file ->
+                file.isFile &&
+                    file.length() > 0L &&
+                    (file.name.contains("rearScreen.db") ||
+                        file.name.contains("rearScreenAiApp.db") ||
+                        file.name.contains("ai_database.db"))
+            }
             ?.sortedBy { it.name }
             .orEmpty()
         val report = buildString {

@@ -2,6 +2,7 @@ package hook.HyperBackscreen.ui
 
 import android.graphics.Color
 import android.content.Context
+import android.content.Intent
 import androidx.compose.runtime.CompositionLocalProvider
 import hook.HyperBackscreen.ui.components.LocalUiFeedback
 import hook.HyperBackscreen.ui.components.rememberUiFeedback
@@ -41,6 +42,7 @@ import hook.HyperBackscreen.ui.updater.UpdateChecker
 import hook.HyperBackscreen.ui.updater.UpdateDialog
 import hook.HyperBackscreen.ui.updater.UpdateInfo
 import hook.HyperBackscreen.ui.battery.BatteryColorSlot
+import hook.HyperBackscreen.ui.battery.BatteryPercentPosition
 import hook.HyperBackscreen.ui.util.AppLanguage
 import hook.HyperBackscreen.ui.util.RearDisplayCompatibility
 import hook.HyperBackscreen.ui.util.ThemeMode
@@ -97,6 +99,12 @@ internal fun RearScreenApp() {
     }
     var batteryColorLow by remember {
         mutableStateOf(PrefsBridge.readBatteryColorForUi(context, Constants.KEY_BATTERY_COLOR_LOW))
+    }
+    var batteryPercentPosition by remember {
+        mutableStateOf(BatteryPercentPosition.fromPref(PrefsBridge.readBatteryPercentPositionForUi(context)))
+    }
+    var autoWallpaperInterval by remember {
+        mutableStateOf(AutoWallpaperInterval.fromPref(PrefsBridge.readAutoWallpaperIntervalForUi(context)))
     }
     var disableLongPress by remember {
         mutableStateOf(PrefsBridge.readDisableLongPressForUi(context))
@@ -188,6 +196,8 @@ internal fun RearScreenApp() {
                 batteryColorIdle = values.batteryColorIdle
                 batteryColorCharging = values.batteryColorCharging
                 batteryColorLow = values.batteryColorLow
+                batteryPercentPosition = BatteryPercentPosition.fromPref(values.batteryPercentPosition)
+                autoWallpaperInterval = AutoWallpaperInterval.fromPref(values.autoWallpaperIntervalMinutes)
                 disableLongPress = values.disableLongPress
                 removeWallpaperLimit = values.removeWallpaperLimit
                 enableAppCard = values.enableAppCard
@@ -256,8 +266,16 @@ internal fun RearScreenApp() {
             enableBatteryRing = enableBatteryRing,
             onEnableBatteryRingChange = { value ->
                 enableBatteryRing = value
-                PrefsBridge.writeEnableBatteryRingFromUi(context, value)
-                refreshScopes(Constants.TARGET_PACKAGE)
+                if (PrefsBridge.writeEnableBatteryRingFromUi(context, value)) {
+                    context.sendBroadcast(
+                        Intent(Constants.ACTION_SYNC_BATTERY_RING)
+                            .setPackage(Constants.TARGET_PACKAGE)
+                            .putExtra(Constants.EXTRA_PREFERENCE_KEY, Constants.KEY_ENABLE_BATTERY_RING)
+                            .putExtra(Constants.EXTRA_PREFERENCE_VALUE, value)
+                    )
+                } else {
+                    feedback.show(saveFailed)
+                }
             },
             enable18ProFeatures = enable18ProFeatures,
             onEnable18ProFeaturesChange = { newValue ->
@@ -284,6 +302,7 @@ internal fun RearScreenApp() {
             disableLongPress = disableLongPress,
             removeWallpaperLimit = removeWallpaperLimit,
             removeAppCardLimit = removeAppCardLimit,
+            autoWallpaperInterval = autoWallpaperInterval,
             fixRearScreenApply = fixRearScreenApply,
             floatingNavBar = floatingNavBar,
             liquidGlass = liquidGlass,
@@ -296,6 +315,7 @@ internal fun RearScreenApp() {
             batteryColorIdle = batteryColorIdle,
             batteryColorCharging = batteryColorCharging,
             batteryColorLow = batteryColorLow,
+            batteryPercentPosition = batteryPercentPosition,
             disableRearScreenCover = disableRearScreenCover,
             disableDoubleTapWake = disableDoubleTapWake,
             doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
@@ -303,7 +323,16 @@ internal fun RearScreenApp() {
             moduleActivated = moduleActivated,
             onDisableLongPressChange = { newValue ->
                 disableLongPress = newValue
-                PrefsBridge.writeDisableLongPressFromUi(context, newValue)
+                if (PrefsBridge.writeDisableLongPressFromUi(context, newValue)) {
+                    context.sendBroadcast(
+                        Intent(Constants.ACTION_SYNC_BATTERY_RING)
+                            .setPackage(Constants.TARGET_PACKAGE)
+                            .putExtra(Constants.EXTRA_PREFERENCE_KEY, Constants.KEY_DISABLE_LONG_PRESS_EDIT)
+                            .putExtra(Constants.EXTRA_PREFERENCE_VALUE, newValue)
+                    )
+                } else {
+                    feedback.show(saveFailed)
+                }
             },
             onRemoveWallpaperLimitChange = { newValue ->
                 removeWallpaperLimit = newValue
@@ -314,6 +343,15 @@ internal fun RearScreenApp() {
                 removeAppCardLimit = newValue
                 PrefsBridge.writeRemoveAppCardLimitFromUi(context, newValue)
                 refreshScopes(Constants.TARGET_PACKAGE)
+            },
+            onAutoWallpaperIntervalChange = { interval ->
+                autoWallpaperInterval = interval
+                PrefsBridge.writeAutoWallpaperIntervalFromUi(context, interval.prefValue)
+                context.sendBroadcast(
+                    Intent(Constants.ACTION_SYNC_AUTO_WALLPAPER)
+                        .setPackage(Constants.TARGET_PACKAGE)
+                        .putExtra(Constants.EXTRA_INTERVAL_MINUTES, interval.minutes)
+                )
             },
             onFixRearScreenApplyChange = { newValue ->
                 fixRearScreenApply = newValue
@@ -345,9 +383,19 @@ internal fun RearScreenApp() {
                 PrefsBridge.writeCheckUpdates(context, newValue)
             },
             onEnableAppCardChange = { newValue ->
-                enableAppCard = newValue
-                PrefsBridge.writeEnableAppCardFromUi(context, newValue)
-                refreshScopes(Constants.TARGET_PACKAGE)
+                if (newValue) {
+                    val saved = PrefsBridge.requestInstallAppCardFromUi(context)
+                    if (saved) {
+                        enableAppCard = true
+                        refreshScopes(Constants.TARGET_PACKAGE)
+                    } else {
+                        feedback.show(saveFailed)
+                    }
+                } else {
+                    enableAppCard = false
+                    PrefsBridge.writeEnableAppCardFromUi(context, false)
+                    refreshScopes(Constants.TARGET_PACKAGE)
+                }
             },
             onEnablePickupChange = { newValue ->
                 enablePickup = newValue
@@ -365,6 +413,10 @@ internal fun RearScreenApp() {
                     BatteryColorSlot.LOW -> batteryColorLow = value
                 }
                 PrefsBridge.writeBatteryColorFromUi(context, key, value)
+            },
+            onBatteryPercentPositionChange = { position ->
+                batteryPercentPosition = position
+                PrefsBridge.writeBatteryPercentPositionFromUi(context, position.prefValue)
             },
             onDisableRearScreenCoverChange = { newValue ->
                 disableRearScreenCover = newValue

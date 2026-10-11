@@ -2,6 +2,7 @@ package hook.HyperBackscreen.ui.config
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
@@ -10,6 +11,7 @@ import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.util.AppLanguage
 import hook.HyperBackscreen.ui.util.ThemeMode
 import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
@@ -37,6 +39,8 @@ internal fun ConfigPage(
     themeSettingsShortcut: Boolean,
     onThemeSettingsShortcutChange: (Boolean) -> Unit
 ) {
+    val context = LocalContext.current
+
     SmallTitle(text = stringResource(R.string.config_module_settings_title), insideMargin = PaddingValues(16.dp, 8.dp))
     CardBlock(pressFeedbackType = PressFeedbackType.None) {
         WindowDropdownPreference(
@@ -50,11 +54,10 @@ internal fun ConfigPage(
                 onThemeSettingsShortcutChange(index == 1)
             }
         )
-        SwitchPreference(
-            checked = enableAppCard,
-            onCheckedChange = onEnableAppCardChange,
+        ArrowPreference(
             title = stringResource(R.string.config_enable_app_card_title),
-            summary = stringResource(R.string.config_enable_app_card_summary)
+            summary = stringResource(R.string.config_enable_app_card_summary),
+            onClick = { onEnableAppCardChange(true) }
         )
         SwitchPreference(
             checked = launcherIconHidden,

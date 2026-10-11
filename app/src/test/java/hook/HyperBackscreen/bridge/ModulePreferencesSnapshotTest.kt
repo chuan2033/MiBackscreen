@@ -110,6 +110,42 @@ class ModulePreferencesSnapshotTest {
         }
     }
 
+    @Test fun batteryPercentPositionIsObservedIndependently() {
+        val cache = Cache()
+        var snapshot = ModulePreferencesSnapshot.read(cache.preferences)
+        assertEquals(PrefsBridge.DEFAULT_BATTERY_PERCENT_POSITION, snapshot.batteryPercentPosition)
+        val before = snapshot
+        ModulePreferencesSnapshot.observe(cache.preferences, Runnable {
+            snapshot = ModulePreferencesSnapshot.read(cache.preferences)
+        }).use {
+            cache.put(Constants.KEY_BATTERY_PERCENT_POSITION, "right")
+            assertEquals("right", snapshot.batteryPercentPosition)
+            assertEquals(before, snapshot.copy(batteryPercentPosition = PrefsBridge.DEFAULT_BATTERY_PERCENT_POSITION))
+        }
+    }
+
+    @Test fun automaticWallpaperIntervalIsObservedIndependently() {
+        val cache = Cache()
+        var snapshot = ModulePreferencesSnapshot.read(cache.preferences)
+        assertEquals(
+            PrefsBridge.DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES,
+            snapshot.autoWallpaperIntervalMinutes,
+        )
+        val before = snapshot
+        ModulePreferencesSnapshot.observe(cache.preferences, Runnable {
+            snapshot = ModulePreferencesSnapshot.read(cache.preferences)
+        }).use {
+            cache.put(Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES, "5")
+            assertEquals("5", snapshot.autoWallpaperIntervalMinutes)
+            assertEquals(
+                before,
+                snapshot.copy(
+                    autoWallpaperIntervalMinutes = PrefsBridge.DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES,
+                ),
+            )
+        }
+    }
+
     @Test fun lateServiceReconciliationRefreshesPickupToggle() {
         val cache = Cache()
         var snapshot = ModulePreferencesSnapshot.read(cache.preferences)

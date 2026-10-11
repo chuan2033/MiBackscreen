@@ -44,6 +44,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.HashSet;
+import java.util.Locale;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -67,9 +69,11 @@ import io.github.libxposed.api.XposedModule;
 
 public class ModuleMain extends XposedModule {
     private final Set<Method> installedMethods = new HashSet<>();
+    private final Set<Constructor<?>> installedConstructors = new HashSet<>();
     private final AtomicReference<Integer> pendingSelection = new AtomicReference<>();
     private final AtomicBoolean selectionSyncRunning = new AtomicBoolean();
     private final AtomicBoolean aiIndexSyncRunning = new AtomicBoolean();
+    private volatile boolean themeAiAppPageVisible;
     private final Set<String> pendingRepairs = new HashSet<>();
     private final ScheduledThreadPoolExecutor repairExecutor = createRepairExecutor();
 
@@ -106,6 +110,9 @@ public class ModuleMain extends XposedModule {
     private volatile long lastThemeDatabaseSyncedAtElapsed;
     private volatile long lastAiAppIndexSyncedAtElapsed;
     private volatile long lastRearWakeDecisionLoggedAtElapsed;
+    private volatile long lastSubscreenAppInfoModified = Long.MIN_VALUE;
+    private volatile long lastSubscreenAppInfoLength = Long.MIN_VALUE;
+    private volatile int lastSubscreenAppInfoCount = Integer.MIN_VALUE;
     /** insertAppWidget 交易期间置位，供应用卡列表 getter 判断是否需要封顶 size。 */
     private static final ThreadLocal<Boolean> APP_CARD_INSERT_ACTIVE = new ThreadLocal<>();
 
@@ -190,6 +197,7 @@ public class ModuleMain extends XposedModule {
                     installModuleEntryClickHook(param.getClassLoader());
                     installQuickPanelDispatchHook(param.getClassLoader());
                     installRearScreenSelectionSyncHook(param.getClassLoader());
+                    installAutoWallpaperRotationHooks(param.getClassLoader());
                     hooksInstalled = true;
                     log(Log.INFO, Constants.LOG_TAG, "Hooks installed for " + Constants.TARGET_PACKAGE);
                 } catch (Throwable throwable) {
@@ -211,6 +219,7 @@ public class ModuleMain extends XposedModule {
                     installRearScreenApplyFixHook(param.getClassLoader());
                     installAiCompanionReuseApplyHook(param.getClassLoader());
                     installThemeFaceEnrollmentHook(param.getClassLoader());
+                    installRearScreenPersonalizationPresetHook(param.getClassLoader());
                     installThemeSettingsSelectionSyncHook(param.getClassLoader());
                     installThemeAiAppIndexSyncHooks(param.getClassLoader());
                     installThemeSettingsAiVisibilityHooks(param.getClassLoader());
@@ -291,10 +300,81 @@ public class ModuleMain extends XposedModule {
                             + Constants.PERSONAL_ASSISTANT_PRESET_PARSE_METHOD,
                     chain -> {
                         Object result = chain.proceed();
+                        if (PrefsBridge.shouldEnable18ProFeatures(this)) {
+                            Object modulePreset = parsePersonalAssistantPreset(
+                                    classLoader,
+                                    presetParserClass,
+                                    new File(Constants.PERSONAL_ASSISTANT_PRESET_JSON_PATH));
+                            if (modulePreset instanceof List<?> list && !list.isEmpty()) {
+                                result = modulePreset;
+                            }
+                        }
                         logBackScreenStoreData("preset", result);
                         return result;
                     }
             );
+        }
+    }
+
+    @Nullable
+    private Object parsePersonalAssistantPreset(
+            @NonNull ClassLoader classLoader,
+            @NonNull Class<?> parserClass,
+            @NonNull File jsonFile
+    ) {
+        if (!jsonFile.isFile()) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "BackScreenStore preset file unavailable: " + jsonFile);
+            return null;
+        }
+        try {
+            Class<?> gsonClass = findClass(Constants.PERSONAL_ASSISTANT_GSON_CLASS, classLoader);
+            Class<?> presetJsonClass = findClass(
+                    Constants.PERSONAL_ASSISTANT_PRESET_JSON_CLASS,
+                    classLoader);
+            Class<?> presetCategoryClass = findClass(
+                    Constants.PERSONAL_ASSISTANT_PRESET_CATEGORY_CLASS,
+                    classLoader);
+            if (gsonClass == null || presetJsonClass == null || presetCategoryClass == null) {
+                log(Log.WARN, Constants.LOG_TAG,
+                        "BackScreenStore preset model classes unavailable");
+                return null;
+            }
+
+            Object gson = gsonClass.getDeclaredConstructor().newInstance();
+            Method fromJson = gsonClass.getMethod("fromJson", String.class, Class.class);
+            Object presetJson = fromJson.invoke(
+                    gson,
+                    readUtf8(jsonFile, MAX_THEME_INDEX_BYTES),
+                    presetJsonClass);
+            Object productsValue = invokeNoArg(presetJson, "getProducts");
+            if (!(productsValue instanceof List<?> products) || products.isEmpty()) {
+                log(Log.WARN, Constants.LOG_TAG,
+                        "BackScreenStore module preset contains no products");
+                return null;
+            }
+
+            Method convertCategory = parserClass.getDeclaredMethod(
+                    "a",
+                    presetCategoryClass,
+                    String.class);
+            convertCategory.setAccessible(true);
+            Locale locale = Locale.getDefault();
+            String localeKey = locale.getLanguage() + "_" + locale.getCountry();
+            ArrayList<Object> categories = new ArrayList<>();
+            for (Object product : products) {
+                if (product == null || !presetCategoryClass.isInstance(product)) continue;
+                Object category = convertCategory.invoke(null, product, localeKey);
+                Object items = invokeNoArg(category, "getItems");
+                if (category != null && items instanceof List<?> list && !list.isEmpty()) {
+                    categories.add(category);
+                }
+            }
+            return categories.isEmpty() ? null : categories;
+        } catch (Throwable throwable) {
+            log(Log.ERROR, Constants.LOG_TAG,
+                    "BackScreenStore module preset parse failed", throwable);
+            return null;
         }
     }
 
@@ -587,6 +667,7 @@ public class ModuleMain extends XposedModule {
                 Constants.SUBSCREEN_APP_LIST_MANAGER_CLASS + "#"
                         + Constants.SUBSCREEN_APP_LIST_GETTER_METHOD,
                 chain -> {
+                    refreshSubscreenAppInfoCacheIfChanged(classLoader, chain.getThisObject());
                     Object list = chain.proceed();
                     if (!(list instanceof ArrayList)) return list;
                     ArrayList<?> items = (ArrayList<?>) list;
@@ -601,20 +682,15 @@ public class ModuleMain extends XposedModule {
                 }
         );
 
-        // 背屏上滑面板通过这条分发链取数据，条目要在分发副本里补上。
+        // 背屏上滑面板通过这条分发链取数据；进入前先同步官方索引并刷新宿主缓存。
         hookMethodIfPresent(
                 findDeclaredMethod(listManagerClass,
                         Constants.SUBSCREEN_APP_LIST_DISPATCH_METHOD, Consumer.class),
                 Constants.SUBSCREEN_APP_LIST_MANAGER_CLASS + "#"
                         + Constants.SUBSCREEN_APP_LIST_DISPATCH_METHOD,
                 chain -> {
-                    Object consumer = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
-                    if (!(consumer instanceof Consumer)) return chain.proceed();
-                    if (!PrefsBridge.shouldEnableAppCard(this)) return chain.proceed();
-                    List<Object> args = new ArrayList<>(chain.getArgs());
-                    args.set(0, PanelAppCard.wrapDispatchConsumer(
-                            classLoader, (Consumer<?>) consumer));
-                    return chain.proceed(args.toArray());
+                    refreshSubscreenAppInfoCacheIfChanged(classLoader, chain.getThisObject());
+                    return chain.proceed();
                 }
         );
 
@@ -628,21 +704,132 @@ public class ModuleMain extends XposedModule {
                         + Constants.SUBSCREEN_APP_LIST_SAVE_METHOD,
                 chain -> {
                     Object list = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
-                    if (!(list instanceof ArrayList)) return chain.proceed();
-                    List<Object> stripped = PanelAppCard.withoutModuleEntry(
-                            classLoader, (List<?>) list);
-                    if (stripped == null && !(list instanceof SizeCappedList)) {
+                    if (!(list instanceof SizeCappedList)) {
                         return chain.proceed();
                     }
                     List<Object> args = new ArrayList<>(chain.getArgs());
-                    args.set(0, stripped != null
-                            ? stripped
-                            : new ArrayList<>((SizeCappedList) list));
+                    args.set(0, ((SizeCappedList) list).fullCopy());
                     return chain.proceed(args.toArray());
                 }
         );
 
         log(Log.INFO, Constants.LOG_TAG, "App card limit hook installed");
+    }
+
+    private void refreshSubscreenAppInfoCacheIfChanged(
+            @NonNull ClassLoader classLoader,
+            @Nullable Object listManager
+    ) {
+        if (listManager == null) return;
+        syncOfficialPanelAppCardWithSubscreenIndex();
+        cleanupDeletedSubscreenAppInfoEntries();
+        File appInfoFile = new File(Constants.SUBSCREEN_APP_INFO_FILE);
+        if (!appInfoFile.isFile()) return;
+
+        long modified = appInfoFile.lastModified();
+        long length = appInfoFile.length();
+        if (modified == lastSubscreenAppInfoModified
+                && length == lastSubscreenAppInfoLength) {
+            return;
+        }
+
+        try {
+            ArrayList<Object> items = readSubscreenAppInfoList(classLoader, appInfoFile);
+            if (items == null) return;
+            if (setFieldValue(listManager, "c", items)) {
+                lastSubscreenAppInfoModified = modified;
+                lastSubscreenAppInfoLength = length;
+                lastSubscreenAppInfoCount = items.size();
+                notifySubscreenAppInfoListeners(classLoader, listManager, items, "refresh");
+                log(Log.INFO, Constants.LOG_TAG,
+                        "Refreshed SubScreenCenter app list cache: size=" + items.size());
+            }
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "refreshSubscreenAppInfoCacheIfChanged failed", e);
+        }
+    }
+
+    private void refreshActiveSubscreenAppInfoCache(@NonNull ClassLoader classLoader) {
+        Class<?> listManagerClass = findClass(Constants.SUBSCREEN_APP_LIST_MANAGER_CLASS, classLoader);
+        if (listManagerClass == null) return;
+        Object listManager = getStaticFieldValueByType(listManagerClass, listManagerClass);
+        refreshSubscreenAppInfoCacheIfChanged(classLoader, listManager);
+    }
+
+    private void notifySubscreenAppInfoListeners(
+            @NonNull ClassLoader classLoader,
+            @NonNull Object listManager,
+            @NonNull ArrayList<Object> items,
+            @NonNull String source
+    ) {
+        Object listenersValue = getFieldValue(listManager, "a");
+        if (!(listenersValue instanceof Collection<?> listeners) || listeners.isEmpty()) return;
+        Class<?> entryClass = findClass(Constants.SUBSCREEN_LAUNCHER_ENTRY_CLASS, classLoader);
+        if (entryClass == null) return;
+        ArrayList<Object> payload = new ArrayList<>(items);
+        int notified = 0;
+        for (Object listener : new ArrayList<>(listeners)) {
+            if (listener == null) continue;
+            Method callback = findDeclaredMethod(
+                    listener.getClass(), "a", ArrayList.class, String.class, entryClass);
+            if (callback == null) continue;
+            try {
+                callback.invoke(listener, new ArrayList<>(payload), source, null);
+                notified++;
+            } catch (Throwable e) {
+                log(Log.WARN, Constants.LOG_TAG,
+                        "SubScreenCenter app list listener notify failed", e);
+            }
+        }
+        if (notified > 0) {
+            log(Log.INFO, Constants.LOG_TAG,
+                    "Notified SubScreenCenter app list listeners: count=" + notified
+                            + ", size=" + payload.size());
+        }
+    }
+
+    @Nullable
+    private ArrayList<Object> readSubscreenAppInfoList(
+            @NonNull ClassLoader classLoader,
+            @NonNull File appInfoFile
+    ) {
+        try {
+            Class<?> entryClass = Class.forName(
+                    Constants.SUBSCREEN_LAUNCHER_ENTRY_CLASS, false, classLoader);
+            Constructor<?> constructor = entryClass.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            JSONArray array = new JSONArray(readUtf8(appInfoFile, MAX_THEME_INDEX_BYTES));
+            ArrayList<Object> items = new ArrayList<>(array.length());
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject item = array.optJSONObject(i);
+                if (item == null) continue;
+                Object entry = constructor.newInstance();
+                callMethodQuietly(entry, "c", item.optString("appName", null));
+                setFieldValue(entry, Constants.SUBSCREEN_LAUNCHER_ENTRY_MTZ_FIELD,
+                        item.optString("mtzPath", null));
+                setFieldValue(entry, Constants.SUBSCREEN_LAUNCHER_ENTRY_BIND_APP_FIELD,
+                        item.optString("bindApp", null));
+                setFieldValue(entry, Constants.SUBSCREEN_LAUNCHER_ENTRY_ICON_FIELD,
+                        item.optString("appIconPath", null));
+                setFieldValue(entry, Constants.SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_LIGHT_FIELD,
+                        item.optString("previewLightPath", null));
+                setFieldValue(entry, Constants.SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_DARK_FIELD,
+                        item.optString("previewDarkPath", null));
+                setFieldValue(entry, Constants.SUBSCREEN_LAUNCHER_ENTRY_RES_ID_FIELD,
+                        item.optString("resId", null));
+                setFieldValue(entry, Constants.SUBSCREEN_LAUNCHER_ENTRY_GAME_FIELD,
+                        item.optBoolean("isGame", false));
+                setFieldValue(entry, Constants.SUBSCREEN_LAUNCHER_ENTRY_CARD_TYPE_FIELD,
+                        item.optInt("appCardType", -1));
+                setFieldValue(entry, Constants.SUBSCREEN_LAUNCHER_ENTRY_PRESET_FIELD,
+                        item.optBoolean("isPreset", false));
+                items.add(entry);
+            }
+            return items;
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "readSubscreenAppInfoList failed", e);
+            return null;
+        }
     }
 
     /**
@@ -710,6 +897,7 @@ public class ModuleMain extends XposedModule {
         hookMethodIfPresent(findDeclaredMethod(launcherClass, "onResume"),
                 Constants.SUBSCREEN_LAUNCHER_ACTIVITY_CLASS + "#onResume", chain -> {
                     Object result = chain.proceed();
+                    refreshActiveSubscreenAppInfoCache(classLoader);
                     BatteryRingHost.show((Activity) chain.getThisObject(), this);
                     return result;
                 });
@@ -863,15 +1051,120 @@ public class ModuleMain extends XposedModule {
                         + Constants.HOOK_METHOD_SAVE_USER_SELECTION + "]",
                 chain -> {
                     Object result = chain.proceed();
-                    if (PrefsBridge.shouldFixRearScreenApply(this)
-                            && chain.getThisObject() instanceof View panel) {
-                        consumePendingRearSelection(panel);
-                    } else if (chain.getThisObject() instanceof View panel) {
-                        pendingRearSelections.remove(panel);
+                    if (chain.getThisObject() instanceof View panel) {
+                        PendingRearSelection pending = pendingRearSelections.get(panel);
+                        if (PrefsBridge.shouldFixRearScreenApply(this)
+                                || (pending != null && pending.autoRotation)) {
+                            consumePendingRearSelection(panel);
+                        } else {
+                            pendingRearSelections.remove(panel);
+                        }
+                        AutoWallpaperRotationHost.onWallpaperCommitted(panel);
                     }
                     return result;
                 }
         );
+    }
+
+    private void installAutoWallpaperRotationHooks(@NonNull ClassLoader classLoader) {
+        Class<?> mainPanelClass = findClass(Constants.HOOK_CLASS_MAIN_PANEL, classLoader);
+        if (mainPanelClass == null) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Auto wallpaper target missing: " + Constants.HOOK_CLASS_MAIN_PANEL);
+            return;
+        }
+
+        hookMethodIfPresent(
+                findDeclaredMethod(mainPanelClass, Constants.HOOK_METHOD_MAIN_PANEL_RESUME),
+                Constants.HOOK_CLASS_MAIN_PANEL + "#"
+                        + Constants.HOOK_METHOD_MAIN_PANEL_RESUME,
+                chain -> {
+                    Object result = chain.proceed();
+                    if (chain.getThisObject() instanceof View panel) {
+                        AutoWallpaperRotationHost.onPanelResumed(
+                                panel,
+                                this,
+                                this::rotateToNextRearWallpaper);
+                    }
+                    return result;
+                });
+        hookMethodIfPresent(
+                findDeclaredMethod(mainPanelClass, Constants.HOOK_METHOD_MAIN_PANEL_PAUSE),
+                Constants.HOOK_CLASS_MAIN_PANEL + "#"
+                        + Constants.HOOK_METHOD_MAIN_PANEL_PAUSE,
+                chain -> {
+                    if (chain.getThisObject() instanceof View panel) {
+                        AutoWallpaperRotationHost.onPanelPaused(panel);
+                    }
+                    return chain.proceed();
+                });
+        hookMethodIfPresent(
+                findDeclaredMethod(mainPanelClass, Constants.HOOK_METHOD_MAIN_PANEL_DESTROY),
+                Constants.HOOK_CLASS_MAIN_PANEL + "#"
+                        + Constants.HOOK_METHOD_MAIN_PANEL_DESTROY,
+                chain -> {
+                    if (chain.getThisObject() instanceof View panel) {
+                        AutoWallpaperRotationHost.release(panel);
+                    }
+                    return chain.proceed();
+                });
+        hookMethodIfPresent(
+                findDeclaredMethod(
+                        mainPanelClass,
+                        Constants.HOOK_METHOD_MAIN_PANEL_AOD_CHANGED,
+                        boolean.class),
+                Constants.HOOK_CLASS_MAIN_PANEL + "#"
+                        + Constants.HOOK_METHOD_MAIN_PANEL_AOD_CHANGED,
+                chain -> {
+                    Object result = chain.proceed();
+                    if (chain.getThisObject() instanceof View panel) {
+                        AutoWallpaperRotationHost.onPanelStateChanged(panel);
+                    }
+                    return result;
+                });
+    }
+
+    private boolean rotateToNextRearWallpaper(@NonNull View panel) {
+        if (SwipePanelHost.isShowing()) return false;
+        Object editing = getFieldValue(panel, Constants.HOOK_FIELD_MAIN_PANEL_EDITING);
+        if (Boolean.TRUE.equals(editing)) return false;
+        Object state = getFieldValue(panel, Constants.HOOK_FIELD_MAIN_PANEL_STATE);
+        if (state instanceof Number && ((Number) state).intValue() != 0) return false;
+
+        Object listValue = getFieldValue(panel, Constants.HOOK_FIELD_WIDGET_LIST_OS4);
+        if (!(listValue instanceof List<?>)) {
+            listValue = getFieldValue(panel, Constants.HOOK_FIELD_WIDGET_LIST);
+        }
+        if (!(listValue instanceof List<?> widgets) || widgets.size() < 2) return false;
+
+        Integer currentIndex = resolveWallpaperIndex(panel, false);
+        if (currentIndex == null) return false;
+        int nextIndex = AutoWallpaperRotationPolicy.nextIndex(currentIndex, widgets.size());
+        if (nextIndex < 0) return false;
+        Integer nextId = resolveWallpaperIdAtIndex(panel, nextIndex);
+        if (nextId == null) return false;
+
+        PendingRearSelection pending = new PendingRearSelection(
+                nextId,
+                nextIndex,
+                SystemClock.elapsedRealtime(),
+                true);
+        pendingRearSelections.put(panel, pending);
+        try {
+            callMethodCompatible(
+                    panel,
+                    Constants.HOOK_METHOD_AUTO_WALLPAPER_SWITCH,
+                    nextIndex,
+                    widgets);
+            log(Log.INFO, Constants.LOG_TAG,
+                    "Auto wallpaper switch requested: id=" + nextId
+                            + ", index=" + currentIndex + "->" + nextIndex);
+            return true;
+        } catch (Throwable error) {
+            pendingRearSelections.remove(panel);
+            log(Log.WARN, Constants.LOG_TAG, "Auto wallpaper switch failed", error);
+            return false;
+        }
     }
 
     @Nullable
@@ -886,7 +1179,8 @@ public class ModuleMain extends XposedModule {
         return new PendingRearSelection(
                 previewId,
                 previewIndex,
-                SystemClock.elapsedRealtime());
+                SystemClock.elapsedRealtime(),
+                false);
     }
 
     private void consumePendingRearSelection(@NonNull View panel) {
@@ -926,6 +1220,23 @@ public class ModuleMain extends XposedModule {
 
         Integer index = resolveWallpaperIndex(panel, preview, os4Layout);
         if (index == null || index < 0 || index >= widgets.size()) return null;
+        return resolveWallpaperIdAtIndex(widgets, index);
+    }
+
+    @Nullable
+    private Integer resolveWallpaperIdAtIndex(@NonNull View panel, int index) {
+        Object listValue = getFieldValue(panel, Constants.HOOK_FIELD_WIDGET_LIST_OS4);
+        if (!(listValue instanceof List<?>)) {
+            listValue = getFieldValue(panel, Constants.HOOK_FIELD_WIDGET_LIST);
+        }
+        return listValue instanceof List<?> widgets
+                ? resolveWallpaperIdAtIndex(widgets, index)
+                : null;
+    }
+
+    @Nullable
+    private Integer resolveWallpaperIdAtIndex(@NonNull List<?> widgets, int index) {
+        if (index < 0 || index >= widgets.size()) return null;
         Object widget = widgets.get(index);
         Object bean = getFieldValue(widget, Constants.HOOK_FIELD_WIDGET_BEAN);
         Object idValue = getFieldValue(bean, Constants.HOOK_FIELD_WIDGET_ID);
@@ -1028,11 +1339,18 @@ public class ModuleMain extends XposedModule {
         final int wallpaperId;
         final int selectedIndex;
         final long requestedAtElapsed;
+        final boolean autoRotation;
 
-        PendingRearSelection(int wallpaperId, int selectedIndex, long requestedAtElapsed) {
+        PendingRearSelection(
+                int wallpaperId,
+                int selectedIndex,
+                long requestedAtElapsed,
+                boolean autoRotation
+        ) {
             this.wallpaperId = wallpaperId;
             this.selectedIndex = selectedIndex;
             this.requestedAtElapsed = requestedAtElapsed;
+            this.autoRotation = autoRotation;
         }
     }
 
@@ -1092,6 +1410,34 @@ public class ModuleMain extends XposedModule {
                 classLoader,
                 Constants.THEME_DEVICE_UTILS_CLASS,
                 "a");
+        hookStringReturnIfPresent(
+                classLoader,
+                Constants.THEME_DEVICE_UTILS_CLASS,
+                "y",
+                Constants.THEME_REAR_DEVICE,
+                this::shouldSpoofThemeAiPageDeviceIdentity);
+        hookStringReturnIfPresent(
+                classLoader,
+                Constants.THEME_DEVICE_UTILS_CLASS,
+                "cdj",
+                Constants.THEME_REAR_MODEL,
+                this::shouldSpoofThemeAiPageDeviceIdentity);
+        hookStringReturnIfPresent(
+                classLoader,
+                Constants.THEME_DEVICE_UTILS_CLASS,
+                "z",
+                Constants.THEME_REAR_VERSION,
+                this::shouldSpoofThemeAiPageDeviceIdentity);
+        hookStringReturnIfPresent(
+                classLoader,
+                Constants.THEME_ONLINE_SERVICE_CLASS,
+                "fnq8",
+                Constants.THEME_REAR_VERSION,
+                this::shouldSpoofThemeAiPageDeviceIdentity);
+    }
+
+    private boolean shouldSpoofThemeAiPageDeviceIdentity() {
+        return themeAiAppPageVisible && PrefsBridge.shouldEnable18ProFeatures(this);
     }
 
     private void installThemeNetworkDeviceSpoofHook(@NonNull ClassLoader classLoader) {
@@ -1115,6 +1461,8 @@ public class ModuleMain extends XposedModule {
                     if (!PrefsBridge.shouldEnable18ProFeatures(this)) return chain.proceed();
                     Object request = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
                     Object params = chain.getArgs().size() > 1 ? chain.getArgs().get(1) : null;
+                    boolean diagnosticRequest = shouldLogThemeDiagnosticRequest(request);
+                    boolean spoofed = false;
                     if (shouldSpoofThemeAiAppRequest(request) && params instanceof Map<?, ?> rawMap) {
                         @SuppressWarnings("unchecked")
                         Map<String, String> map = (Map<String, String>) rawMap;
@@ -1122,34 +1470,82 @@ public class ModuleMain extends XposedModule {
                         map.put("model", Constants.THEME_REAR_MODEL);
                         map.put("version", Constants.THEME_REAR_VERSION);
                         map.put("isSupportRearScreen", "true");
+                        spoofed = true;
                         log(Log.DEBUG, Constants.LOG_TAG,
-                                "Spoofed Theme AI app request as " + Constants.THEME_REAR_DEVICE);
+                                "Spoofed Theme rear AI request as " + Constants.THEME_REAR_DEVICE);
+                    }
+                    if (diagnosticRequest) {
+                        log(Log.DEBUG, Constants.LOG_TAG,
+                                "Theme request diagnostic: spoofed=" + spoofed
+                                        + ", " + summarizeThemeNetworkRequest(request, params));
                     }
                     return chain.proceed();
                 }
         );
     }
 
+    private boolean shouldLogThemeDiagnosticRequest(@Nullable Object request) {
+        if (request == null) return false;
+        return ThemeNetworkClassifier.shouldLogDiagnostic(themeRequestPathOrUrl(request));
+    }
+
+    @NonNull
+    private String summarizeThemeNetworkRequest(@Nullable Object request, @Nullable Object params) {
+        String path = asString(callMethodQuietly(request, "cdj"));
+        String url = stripQueryAndFragment(String.valueOf(callMethodQuietly(request, "url")));
+        String requestFlag = asString(callMethodQuietly(
+                request, "s", Constants.THEME_AI_APP_REQUEST_FLAG_HEADER));
+        return "path=" + path
+                + ", url=" + clipForLog(url, 240)
+                + ", request_flag=" + requestFlag
+                + ", params=" + summarizeThemeNetworkParams(params);
+    }
+
+    @NonNull
+    private String summarizeThemeNetworkParams(@Nullable Object params) {
+        if (!(params instanceof Map<?, ?> map)) return String.valueOf(params);
+        return "{device=" + map.get("device")
+                + ", model=" + map.get("model")
+                + ", version=" + map.get("version")
+                + ", isSupportRearScreen=" + map.get("isSupportRearScreen")
+                + ", category=" + map.get("category")
+                + ", module=" + map.get("module")
+                + ", screen=" + map.get("screen")
+                + ", page=" + map.get("page")
+                + ", request_flag=" + map.get("request_flag")
+                + "}";
+    }
+
+    @NonNull
+    private static String stripQueryAndFragment(@Nullable String value) {
+        if (value == null || "null".equals(value)) return "null";
+        int query = value.indexOf('?');
+        int fragment = value.indexOf('#');
+        int end = value.length();
+        if (query >= 0) end = Math.min(end, query);
+        if (fragment >= 0) end = Math.min(end, fragment);
+        return value.substring(0, end);
+    }
+
     private boolean shouldSpoofThemeAiAppRequest(@Nullable Object request) {
         if (request == null) {
             return false;
         }
+        String flag = themeRequestFlag(request);
+        return ThemeNetworkClassifier.shouldSpoofDeviceIdentity(themeRequestPathOrUrl(request), flag);
+    }
+
+    @Nullable
+    private String themeRequestPathOrUrl(@Nullable Object request) {
         String raw = asString(callMethodQuietly(request, "cdj"));
-        if (isEmpty(raw)) {
-            return false;
-        }
-        if (raw.contains(Constants.THEME_AI_APP_PAGE_PATH)
-                || raw.contains(Constants.THEME_AI_APP_SUBJECT_PATH)) {
-            return true;
-        }
-        // /native/page/v3/theme/{id} 是 AI 应用详情与普通背屏资源详情共用的接口，
-        // 只有 request_flag 为 1（AiAppPageApi）时才伪装；普通详情为 31，要放行真实机型参数。
-        if (raw.contains(Constants.THEME_AI_APP_DETAIL_PATH)) {
-            String flag = asString(callMethodQuietly(
-                    request, "s", Constants.THEME_AI_APP_REQUEST_FLAG_HEADER));
-            return Constants.THEME_AI_APP_REQUEST_FLAG_VALUE.equals(flag);
-        }
-        return false;
+        if (!isEmpty(raw)) return raw;
+        raw = String.valueOf(callMethodQuietly(request, "url"));
+        return isEmpty(raw) ? null : raw;
+    }
+
+    @Nullable
+    private String themeRequestFlag(@Nullable Object request) {
+        return asString(callMethodQuietly(request, "s", Constants.THEME_AI_APP_REQUEST_FLAG_HEADER));
     }
 
     private void installThemeLegacyDownloadHook(@NonNull ClassLoader classLoader) {
@@ -1180,7 +1576,7 @@ public class ModuleMain extends XposedModule {
                                 "Theme AI app download response length="
                                         + (body == null ? -1 : body.length())
                                         + ", body=" + (body == null ? "null"
-                                                : body.substring(0, Math.min(body.length(), 600))));
+                                                : clipForLog(body, 600)));
                     }
                     return result;
                 }
@@ -1193,15 +1589,20 @@ public class ModuleMain extends XposedModule {
     }
 
     /**
-     * 下载地址接口按 device 决定资源可用性：真机会返回 BUSINESS_LOGIC_ERROR，客户端上报 300001。
-     * 宿主的 device 在 baseUrl 的查询串里，而 addParameter 只写参数表，最终 URL 会带两个 device，
-     * 服务端取到前一个真机值。这里直接改写 baseUrl 里的 device。
+     * 普通 download/v2 用于 AI 应用卡资源，差分 diff/download/v2 用于背屏壁纸资源。
+     * 两类资源按不同设备池发放，下载阶段需要按接口类型分别写入设备参数。
      */
     private void addThemeRearDownloadParams(@Nullable Object requestUrl) {
         String baseUrl = asString(callMethodQuietly(requestUrl, "getBaseUrl"));
         if (!isEmpty(baseUrl)) {
+            boolean diffDownload = isThemeRearDiffDownloadRequest(requestUrl);
+            String device = diffDownload ? android.os.Build.DEVICE : Constants.THEME_REAR_DEVICE;
+            String version = diffDownload ? getCurrentThemeSystemVersion() : Constants.THEME_REAR_VERSION;
             String rewritten = rewriteUrlParameter(
-                    baseUrl, "device", Constants.THEME_REAR_DEVICE);
+                    baseUrl, "device", device);
+            if (!isEmpty(version)) {
+                rewritten = rewriteUrlParameter(rewritten, "version", version);
+            }
             if (!rewritten.equals(baseUrl)) {
                 callMethodQuietly(requestUrl, "setBaseUrl", rewritten);
             }
@@ -1212,6 +1613,21 @@ public class ModuleMain extends XposedModule {
             return;
         }
         callMethodQuietly(requestUrl, "addParameter", "isSupportRearScreen", "true");
+    }
+
+    @NonNull
+    private static String getCurrentThemeSystemVersion() {
+        String release = android.os.Build.VERSION.RELEASE;
+        String incremental = android.os.Build.VERSION.INCREMENTAL;
+        if (release == null || release.isEmpty() || incremental == null || incremental.isEmpty()) {
+            return "";
+        }
+        return release + "_" + incremental;
+    }
+
+    private boolean isThemeRearDiffDownloadRequest(@Nullable Object requestUrl) {
+        Object baseUrl = callMethodQuietly(requestUrl, "getBaseUrl");
+        return String.valueOf(baseUrl).contains("/diff" + Constants.THEME_DOWNLOAD_PATH);
     }
 
     @NonNull
@@ -1238,6 +1654,13 @@ public class ModuleMain extends XposedModule {
                 + String.valueOf(callMethodQuietly(requestUrl, "getParameter", "isSupportRearScreen"));
     }
 
+    @NonNull
+    private static String clipForLog(@Nullable String value, int maxChars) {
+        if (value == null) return "null";
+        if (value.length() <= maxChars) return value;
+        return value.substring(0, maxChars) + "...";
+    }
+
     private void installThemeFaceEnrollmentHook(@NonNull ClassLoader classLoader) {
         // Theme Manager 11.5.3.1: k(Context) is the enrollment-count query only.
         // Keep the credential gate, enrollment UI, content audit and authentication intact.
@@ -1257,6 +1680,7 @@ public class ModuleMain extends XposedModule {
             return actual >= 0 ? actual : original;
         });
     }
+
 
     private void installRearScreenApplyFixHook(@NonNull ClassLoader classLoader) {
         Class<?> applyResultClass = findClass(Constants.THEME_APPLY_RESULT_CLASS, classLoader);
@@ -1505,6 +1929,254 @@ public class ModuleMain extends XposedModule {
         }
     }
 
+    private void installRearScreenPersonalizationPresetHook(@NonNull ClassLoader classLoader) {
+        Class<?> settingHelperCompanionClass = findClass(
+                Constants.THEME_SETTING_HELPER_COMPANION_CLASS, classLoader);
+        if (settingHelperCompanionClass != null) {
+            hookMethodIfPresent(
+                    settingHelperCompanionClass,
+                    "zy",
+                    new Class[]{},
+                    Constants.THEME_SETTING_HELPER_COMPANION_CLASS + "#zy",
+                    chain -> {
+                        Object result = chain.proceed();
+                        if (!PrefsBridge.shouldEnable18ProFeatures(this)) return result;
+                        String cmf = asString(result);
+                        return isEmpty(cmf) ? Constants.THEME_REAR_CMF_FALLBACK : result;
+                    }
+            );
+        } else {
+            log(Log.DEBUG, Constants.LOG_TAG,
+                    "Rear personalization CMF hook target missing: "
+                            + Constants.THEME_SETTING_HELPER_COMPANION_CLASS);
+        }
+
+        Class<?> miuiUtilsClass = findClass(Constants.THEME_MIUI_UTILS_CLASS, classLoader);
+        if (miuiUtilsClass != null) {
+            hookMethodIfPresent(
+                    miuiUtilsClass,
+                    "zurt",
+                    new Class[]{},
+                    Constants.THEME_MIUI_UTILS_CLASS + "#zurt",
+                    chain -> PrefsBridge.shouldEnable18ProFeatures(this) ? false : chain.proceed()
+            );
+        } else {
+            log(Log.DEBUG, Constants.LOG_TAG,
+                    "Rear personalization version hook target missing: "
+                            + Constants.THEME_MIUI_UTILS_CLASS);
+        }
+
+        Class<?> repositoryClass = findClass(
+                Constants.THEME_REAR_PRESET_REPOSITORY_CLASS, classLoader);
+        Class<?> continuationClass = findClass("kotlin.coroutines.Continuation", classLoader);
+        if (repositoryClass == null || continuationClass == null) {
+            log(Log.DEBUG, Constants.LOG_TAG,
+                    "Rear personalization preset hook target missing: "
+                            + Constants.THEME_REAR_PRESET_REPOSITORY_CLASS);
+            return;
+        }
+        hookMethodIfPresent(
+                repositoryClass,
+                "k",
+                new Class[]{continuationClass},
+                Constants.THEME_REAR_PRESET_REPOSITORY_CLASS + "#k",
+                chain -> {
+                    Object result = chain.proceed();
+                    if (!PrefsBridge.shouldEnable18ProFeatures(this)) return result;
+                    return ensureRearPersonalizationAiPresets(result, chain.getThisObject());
+                }
+        );
+    }
+
+    private Object ensureRearPersonalizationAiPresets(
+            @Nullable Object result,
+            @Nullable Object repository
+    ) {
+        if (!(result instanceof List<?> rawList)) return result;
+        if (hasRearPersonalizationAiPresets(rawList)) return result;
+
+        ArrayList<Object> merged = new ArrayList<>(rawList);
+        int added = 0;
+        added += mergeRearPersonalizationPresetPath(
+                merged, repository, Constants.THEME_REAR_TEMPLATE_NORMAL_DATA_DIR);
+        added += mergeRearPersonalizationPresetPath(
+                merged, repository, Constants.THEME_REAR_TEMPLATE_NORMAL_PRODUCT_DIR);
+        added += mergeRearPersonalizationPresetPath(
+                merged, repository, Constants.THEME_REAR_TEMPLATE_NORMAL_SYSTEM_DIR);
+        if (added > 0) {
+            log(Log.INFO, Constants.LOG_TAG,
+                    "Rear personalization AI presets ensured: added=" + added);
+            return merged;
+        }
+        log(Log.DEBUG, Constants.LOG_TAG,
+                "Rear personalization AI preset source unavailable");
+        return result;
+    }
+
+    private int mergeRearPersonalizationPresetPath(
+            @NonNull ArrayList<Object> target,
+            @Nullable Object repository,
+            @NonNull String path
+    ) {
+        if (repository == null) return 0;
+        ArrayList<Object> supplemental = new ArrayList<>();
+        try {
+            Object value = callMethodCompatible(repository, "zurt", supplemental, path);
+            List<?> parsed = value instanceof List<?> list ? list : supplemental;
+            log(Log.DEBUG, Constants.LOG_TAG,
+                    "Rear personalization preset source: path=" + path
+                            + ", size=" + parsed.size()
+                            + ", current=" + target.size());
+            int added = mergeRearPersonalizationPresetCategories(target, parsed);
+            if (added == 0) {
+                added = mergeLeadingRearPersonalizationPresetCategories(target, parsed);
+            }
+            return added;
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Rear personalization preset source failed: path=" + path, e);
+            return 0;
+        }
+    }
+
+    private int mergeRearPersonalizationPresetCategories(
+            @NonNull ArrayList<Object> target,
+            @NonNull List<?> supplemental
+    ) {
+        int added = 0;
+        for (Object category : supplemental) {
+            String categoryType = asString(callNoArgMethodQuietly(category, "getCategoryType"));
+            if (!isRearPersonalizationAiCategory(categoryType)) continue;
+            Object existing = findRearPresetCategory(target, categoryType);
+            if (existing == null) {
+                target.add(category);
+                added++;
+                continue;
+            }
+            Object existingItems = callNoArgMethodQuietly(existing, "getItemList");
+            Object supplementalItems = callNoArgMethodQuietly(category, "getItemList");
+            if (!(existingItems instanceof List<?> current)
+                    || !(supplementalItems instanceof List<?> extras)) {
+                continue;
+            }
+            @SuppressWarnings("unchecked")
+            List<Object> mutableCurrent = (List<Object>) current;
+            for (Object item : extras) {
+                if (isRearPersonalizationAiItem(item)
+                        && !containsRearPresetItem(mutableCurrent, item)) {
+                    mutableCurrent.add(item);
+                    added++;
+                }
+            }
+        }
+        return added;
+    }
+
+    private int mergeLeadingRearPersonalizationPresetCategories(
+            @NonNull ArrayList<Object> target,
+            @NonNull List<?> supplemental
+    ) {
+        int missing = supplemental.size() - target.size();
+        if (missing <= 0) return 0;
+        int limit = Math.min(missing, supplemental.size());
+        for (int i = limit - 1; i >= 0; i--) {
+            target.add(0, supplemental.get(i));
+        }
+        log(Log.INFO, Constants.LOG_TAG,
+                "Rear personalization preset leading categories restored: added=" + limit
+                        + ", source=" + supplemental.size()
+                        + ", result=" + target.size());
+        return limit;
+    }
+
+    @Nullable
+    private Object findRearPresetCategory(
+            @NonNull List<?> categories,
+            @Nullable String categoryType
+    ) {
+        for (Object category : categories) {
+            if (categoryType != null
+                    && categoryType.equals(asString(
+                    callNoArgMethodQuietly(category, "getCategoryType")))) {
+                return category;
+            }
+        }
+        return null;
+    }
+
+    private boolean hasRearPersonalizationAiPresets(@NonNull List<?> categories) {
+        boolean hasAiCompanion = false;
+        boolean hasGroupPhoto = false;
+        boolean hasPhoneCase = false;
+        for (Object category : categories) {
+            String categoryType = asString(callNoArgMethodQuietly(category, "getCategoryType"));
+            if (Constants.THEME_REAR_AI_COMPANION_RES_TYPE.equals(categoryType)) {
+                hasAiCompanion = true;
+            }
+            Object items = callNoArgMethodQuietly(category, "getItemList");
+            if (!(items instanceof List<?> list)) continue;
+            for (Object item : list) {
+                String resType = asString(callNoArgMethodQuietly(item, "getResType"));
+                if (Constants.THEME_REAR_GROUP_PHOTO_RES_TYPE.equals(resType)) {
+                    hasGroupPhoto = true;
+                } else if (Constants.THEME_REAR_PHONE_CASE_RES_TYPE.equals(resType)) {
+                    hasPhoneCase = true;
+                }
+            }
+        }
+        return hasAiCompanion && hasGroupPhoto && hasPhoneCase;
+    }
+
+    private int countRearPersonalizationPresetItems(@NonNull List<?> categories) {
+        int count = 0;
+        for (Object category : categories) {
+            if (isRearPersonalizationAiCategory(asString(
+                    callNoArgMethodQuietly(category, "getCategoryType")))) {
+                count++;
+            }
+            Object items = callNoArgMethodQuietly(category, "getItemList");
+            if (!(items instanceof List<?> list)) continue;
+            for (Object item : list) {
+                if (isRearPersonalizationAiItem(item)) count++;
+            }
+        }
+        return count;
+    }
+
+    private boolean isRearPersonalizationAiCategory(@Nullable String categoryType) {
+        return Constants.THEME_REAR_AI_COMPANION_RES_TYPE.equals(categoryType)
+                || Constants.THEME_REAR_AI_WALLPAPER_CATEGORY_TYPE.equals(categoryType);
+    }
+
+    private boolean isRearPersonalizationAiItem(@Nullable Object item) {
+        String resType = asString(callNoArgMethodQuietly(item, "getResType"));
+        return Constants.THEME_REAR_AI_COMPANION_RES_TYPE.equals(resType)
+                || Constants.THEME_REAR_GROUP_PHOTO_RES_TYPE.equals(resType)
+                || Constants.THEME_REAR_PHONE_CASE_RES_TYPE.equals(resType)
+                || Constants.THEME_REAR_AI_WALLPAPER_CATEGORY_TYPE.equals(resType);
+    }
+
+    private boolean containsRearPresetItem(
+            @NonNull List<?> items,
+            @Nullable Object targetItem
+    ) {
+        String targetKey = rearPresetItemKey(targetItem);
+        for (Object item : items) {
+            if (targetKey.equals(rearPresetItemKey(item))) return true;
+        }
+        return false;
+    }
+
+    @NonNull
+    private String rearPresetItemKey(@Nullable Object item) {
+        String resType = asString(callNoArgMethodQuietly(item, "getResType"));
+        String resId = asString(callNoArgMethodQuietly(item, "getResId"));
+        String resName = asString(callNoArgMethodQuietly(item, "getResName"));
+        return (resType == null ? "" : resType)
+                + ":"
+                + (!isEmpty(resId) ? resId : (resName == null ? "" : resName));
+    }
+
     private void installThemeSettingsShortcutHook(@NonNull ClassLoader classLoader) {
         Class<?> entryConfigCompanionClass = findClass(
                 Constants.THEME_ENTRY_CONFIG_COMPANION_CLASS, classLoader);
@@ -1608,6 +2280,21 @@ public class ModuleMain extends XposedModule {
             @NonNull String methodName,
             @NonNull String value
     ) {
+        hookStringReturnIfPresent(
+                classLoader,
+                className,
+                methodName,
+                value,
+                () -> PrefsBridge.shouldEnable18ProFeatures(this));
+    }
+
+    private void hookStringReturnIfPresent(
+            @NonNull ClassLoader classLoader,
+            @NonNull String className,
+            @NonNull String methodName,
+            @NonNull String value,
+            @NonNull BooleanSupplier enabled
+    ) {
         Class<?> targetClass = findClass(className, classLoader);
         if (targetClass == null) {
             log(Log.DEBUG, Constants.LOG_TAG, "String hook target missing: " + className);
@@ -1618,7 +2305,7 @@ public class ModuleMain extends XposedModule {
                 methodName,
                 new Class[]{},
                 className + "#" + methodName,
-                chain -> PrefsBridge.shouldEnable18ProFeatures(this) ? value : chain.proceed()
+                chain -> enabled.getAsBoolean() ? value : chain.proceed()
         );
     }
 
@@ -1654,7 +2341,7 @@ public class ModuleMain extends XposedModule {
         int nextSlot = 0;
         if (shouldInsertAi) {
             Object shortcut = createThemeSettingsShortcutController(
-                    context, classLoader, ModuleStrings.get(context, "ai_rear_screen_title", "AI 背屏", "AI rear screen"), aiIntent);
+                    context, classLoader, ModuleStrings.get(context, "ai_rear_screen_title", "AI陪伴", "AI Companion"), aiIntent);
             if (shortcut != null) {
                 copy.add(Math.min(insertionIndexes.get(nextSlot++), copy.size()), shortcut);
                 themeAiShortcutControllers.add(shortcut);
@@ -1834,7 +2521,7 @@ public class ModuleMain extends XposedModule {
         if (titleId != 0) {
             View titleView = row.findViewById(titleId);
             if (titleView instanceof TextView) {
-                ((TextView) titleView).setText(ModuleStrings.get(context, "ai_rear_screen_title", "AI 背屏", "AI rear screen"));
+                ((TextView) titleView).setText(ModuleStrings.get(context, "ai_rear_screen_title", "AI陪伴", "AI Companion"));
             }
         }
         row.setOnClickListener(v -> {
@@ -1919,6 +2606,7 @@ public class ModuleMain extends XposedModule {
                 new Class[]{Bundle.class},
                 activityClass.getName() + "#onCreate",
                 chain -> {
+                    themeAiAppPageVisible = true;
                     syncAiGeneratedAppCardsToSubscreenIndex();
                     return chain.proceed();
                 }
@@ -1929,7 +2617,28 @@ public class ModuleMain extends XposedModule {
                 new Class[]{},
                 activityClass.getName() + "#onResume",
                 chain -> {
+                    themeAiAppPageVisible = true;
                     syncAiGeneratedAppCardsToSubscreenIndex();
+                    return chain.proceed();
+                }
+        );
+        hookMethodIfPresent(
+                activityClass,
+                "onPause",
+                new Class[]{},
+                activityClass.getName() + "#onPause",
+                chain -> {
+                    themeAiAppPageVisible = false;
+                    return chain.proceed();
+                }
+        );
+        hookMethodIfPresent(
+                activityClass,
+                "onDestroy",
+                new Class[]{},
+                activityClass.getName() + "#onDestroy",
+                chain -> {
+                    themeAiAppPageVisible = false;
                     return chain.proceed();
                 }
         );
@@ -2069,6 +2778,7 @@ public class ModuleMain extends XposedModule {
         if (!PrefsBridge.shouldEnable18ProFeatures(this)) return;
         File runtimeFile = new File(Constants.THEME_AI_APP_RUNTIME_FILE);
         File appInfoFile = new File(Constants.SUBSCREEN_APP_INFO_FILE);
+        cleanupDeletedSubscreenAppInfoEntries();
         if (!runtimeFile.isFile()) {
             return;
         }
@@ -2077,12 +2787,31 @@ public class ModuleMain extends XposedModule {
             JSONArray appInfoItems = appInfoFile.isFile()
                     ? new JSONArray(readUtf8(appInfoFile, MAX_THEME_INDEX_BYTES))
                     : new JSONArray();
+            int[] deletedLocalRemoved = new int[1];
+            appInfoItems = withoutDeletedLocalAppInfoItems(appInfoItems, deletedLocalRemoved);
 
+            LinkedHashSet<String> runtimeIds = new LinkedHashSet<>();
+            for (int i = 0; i < runtimeItems.length(); i++) {
+                JSONObject aiItem = runtimeItems.optJSONObject(i);
+                if (aiItem == null) continue;
+                String productId = aiItem.optString("productId", "");
+                if (!isEmpty(productId)) {
+                    runtimeIds.add(productId);
+                }
+            }
+
+            JSONArray syncedItems = new JSONArray();
             LinkedHashSet<String> existingIds = new LinkedHashSet<>();
+            int removed = deletedLocalRemoved[0];
             for (int i = 0; i < appInfoItems.length(); i++) {
                 JSONObject item = appInfoItems.optJSONObject(i);
                 if (item == null) continue;
                 String resId = item.optString("resId", "");
+                if (isSyncedAiAppInfo(item) && !runtimeIds.contains(resId)) {
+                    removed++;
+                    continue;
+                }
+                syncedItems.put(item);
                 if (!isEmpty(resId)) {
                     existingIds.add(resId);
                 }
@@ -2100,26 +2829,242 @@ public class ModuleMain extends XposedModule {
                 if (appInfoItem == null) {
                     continue;
                 }
-                appInfoItems.put(appInfoItem);
+                syncedItems.put(appInfoItem);
                 existingIds.add(productId);
                 added++;
             }
 
             if (!PrefsBridge.shouldEnable18ProFeatures(this)) return;
-            if (added <= 0) {
-                grantAiAppIndexAccess(runtimeFile, appInfoFile, appInfoItems);
+            if (added <= 0 && removed <= 0) {
+                grantAiAppIndexAccess(runtimeFile, appInfoFile, syncedItems);
                 return;
             }
 
             backupFileOnce(appInfoFile);
-            writeJsonArray(appInfoFile, appInfoItems);
-            grantAiAppIndexAccess(runtimeFile, appInfoFile, appInfoItems);
+            writeJsonArray(appInfoFile, syncedItems);
+            grantAiAppIndexAccess(runtimeFile, appInfoFile, syncedItems);
             log(Log.INFO, Constants.LOG_TAG,
                     "Synced AI app cards to SubScreenCenter index: added=" + added
-                            + ", total=" + appInfoItems.length());
+                            + ", removed=" + removed
+                            + ", total=" + syncedItems.length());
         } catch (Throwable e) {
             log(Log.WARN, Constants.LOG_TAG, "syncAiGeneratedAppCardsToSubscreenIndex failed", e);
         }
+    }
+
+    private boolean isSyncedAiAppInfo(@NonNull JSONObject item) {
+        String mtzPath = item.optString("mtzPath", "");
+        return item.optInt("appCardType", -1) == 2
+                && !isEmpty(mtzPath)
+                && mtzPath.startsWith(Constants.THEME_MAGIC_AI_APP_DIR + "/");
+    }
+
+    private boolean cleanupDeletedSubscreenAppInfoEntries() {
+        File appInfoFile = new File(Constants.SUBSCREEN_APP_INFO_FILE);
+        if (!appInfoFile.isFile()) return false;
+        try {
+            JSONArray items = new JSONArray(readUtf8(appInfoFile, MAX_THEME_INDEX_BYTES));
+            int[] removed = new int[1];
+            JSONArray cleaned = withoutDeletedLocalAppInfoItems(items, removed);
+            if (removed[0] <= 0) return false;
+            backupFileOnce(appInfoFile);
+            writeJsonArray(appInfoFile, cleaned);
+            grantThemeResourceAssetAccess(appInfoFile);
+            log(Log.INFO, Constants.LOG_TAG,
+                    "Cleaned deleted app cards from SubScreenCenter index: removed="
+                            + removed[0] + ", total=" + cleaned.length());
+            return true;
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "cleanupDeletedSubscreenAppInfoEntries failed", e);
+            return false;
+        }
+    }
+
+    private boolean syncOfficialPanelAppCardWithSubscreenIndex() {
+        File appInfoFile = new File(Constants.SUBSCREEN_APP_INFO_FILE);
+        boolean enabled = PrefsBridge.shouldEnableAppCard(this);
+        boolean installRequested = PrefsBridge.shouldInstallAppCard(this);
+        JSONObject officialItem = null;
+        try {
+            JSONArray current = appInfoFile.isFile()
+                    ? new JSONArray(readUtf8(appInfoFile, MAX_THEME_INDEX_BYTES))
+                    : new JSONArray();
+            boolean installMarked = isOfficialPanelCardInstallMarked();
+            boolean hasOfficialItem = containsOfficialPanelCard(current);
+            if (enabled && !hasOfficialItem && !installRequested) {
+                grantThemeResourceAssetAccess(appInfoFile);
+                return false;
+            }
+            if (enabled) {
+                if (!PanelAppCard.ensureOfficialResources()) {
+                    log(Log.WARN, Constants.LOG_TAG,
+                            "Official quick panel card resources unavailable");
+                    return false;
+                }
+                officialItem = PanelAppCard.createOfficialAppInfo();
+                if (officialItem == null) return false;
+            }
+            JSONArray updated = new JSONArray();
+            boolean found = false;
+            boolean changed = false;
+            for (int i = 0; i < current.length(); i++) {
+                JSONObject item = current.optJSONObject(i);
+                if (item == null) continue;
+                if (!PanelAppCard.isModuleCardInfo(item)) {
+                    updated.put(item);
+                    continue;
+                }
+                changed = true;
+                if (enabled && !found) {
+                    updated.put(officialItem);
+                    found = true;
+                    changed = !jsonObjectsEqual(item, officialItem);
+                }
+            }
+            if (enabled && !found && installRequested) {
+                JSONArray withOfficialFirst = new JSONArray();
+                withOfficialFirst.put(officialItem);
+                for (int i = 0; i < updated.length(); i++) {
+                    withOfficialFirst.put(updated.opt(i));
+                }
+                updated = withOfficialFirst;
+                changed = true;
+            }
+            if (!changed) {
+                if (enabled) {
+                    if (found && !installMarked) {
+                        markOfficialPanelCardInstalled();
+                    }
+                    if (found && installRequested) {
+                        PrefsBridge.clearAppCardInstallRequest(this);
+                    }
+                    grantOfficialPanelCardAccess();
+                } else if (installMarked) {
+                    clearOfficialPanelCardInstallMark();
+                }
+                return false;
+            }
+            backupFileOnce(appInfoFile);
+            writeJsonArray(appInfoFile, updated);
+            if (enabled && updatedContainsOfficialPanelCard(updated)) {
+                markOfficialPanelCardInstalled();
+                if (installRequested) {
+                    PrefsBridge.clearAppCardInstallRequest(this);
+                }
+            } else if (!enabled) {
+                clearOfficialPanelCardInstallMark();
+            }
+            grantOfficialPanelCardAccess();
+            log(Log.INFO, Constants.LOG_TAG,
+                    "Synced official quick panel app card: enabled=" + enabled
+                            + ", total=" + updated.length());
+            return true;
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "syncOfficialPanelAppCardWithSubscreenIndex failed", e);
+            return false;
+        }
+    }
+
+    private boolean containsOfficialPanelCard(@NonNull JSONArray items) {
+        for (int i = 0; i < items.length(); i++) {
+            JSONObject item = items.optJSONObject(i);
+            if (item != null && PanelAppCard.isModuleCardInfo(item)) return true;
+        }
+        return false;
+    }
+
+    private boolean updatedContainsOfficialPanelCard(@NonNull JSONArray items) {
+        for (int i = 0; i < items.length(); i++) {
+            JSONObject item = items.optJSONObject(i);
+            if (item != null && PanelAppCard.isModuleCardInfo(item)) return true;
+        }
+        return false;
+    }
+
+    private boolean isOfficialPanelCardInstallMarked() {
+        return new File(Constants.MODULE_PANEL_CARD_INSTALL_MARK).isFile();
+    }
+
+    private void markOfficialPanelCardInstalled() {
+        File mark = new File(Constants.MODULE_PANEL_CARD_INSTALL_MARK);
+        File parent = mark.getParentFile();
+        try {
+            if (parent != null && !parent.exists() && !parent.mkdirs()) return;
+            try (FileOutputStream out = new FileOutputStream(mark, false)) {
+                out.write("1".getBytes(StandardCharsets.UTF_8));
+                out.getFD().sync();
+            }
+            grantThemeResourceAssetAccess(mark);
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "markOfficialPanelCardInstalled failed", e);
+        }
+    }
+
+    private void clearOfficialPanelCardInstallMark() {
+        File mark = new File(Constants.MODULE_PANEL_CARD_INSTALL_MARK);
+        if (mark.isFile() && !mark.delete()) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Failed to clear official panel card install mark");
+        }
+    }
+
+    private boolean jsonObjectsEqual(@Nullable JSONObject a, @Nullable JSONObject b) {
+        return a != null && b != null && a.toString().equals(b.toString());
+    }
+
+    private void grantOfficialPanelCardAccess() {
+        grantThemeResourceAssetAccess(new File(Constants.MODULE_PANEL_CARD_ROOT));
+        grantThemeResourceAssetAccess(new File(Constants.MODULE_PANEL_CARD_RESOURCE));
+        grantThemeResourceAssetAccess(new File(Constants.MODULE_PANEL_CARD_DESCRIPTION));
+        grantThemeResourceAssetAccess(new File(Constants.MODULE_PANEL_CARD_META));
+        grantThemeResourceAssetAccess(new File(Constants.MODULE_PANEL_CARD_ICON));
+        grantThemeResourceAssetAccess(new File(Constants.MODULE_PANEL_CARD_PREVIEW_LIGHT));
+        grantThemeResourceAssetAccess(new File(Constants.MODULE_PANEL_CARD_PREVIEW_DARK));
+        grantThemeResourceAssetAccess(new File(Constants.SUBSCREEN_APP_INFO_FILE));
+    }
+
+    @NonNull
+    private JSONArray withoutDeletedLocalAppInfoItems(
+            @NonNull JSONArray items,
+            @NonNull int[] removed
+    ) {
+        JSONArray kept = new JSONArray();
+        for (int i = 0; i < items.length(); i++) {
+            JSONObject item = items.optJSONObject(i);
+            if (item == null) continue;
+            if (isDeletedLocalAppInfo(item)) {
+                removed[0]++;
+                continue;
+            }
+            kept.put(item);
+        }
+        return kept;
+    }
+
+    private boolean isDeletedLocalAppInfo(@NonNull JSONObject item) {
+        String mtzPath = item.optString("mtzPath", "");
+        if (!isLocalAppCardPath(mtzPath)) return false;
+        String iconPath = item.optString("appIconPath", "");
+        String previewLightPath = item.optString("previewLightPath", "");
+        String previewDarkPath = item.optString("previewDarkPath", "");
+        return !pathExists(mtzPath)
+                || (!isEmpty(iconPath) && !pathExists(iconPath))
+                || (!isEmpty(previewLightPath) && !pathExists(previewLightPath))
+                || (!isEmpty(previewDarkPath) && !pathExists(previewDarkPath));
+    }
+
+    private boolean isLocalAppCardPath(@Nullable String path) {
+        return path != null
+                && (path.startsWith(Constants.THEME_MAGIC_APP_CARD_DIR + "/")
+                || path.startsWith(Constants.THEME_MAGIC_AI_APP_DIR + "/")
+                || path.startsWith(Constants.THEME_MAGIC_MIBACKSCREEN_RESOURCE_DIR + "/"));
+    }
+
+    private boolean pathExists(@Nullable String path) {
+        return !isEmpty(path) && new File(path).exists();
     }
 
     @Nullable
@@ -2990,6 +3935,32 @@ public class ModuleMain extends XposedModule {
         return null;
     }
 
+    @Nullable
+    private static Object getStaticFieldValueByType(
+            @NonNull Class<?> owner,
+            @NonNull Class<?> expectedType
+    ) {
+        Class<?> current = owner;
+        while (current != null) {
+            for (Field field : current.getDeclaredFields()) {
+                try {
+                    if (!java.lang.reflect.Modifier.isStatic(field.getModifiers())
+                            || !expectedType.isAssignableFrom(field.getType())) {
+                        continue;
+                    }
+                    field.setAccessible(true);
+                    Object value = field.get(null);
+                    if (expectedType.isInstance(value)) {
+                        return value;
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            current = current.getSuperclass();
+        }
+        return null;
+    }
+
     private static boolean setFieldValue(Object target, String field, Object value) {
         if (target == null) return false;
         Class<?> owner = target.getClass();
@@ -3082,6 +4053,18 @@ public class ModuleMain extends XposedModule {
         return m.invoke(target, args);
     }
 
+    private static Object callMethodCompatible(Object target, String method, Object... args)
+            throws Throwable {
+        try {
+            return callMethod(target, method, args);
+        } catch (NoSuchMethodException ignored) {
+        }
+        Method m = findCompatibleMethod(target.getClass(), method, args);
+        if (m == null) throw new NoSuchMethodException(method);
+        m.setAccessible(true);
+        return m.invoke(target, args);
+    }
+
     @Nullable
     private static Object callNoArgMethodQuietly(@Nullable Object target, @NonNull String method) {
         if (target == null) return null;
@@ -3111,6 +4094,56 @@ public class ModuleMain extends XposedModule {
             }
         }
         return null;
+    }
+
+    @Nullable
+    private static Method findCompatibleMethod(
+            @Nullable Class<?> clazz,
+            @NonNull String name,
+            @NonNull Object[] args
+    ) {
+        while (clazz != null) {
+            for (Method method : clazz.getDeclaredMethods()) {
+                if (!name.equals(method.getName())) continue;
+                Class<?>[] parameterTypes = method.getParameterTypes();
+                if (parameterTypes.length != args.length) continue;
+                boolean matches = true;
+                for (int i = 0; i < parameterTypes.length; i++) {
+                    if (!isReflectionArgumentCompatible(parameterTypes[i], args[i])) {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (matches) return method;
+            }
+            clazz = clazz.getSuperclass();
+        }
+        return null;
+    }
+
+    private static boolean isReflectionArgumentCompatible(
+            @NonNull Class<?> parameterType,
+            @Nullable Object arg
+    ) {
+        if (arg == null) return !parameterType.isPrimitive();
+        Class<?> argType = arg.getClass();
+        if (parameterType.isPrimitive()) {
+            return primitiveWrapperType(parameterType) == argType;
+        }
+        return parameterType.isAssignableFrom(argType);
+    }
+
+    @NonNull
+    private static Class<?> primitiveWrapperType(@NonNull Class<?> primitiveType) {
+        if (primitiveType == boolean.class) return Boolean.class;
+        if (primitiveType == int.class) return Integer.class;
+        if (primitiveType == long.class) return Long.class;
+        if (primitiveType == float.class) return Float.class;
+        if (primitiveType == double.class) return Double.class;
+        if (primitiveType == short.class) return Short.class;
+        if (primitiveType == byte.class) return Byte.class;
+        if (primitiveType == char.class) return Character.class;
+        return Void.class;
     }
 
     private static String getStaticStringField(ClassLoader classLoader, String className, String fieldName) {
@@ -3173,6 +4206,29 @@ public class ModuleMain extends XposedModule {
                     .setExceptionMode(ExceptionMode.PROTECTIVE)
                     .intercept(callback::onHook);
             installedMethods.add(method);
+            log(Log.DEBUG, Constants.LOG_TAG, "Hook installed: " + label);
+            return true;
+        } catch (Throwable throwable) {
+            log(Log.ERROR, Constants.LOG_TAG, "Hook install failed: " + label, throwable);
+            return false;
+        }
+    }
+
+    private synchronized boolean hookConstructorIfPresent(
+            @Nullable Constructor<?> constructor,
+            @NonNull String label,
+            @NonNull HookCallback callback
+    ) {
+        if (constructor == null) {
+            log(Log.WARN, Constants.LOG_TAG, "Hook target missing: " + label);
+            return false;
+        }
+        if (installedConstructors.contains(constructor)) return true;
+        try {
+            hook(constructor)
+                    .setExceptionMode(ExceptionMode.PROTECTIVE)
+                    .intercept(callback::onHook);
+            installedConstructors.add(constructor);
             log(Log.DEBUG, Constants.LOG_TAG, "Hook installed: " + label);
             return true;
         } catch (Throwable throwable) {
@@ -3248,6 +4304,20 @@ public class ModuleMain extends XposedModule {
             Method method = targetClass.getDeclaredMethod(methodName, parameterTypes);
             method.setAccessible(true);
             return method;
+        } catch (NoSuchMethodException e) {
+            return null;
+        }
+    }
+
+    @Nullable
+    private static Constructor<?> findDeclaredConstructor(
+            @NonNull Class<?> targetClass,
+            @NonNull Class<?>... parameterTypes
+    ) {
+        try {
+            Constructor<?> constructor = targetClass.getDeclaredConstructor(parameterTypes);
+            constructor.setAccessible(true);
+            return constructor;
         } catch (NoSuchMethodException e) {
             return null;
         }

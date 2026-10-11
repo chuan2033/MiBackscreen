@@ -32,4 +32,21 @@ class FunctionFeatureCountTest {
     @Test fun doubleTapMasterCountsAsOneWithoutCountingItsSelectedPackages() {
         assertEquals(1, countEnabledFunctions(false, false, false, false, false, true, false, false))
     }
+
+    @Test fun automaticWallpaperRotationCountsAsOneFunction() {
+        assertEquals(
+            1,
+            countEnabledFunctions(
+                disableLongPress = false,
+                removeWallpaperLimit = false,
+                removeAppCardLimit = false,
+                fixRearScreenApply = false,
+                disableRearScreenCover = false,
+                disableDoubleTapWake = false,
+                enablePickup = false,
+                enable18ProFeatures = false,
+                autoWallpaperEnabled = true,
+            ),
+        )
+    }
 }

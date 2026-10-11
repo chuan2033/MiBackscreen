@@ -11,6 +11,7 @@ A Xiaomi rear-screen module using Modern Xposed. The `feat/18pro-max-rear-screen
 | Rear-screen battery ring | Off | Shows battery level around the Xiaomi 17 Pro Max camera contour in 1% steps; green while charging, red below 20% when not charging, otherwise white |
 | 18 Pro features | On | Controls AI rear-screen entries, 18 Pro device and download request parameters, rear-screen app-card unlocking, Personal Assistant store adaptation and AI app-card index synchronization |
 | Disable long-press wallpaper editing | On | Prevents entering the rear-screen editor |
+| Timed rear-screen wallpaper rotation | Off | Cycles through the list every 1, 5 or 15 minutes; counts down while AOD is visible, pauses while Smart Display hides the rear screen, and switches once when an overdue screen becomes visible |
 | Remove wallpaper limit | On | Removes Theme Manager's 15-wallpaper limit |
 | Rear-screen app cards / remove card limit | On / On | Adds MiBackscreen to the stock swipe-up list; tap it to open the quick panel |
 | Fix wallpaper application | Off | Repairs resource access and application state; confirmed selection and cancelled edits remain distinct |
@@ -25,7 +26,7 @@ Functions includes an "18 Pro features" switch. Changing it requests a force-sto
 
 The battery ring is calibrated for the 976 x 596 popsicle rear display. It starts at the bottom center and passes the right, top and left centers before closing at 100%. Colors come from SystemUI battery resources when available. The battery progress line is drawn over the existing wallpaper. Changing the switch refreshes Rear Screen Center. The drawing layer is released when leaving the rear launcher, and transitions stop while its window is hidden.
 
-The Functions tab shows an enabled-function count (1–9) by default and hides the badge when all functions are off. Each function switch counts once, including the battery ring, 18 Pro features and the double-tap wake master switch in the app picker; selected apps do not add to the count. Hide it through Settings → Appearance → Show enabled function count. All three navigation styles support the badge.
+The Functions tab shows an enabled-function count (1–10) by default and hides the badge when all functions are off. Each function switch counts once, including the battery ring, timed wallpaper rotation, 18 Pro features and the double-tap wake master switch in the app picker; selected apps do not add to the count. Hide it through Settings → Appearance → Show enabled function count. All three navigation styles support the badge.
 
 Open the quick panel through the stock MiBackscreen card; swipe up from its bottom to close it. Its three switches control long press, wallpaper limits and app-card limits; failed writes roll back. Offline changes in the module app remain pending until the LSPosed service reconnects. Pending does not mean applied in the host.
 
@@ -41,7 +42,7 @@ Install the APK, enable the module in your framework, select all five scopes bel
 | Scope | Purpose |
 | --- | --- |
 | `system` | Protection prompt and per-app double-tap wake interception |
-| `com.xiaomi.subscreencenter` | Long press, app cards, quick panel and confirmed wallpaper-selection sync |
+| `com.xiaomi.subscreencenter` | Long press, timed wallpaper rotation, app cards, quick panel and confirmed wallpaper-selection sync |
 | `com.android.thememanager` | Wallpaper limits/application, settings entry, AI rear screen and face-count compatibility |
 | `com.miui.voiceassist` | Pickup-code presentation, notification clicks and refresh |
 | `com.miui.personalassistant` | Rear-screen app-card store request adaptation |
