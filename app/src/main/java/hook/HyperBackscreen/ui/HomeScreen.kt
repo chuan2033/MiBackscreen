@@ -58,6 +58,7 @@ import hook.HyperBackscreen.ui.battery.BatteryRingGeometry
 import hook.HyperBackscreen.ui.battery.BatteryColorPage
 import hook.HyperBackscreen.ui.battery.BatteryColorSlot
 import hook.HyperBackscreen.ui.battery.BatteryPercentPosition
+import hook.HyperBackscreen.ui.battery.BatteryRingLayout
 import hook.HyperBackscreen.ui.components.BlurredBar
 import hook.HyperBackscreen.ui.components.FloatingBottomBar
 import hook.HyperBackscreen.ui.components.FunctionCountBadge
@@ -188,8 +189,10 @@ internal fun HomeScreen(
     batteryColorCharging: String,
     batteryColorLow: String,
     batteryPercentPosition: BatteryPercentPosition,
+    batteryLayout: BatteryRingLayout,
     onBatteryColorChange: (BatteryColorSlot, String) -> Unit,
-    onBatteryPercentPositionChange: (BatteryPercentPosition) -> Unit
+    onBatteryPercentPositionChange: (BatteryPercentPosition) -> Unit,
+    onBatteryLayoutChange: (BatteryRingLayout) -> Unit
 ) {
     val enabledFunctionCount = countEnabledFunctions(
         enableBatteryRing = enableBatteryRing,
@@ -273,17 +276,19 @@ internal fun HomeScreen(
                         onBack = navigateBack
                     )
                     HomeRoute.BatteryColor -> BatteryColorPage(
+                        enableBatteryRing = enableBatteryRing,
+                        onEnableBatteryRingChange = onEnableBatteryRingChange,
                         idleColor = batteryColorIdle,
                         chargingColor = batteryColorCharging,
                         lowColor = batteryColorLow,
                         percentPosition = batteryPercentPosition,
+                        layout = batteryLayout,
                         onColorChange = onBatteryColorChange,
                         onPercentPositionChange = onBatteryPercentPositionChange,
+                        onLayoutCommit = onBatteryLayoutChange,
                         onBack = navigateBack
                     )
                     HomeRoute.Main -> MainContent(
-                        enableBatteryRing = enableBatteryRing,
-                        onEnableBatteryRingChange = onEnableBatteryRingChange,
                         enable18ProFeatures = enable18ProFeatures,
                         onEnable18ProFeaturesChange = onEnable18ProFeaturesChange,
                         enabledFunctionCount = enabledFunctionCount,
@@ -448,8 +453,6 @@ private fun SettingsPage(
 
 @Composable
 private fun MainTabPage(
-    enableBatteryRing: Boolean,
-    onEnableBatteryRingChange: (Boolean) -> Unit,
     enable18ProFeatures: Boolean,
     onEnable18ProFeaturesChange: (Boolean) -> Unit,
     tab: HomeNavigationPolicy.Tab,
@@ -542,9 +545,6 @@ private fun MainTabPage(
                     top = innerPadding.calculateTopPadding()
                 )
             ) {
-                item(key = "top_spacer") {
-                    Spacer(Modifier.height(12.dp))
-                }
                 when (tab) {
                     HomeNavigationPolicy.Tab.HOME -> item {
                         HomePage(
@@ -555,8 +555,6 @@ private fun MainTabPage(
                     }
                     HomeNavigationPolicy.Tab.FUNCTION -> item {
                         FunctionPage(
-                            enableBatteryRing = enableBatteryRing,
-                            onEnableBatteryRingChange = onEnableBatteryRingChange,
                             enable18ProFeatures = enable18ProFeatures,
                             onEnable18ProFeaturesChange = onEnable18ProFeaturesChange,
                             disableLongPress = disableLongPress,
@@ -596,8 +594,6 @@ private fun MainTabPage(
 
 @Composable
 private fun MainContent(
-    enableBatteryRing: Boolean,
-    onEnableBatteryRingChange: (Boolean) -> Unit,
     enable18ProFeatures: Boolean,
     onEnable18ProFeaturesChange: (Boolean) -> Unit,
     enabledFunctionCount: Int,
@@ -710,8 +706,6 @@ private fun MainContent(
         ) { page ->
             val tab = navItems[page].tab
             MainTabPage(
-                enableBatteryRing = enableBatteryRing,
-                onEnableBatteryRingChange = onEnableBatteryRingChange,
                 enable18ProFeatures = enable18ProFeatures,
                 onEnable18ProFeaturesChange = onEnable18ProFeaturesChange,
                 tab = tab,

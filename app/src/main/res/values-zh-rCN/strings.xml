@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="home_battery_ring_title">背屏电量显示</string>
+    <string name="battery_enable_title">电量显示</string>
     <string name="function_group_system">系统框架</string>
     <string name="function_group_subscreen">背屏</string>
     <string name="function_group_theme">主题壁纸</string>
     <string name="function_group_voice">超级小爱</string>
-    <string name="function_battery_color_title">背屏电量颜色自定义</string>
-    <string name="function_battery_color_summary">未充电、充电中、低电量可分别设置；默认跟随系统</string>
+    <string name="function_battery_color_title">背屏电量自定义</string>
     <string name="auto_wallpaper_interval_title">定时切换背屏壁纸</string>
     <string name="auto_wallpaper_interval_summary">%1$s；背屏可见时计时并切换</string>
     <string name="auto_wallpaper_interval_off">关闭</string>
@@ -17,7 +16,8 @@
     <string name="battery_color_state_charging">充电中</string>
     <string name="battery_color_state_low">低电量</string>
     <string name="battery_color_follow_system">跟随系统</string>
-    <string name="battery_color_state_title">电量状态</string>
+    <string name="battery_color_state_title">电量环</string>
+    <string name="battery_color_custom_title">颜色自定义</string>
     <string name="battery_color_rgba_label">RGBA</string>
     <string name="battery_color_hex_label">HEX</string>
     <string name="battery_color_reset_system">恢复系统默认</string>
@@ -25,6 +25,17 @@
     <string name="battery_percent_position_off">不显示</string>
     <string name="battery_percent_position_left">双摄中间左侧</string>
     <string name="battery_percent_position_right">双摄中间右侧</string>
+    <string name="battery_percent_offset_x_title">数字水平位置</string>
+    <string name="battery_percent_offset_y_title">数字垂直位置</string>
+    <string name="battery_ring_scale_title">电量线条大小</string>
+    <string name="battery_ring_stroke_title">电量线条粗细</string>
+    <string name="battery_ring_track_title">显示底轨</string>
+    <string name="battery_ring_style_contour">整体轮廓</string>
+    <string name="battery_ring_style_twin">上下双环</string>
+    <string name="battery_percent_text_size_title">数字大小</string>
+    <string name="battery_percent_show_title">在背屏显示</string>
+    <string name="battery_layout_reset">恢复默认</string>
+    <string name="battery_layout_dialog_summary">默认值: %1$s | 范围: %2$s ~ %3$s</string>
     <string name="battery_color_unsupported_model">当前机型背屏尺寸与校准参数不一致，暂不支持背屏电量显示</string>
     <string name="battery_color_invalid_value">颜色格式无效，请输入 #RRGGBB 或 #AARRGGBB</string>
     <string name="home_root_permission_required">请授权本应用Root权限，部分功能依赖Root权限</string>
@@ -50,6 +61,7 @@
     <string name="common_back">返回</string>
     <string name="common_select_all">全选</string>
     <string name="common_confirm">确定</string>
+    <string name="common_cancel">取消</string>
     <string name="common_version">版本 %1$s</string>
     <string name="about_version">版本 %1$s（%2$d）</string>
     <string name="compat_rear_display_hidden_title">检测到系统背屏显示属性异常</string>
@@ -176,6 +188,7 @@
     <string name="log_progress">正在生成日志（已完成 %1$d/%2$d 项）</string>
     <string name="log_exporting">正在导出日志</string>
     <string name="log_export_complete">日志已导出</string>
+    <string name="log_saved_to">已另存到 %1$s</string>
     <string name="log_export_view">日志已导出，点击查看</string>
     <string name="log_export_start">导出日志</string>
     <string name="log_stage_count">%1$d/%2$d</string>

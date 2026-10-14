@@ -18,7 +18,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
 
 internal fun interface LogExportOperation {
-    fun export(context: Context, progress: (Int, Int) -> Unit): File?
+    fun export(context: Context, progress: (Int, Int) -> Unit): LogExportResult?
 }
 
 internal val LocalLogExportOperation = staticCompositionLocalOf {
@@ -36,7 +36,8 @@ internal val LocalLogShareOperation = staticCompositionLocalOf {
 internal sealed interface LogExportState {
     data object Idle : LogExportState
     data class Running(val completed: Int, val total: Int) : LogExportState
-    data class Ready(val file: File) : LogExportState
+    /** [sharedPath] 是同时落在手机存储根目录的那份副本，发布失败时为 null。 */
+    data class Ready(val file: File, val sharedPath: File?) : LogExportState
     data object Failed : LogExportState
 }
 
@@ -53,7 +54,7 @@ internal class LogExportViewModel(
         if (job?.isActive == true) return
         mutableState.value = LogExportState.Running(0, FeedbackLogExporter.TOTAL_STEPS)
         job = viewModelScope.launch {
-            val file = try {
+            val result = try {
                 withContext(Dispatchers.IO) {
                     operation.export(getApplication()) { completed, total ->
                         ensureActive()
@@ -63,8 +64,9 @@ internal class LogExportViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) { null }
-            mutableState.value = if (file != null && file.isFile && file.length() > 0L) {
-                LogExportState.Ready(file)
+            val archive = result?.archive
+            mutableState.value = if (archive != null && archive.isFile && archive.length() > 0L) {
+                LogExportState.Ready(archive, result.sharedPath)
             } else LogExportState.Failed
         }
     }

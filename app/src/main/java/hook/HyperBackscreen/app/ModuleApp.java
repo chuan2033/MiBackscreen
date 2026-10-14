@@ -12,6 +12,8 @@ import java.util.concurrent.TimeUnit;
 
 import hook.HyperBackscreen.bridge.PrefsBridge;
 import hook.HyperBackscreen.bridge.DiagnosticLogStore;
+import hook.HyperBackscreen.common.BackgroundTasks;
+import hook.HyperBackscreen.ui.about.FeedbackLogExporter;
 import io.github.libxposed.service.XposedService;
 import io.github.libxposed.service.XposedServiceHelper;
 
@@ -77,6 +79,8 @@ public class ModuleApp extends Application {
     public void onCreate() {
         super.onCreate();
         final Context appContext = getApplicationContext();
+        // 缓存目录里只放导出产物，启动时清一次过期/残留件，避免「不导出就永远不清理」。
+        BackgroundTasks.execute(() -> FeedbackLogExporter.purgeStaleArchives(appContext));
         XposedServiceHelper.registerListener(new XposedServiceHelper.OnServiceListener() {
             @Override
             public void onServiceBind(@NonNull XposedService s) {

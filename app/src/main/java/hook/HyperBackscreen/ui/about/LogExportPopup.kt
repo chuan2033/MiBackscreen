@@ -80,6 +80,15 @@ internal fun LogExportPopup(
                 style = MiuixTheme.textStyles.body2,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
+            // 导出的包会同时往手机存储根目录放一份，这里把落点写出来，省得用户去翻目录。
+            val savedDirectory = (state as? LogExportState.Ready)?.sharedPath?.parent
+            if (savedDirectory != null) {
+                Text(
+                    text = stringResource(R.string.log_saved_to, savedDirectory),
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+            }
             if (state is LogExportState.Running || state is LogExportState.Ready) {
                 val completed = (state as? LogExportState.Running)?.completed ?: 10
                 val total = (state as? LogExportState.Running)?.total ?: 10

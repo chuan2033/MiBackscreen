@@ -22,6 +22,15 @@ internal data class ModulePreferencesSnapshot(
     val batteryColorCharging: String = "",
     val batteryColorLow: String = "",
     val batteryPercentPosition: String = PrefsBridge.DEFAULT_BATTERY_PERCENT_POSITION,
+    val batteryPercentOffsetX: String = PrefsBridge.DEFAULT_BATTERY_PERCENT_OFFSET_X,
+    val batteryPercentOffsetXLeft: String = PrefsBridge.DEFAULT_BATTERY_PERCENT_OFFSET_X,
+    val batteryPercentOffsetXRight: String = PrefsBridge.DEFAULT_BATTERY_PERCENT_OFFSET_X,
+    val batteryPercentOffsetY: String = PrefsBridge.DEFAULT_BATTERY_PERCENT_OFFSET_Y,
+    val batteryRingScale: String = PrefsBridge.DEFAULT_BATTERY_RING_SCALE,
+    val batteryRingStroke: String = PrefsBridge.DEFAULT_BATTERY_RING_STROKE,
+    val batteryPercentTextSize: String = PrefsBridge.DEFAULT_BATTERY_PERCENT_TEXT_SIZE,
+    val batteryRingTrack: String = PrefsBridge.DEFAULT_BATTERY_RING_TRACK,
+    val batteryRingStyle: String = PrefsBridge.DEFAULT_BATTERY_RING_STYLE,
     val autoWallpaperIntervalMinutes: String = PrefsBridge.DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES,
 ) {
     companion object {
@@ -42,6 +51,15 @@ internal data class ModulePreferencesSnapshot(
             Constants.KEY_BATTERY_COLOR_CHARGING,
             Constants.KEY_BATTERY_COLOR_LOW,
             Constants.KEY_BATTERY_PERCENT_POSITION,
+            Constants.KEY_BATTERY_PERCENT_OFFSET_X,
+            Constants.KEY_BATTERY_PERCENT_OFFSET_X_LEFT,
+            Constants.KEY_BATTERY_PERCENT_OFFSET_X_RIGHT,
+            Constants.KEY_BATTERY_PERCENT_OFFSET_Y,
+            Constants.KEY_BATTERY_RING_SCALE,
+            Constants.KEY_BATTERY_RING_STROKE,
+            Constants.KEY_BATTERY_PERCENT_TEXT_SIZE,
+            Constants.KEY_BATTERY_RING_TRACK,
+            Constants.KEY_BATTERY_RING_STYLE,
             Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES,
         )
 
@@ -75,6 +93,24 @@ internal data class ModulePreferencesSnapshot(
                     ?: PrefsBridge.DEFAULT_BATTERY_COLOR,
                 batteryPercentPosition = value(Constants.KEY_BATTERY_PERCENT_POSITION) as? String
                     ?: PrefsBridge.DEFAULT_BATTERY_PERCENT_POSITION,
+                batteryPercentOffsetX = value(Constants.KEY_BATTERY_PERCENT_OFFSET_X) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_PERCENT_OFFSET_X,
+                batteryPercentOffsetXLeft = value(Constants.KEY_BATTERY_PERCENT_OFFSET_X_LEFT) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_PERCENT_OFFSET_X,
+                batteryPercentOffsetXRight = value(Constants.KEY_BATTERY_PERCENT_OFFSET_X_RIGHT) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_PERCENT_OFFSET_X,
+                batteryPercentOffsetY = value(Constants.KEY_BATTERY_PERCENT_OFFSET_Y) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_PERCENT_OFFSET_Y,
+                batteryRingScale = value(Constants.KEY_BATTERY_RING_SCALE) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_RING_SCALE,
+                batteryRingStroke = value(Constants.KEY_BATTERY_RING_STROKE) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_RING_STROKE,
+                batteryPercentTextSize = value(Constants.KEY_BATTERY_PERCENT_TEXT_SIZE) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_PERCENT_TEXT_SIZE,
+                batteryRingTrack = value(Constants.KEY_BATTERY_RING_TRACK) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_RING_TRACK,
+                batteryRingStyle = value(Constants.KEY_BATTERY_RING_STYLE) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_RING_STYLE,
                 autoWallpaperIntervalMinutes = value(Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES) as? String
                     ?: PrefsBridge.DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES,
             )

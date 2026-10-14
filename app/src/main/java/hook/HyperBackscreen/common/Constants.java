@@ -19,6 +19,23 @@ public final class Constants {
     public static final String KEY_BATTERY_COLOR_CHARGING = "battery_color_charging";
     public static final String KEY_BATTERY_COLOR_LOW = "battery_color_low";
     public static final String KEY_BATTERY_PERCENT_POSITION = "battery_percent_position";
+    // 背屏电量显示的位置 / 尺寸微调，整数百分比的字符串形式；解析失败回默认值。
+    // 数字偏移以摄像头模组宽（X）/ 高（Y）为基准，线条缩放 100 表示严格贴模组轮廓。
+    // 历史键：只有一个水平偏移槽，切左右会互相覆盖，已被下面两个分侧键取代，只读不写。
+    public static final String KEY_BATTERY_PERCENT_OFFSET_X = "battery_percent_offset_x";
+    // 水平偏移按「数字在左 / 在右」分开存：两侧的可用空间与各自贴靠位置不同，
+    // 共用一个槽会导致切一次就把另一侧调好的值冲掉。
+    public static final String KEY_BATTERY_PERCENT_OFFSET_X_LEFT = "battery_percent_offset_x_left";
+    public static final String KEY_BATTERY_PERCENT_OFFSET_X_RIGHT = "battery_percent_offset_x_right";
+    public static final String KEY_BATTERY_PERCENT_OFFSET_Y = "battery_percent_offset_y";
+    public static final String KEY_BATTERY_RING_SCALE = "battery_ring_scale";
+    // 线条笔画粗细与数字字号，单位是背屏像素（背屏按 976x596 参考尺寸绘制，不用折算）。
+    public static final String KEY_BATTERY_RING_STROKE = "battery_ring_stroke";
+    public static final String KEY_BATTERY_PERCENT_TEXT_SIZE = "battery_percent_text_size";
+    // 是否在未充部分画一圈低透明度底轨；"1" 开 / "0" 关。
+    public static final String KEY_BATTERY_RING_TRACK = "battery_ring_track";
+    // 电量线条样式：contour = 绕模组一整圈的连体轮廓，twin = 上下两个独立圆环。
+    public static final String KEY_BATTERY_RING_STYLE = "battery_ring_style";
     public static final String KEY_AUTO_WALLPAPER_INTERVAL_MINUTES =
             "auto_wallpaper_interval_minutes";
     public static final String KEY_REMOVE_APP_CARD_LIMIT = "remove_app_card_limit";
@@ -109,6 +126,24 @@ public final class Constants {
             "com.rearScreen.aiapp.activity.RearScreenAiAppListActivity";
     public static final String THEME_AI_REAR_SCREEN_LIST_ACTIVITY =
             "com.android.thememanager.activity.ai.AiRearScreenListActivity";
+    /**
+     * AI 应用卡链路涉及的页面。进入其中任意一个都按 18 Pro Max 身份发请求，全部离开才恢复真实身份。
+     * 单个 boolean 会被「列表页 onStop 晚于详情页 onResume」的交错顺序反转，故按集合跟踪。
+     */
+    public static final String[] THEME_AI_APP_FLOW_ACTIVITIES = {
+            THEME_REAR_SCREEN_AI_APP_ACTIVITY,
+            "com.rearScreen.aiapp.activity.RearScreenAiAppDetailActivity",
+            "com.rearScreen.aiapp.activity.RearScreenAiAppAddedListActivity",
+            "com.rearScreen.aiapp.activity.RearScreenAiAppEditActivity",
+            "com.rearScreen.aiapp.activity.RearScreenAiAppGenerateActivity",
+            "com.rearScreen.aiapp.activity.RearScreenAiAppMyGenListActivity",
+            THEME_AI_REAR_SCREEN_LIST_ACTIVITY,
+    };
+    /**
+     * AI 应用卡页面的退出信号，按优先级排列。宿主只在真正覆写时才声明这些方法，
+     * 因此查找必须沿继承链进行；onStop 优先——页面不可见就复位，比等销毁及时。
+     */
+    public static final String[] THEME_AI_APP_EXIT_METHODS = {"onStop", "onPause", "onDestroy"};
     public static final String THEME_PARAM_INTERCEPTOR_CLASS =
             "com.android.thememanager.basemodule.network.theme.interceptors.ParamInterceptor";
     public static final String THEME_NETWORK_HELPER_CLASS =
@@ -127,6 +162,14 @@ public final class Constants {
     public static final String THEME_AI_APP_REQUEST_FLAG_HEADER = "request_flag";
     public static final String THEME_AI_APP_REQUEST_FLAG_VALUE = "1";
     public static final String THEME_DOWNLOAD_PATH = "/download/v2/";
+    /**
+     * 背屏壁纸 / 背屏个性化在主题商店下载接口里的 category 值。
+     * 该类目只认本机真实设备名：伪装成 18 Pro Max（madrid）会被服务端以
+     * {@code get downloadUrl error!} 拒绝。AI 应用卡资源不受此限。
+     */
+    public static final String THEME_REAR_WALLPAPER_CATEGORY = "rearscreen";
+    /** 服务端在拿不到该资源对应设备池时回的固定错误文案，用于触发换身份重试。 */
+    public static final String THEME_DOWNLOAD_ERROR_MARKER = "get downloadUrl error";
     public static final String THEME_REAR_DEVICE = "madrid";
     public static final String THEME_REAR_MODEL = "Xiaomi 18 Pro Max";
     public static final String THEME_REAR_VERSION = "17_OS4.0.9.0.XEOCNXM";

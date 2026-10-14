@@ -74,6 +74,9 @@ public class ModuleMain extends XposedModule {
     private final AtomicBoolean selectionSyncRunning = new AtomicBoolean();
     private final AtomicBoolean aiIndexSyncRunning = new AtomicBoolean();
     private volatile boolean themeAiAppPageVisible;
+    /** 处于前台/已创建的 AI 应用卡链路页面实例；清空才代表离开该链路。 */
+    private final Set<Object> themeAiAppFlowActivities =
+            Collections.newSetFromMap(new WeakHashMap<>());
     private final Set<String> pendingRepairs = new HashSet<>();
     private final ScheduledThreadPoolExecutor repairExecutor = createRepairExecutor();
 
@@ -1563,24 +1566,54 @@ public class ModuleMain extends XposedModule {
                 chain -> {
                     if (!PrefsBridge.shouldEnable18ProFeatures(this)) return chain.proceed();
                     Object requestUrl = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
-                    if (isThemeRearDownloadRequest(requestUrl)) {
-                        addThemeRearDownloadParams(requestUrl);
-                        log(Log.DEBUG, Constants.LOG_TAG,
-                                "Theme AI app download request: "
-                                        + summarizeThemeDownloadRequest(requestUrl));
+                    if (!isThemeRearDownloadRequest(requestUrl)) {
+                        return chain.proceed();
                     }
+                    // 背屏壁纸先按本机真实身份请求；AI 应用卡（非 rearscreen 类目）沿用 18 Pro Max 伪装。
+                    boolean realFirst = isThemeRearDiffDownloadRequest(requestUrl)
+                            || isThemeRearWallpaperDownloadRequest(requestUrl);
+                    applyThemeRearDownloadIdentity(requestUrl, realFirst);
+                    log(Log.DEBUG, Constants.LOG_TAG,
+                            "Theme rear download request: "
+                                    + summarizeThemeDownloadRequest(requestUrl));
                     Object result = chain.proceed();
-                    if (isThemeRearDownloadRequest(requestUrl)) {
-                        String body = result instanceof String ? (String) result : null;
+                    log(Log.DEBUG, Constants.LOG_TAG,
+                            "Theme rear download response length=" + themeResponseLength(result)
+                                    + ", body=" + clipForLog(asString(result), 600));
+                    // 首页商店会同时展示两个设备池的背屏资源：真实身份取不到说明该资源属于
+                    // 18 Pro Max 池（如「Xiaomi 18 Pro 系列」），换 madrid 重试一次即可拿到。
+                    if (realFirst && isThemeDownloadUrlError(result)) {
+                        applyThemeRearDownloadIdentity(requestUrl, false);
                         log(Log.DEBUG, Constants.LOG_TAG,
-                                "Theme AI app download response length="
-                                        + (body == null ? -1 : body.length())
-                                        + ", body=" + (body == null ? "null"
-                                                : clipForLog(body, 600)));
+                                "Theme rear download retry as 18 Pro Max: "
+                                        + summarizeThemeDownloadRequest(requestUrl));
+                        try {
+                            Object retried = chain.proceed();
+                            log(Log.DEBUG, Constants.LOG_TAG,
+                                    "Theme rear download retry response length="
+                                            + themeResponseLength(retried)
+                                            + ", body=" + clipForLog(asString(retried), 600));
+                            if (!isThemeDownloadUrlError(retried) || !(retried instanceof String)) {
+                                result = retried;
+                            }
+                        } catch (Throwable throwable) {
+                            log(Log.WARN, Constants.LOG_TAG,
+                                    "Theme rear download retry failed: " + throwable);
+                        }
                     }
                     return result;
                 }
         );
+    }
+
+    private static int themeResponseLength(@Nullable Object result) {
+        String body = result instanceof String ? (String) result : null;
+        return body == null ? -1 : body.length();
+    }
+
+    private static boolean isThemeDownloadUrlError(@Nullable Object result) {
+        return result instanceof String body
+                && body.contains(Constants.THEME_DOWNLOAD_ERROR_MARKER);
     }
 
     private boolean isThemeRearDownloadRequest(@Nullable Object requestUrl) {
@@ -1589,17 +1622,27 @@ public class ModuleMain extends XposedModule {
     }
 
     /**
-     * 普通 download/v2 用于 AI 应用卡资源，差分 diff/download/v2 用于背屏壁纸资源。
-     * 两类资源按不同设备池发放，下载阶段需要按接口类型分别写入设备参数。
+     * 把设备身份写入背屏资源下载请求。
+     *
+     * <p>主题商店首页会同时展示两个设备池的背屏资源，而 {@code download/v2} 接口按 {@code device}
+     * 分池发放，任选其一都会让另一池取不到：
+     * <ul>
+     *   <li>本机真实身份（{@code ro.product.device}）：17 系列背屏壁纸、背屏个性化、用户分享等；</li>
+     *   <li>18 Pro Max（{@code madrid}）：18 Pro 系列专属背屏、AI 应用卡资源。</li>
+     * </ul>
+     * 因此调用方先按资源倾向选一个身份发出请求，失败时再由 {@code installThemeLegacyDownloadHook}
+     * 换另一个身份重试（见该方法内的回退分支）。
+     *
+     * @param realIdentity true = 本机真实 device/version；false = 18 Pro Max 伪装
      */
-    private void addThemeRearDownloadParams(@Nullable Object requestUrl) {
+    private void applyThemeRearDownloadIdentity(
+            @Nullable Object requestUrl, boolean realIdentity) {
         String baseUrl = asString(callMethodQuietly(requestUrl, "getBaseUrl"));
         if (!isEmpty(baseUrl)) {
-            boolean diffDownload = isThemeRearDiffDownloadRequest(requestUrl);
-            String device = diffDownload ? android.os.Build.DEVICE : Constants.THEME_REAR_DEVICE;
-            String version = diffDownload ? getCurrentThemeSystemVersion() : Constants.THEME_REAR_VERSION;
-            String rewritten = rewriteUrlParameter(
-                    baseUrl, "device", device);
+            String device = realIdentity ? android.os.Build.DEVICE : Constants.THEME_REAR_DEVICE;
+            String version = realIdentity
+                    ? getCurrentThemeSystemVersion() : Constants.THEME_REAR_VERSION;
+            String rewritten = rewriteUrlParameter(baseUrl, "device", device);
             if (!isEmpty(version)) {
                 rewritten = rewriteUrlParameter(rewritten, "version", version);
             }
@@ -1613,6 +1656,29 @@ public class ModuleMain extends XposedModule {
             return;
         }
         callMethodQuietly(requestUrl, "addParameter", "isSupportRearScreen", "true");
+    }
+
+    /**
+     * 判定是否为背屏壁纸类目下载。仅认 {@code category} 精确等于 {@code rearscreen}，
+     * 避免误伤带 rearscreen 前缀的 AI 应用卡类目。
+     *
+     * <p>注意：{@code category} 只存在于 baseUrl 的 query 里，{@code RequestUrl#getParameter}
+     * 读不到（它只反映 addParameter 写入的参数容器），必须直接解析 URL。
+     */
+    private boolean isThemeRearWallpaperDownloadRequest(@Nullable Object requestUrl) {
+        String baseUrl = asString(callMethodQuietly(requestUrl, "getBaseUrl"));
+        return Constants.THEME_REAR_WALLPAPER_CATEGORY
+                .equalsIgnoreCase(readUrlParameter(baseUrl, "category"));
+    }
+
+    /** 从 URL 的 query string 中读取参数值；不存在时返回空串。 */
+    @NonNull
+    private static String readUrlParameter(@Nullable String url, @NonNull String key) {
+        if (isEmpty(url)) return "";
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("[?&]" + java.util.regex.Pattern.quote(key) + "=([^&#]*)")
+                .matcher(url);
+        return matcher.find() ? matcher.group(1) : "";
     }
 
     @NonNull
@@ -1642,14 +1708,15 @@ public class ModuleMain extends XposedModule {
         return url + (url.contains("?") ? "&" : "?") + key + "=" + value;
     }
 
+    /** 诊断用。device/version/category 一律从 baseUrl 读——getParameter 读不到它们。 */
     @NonNull
     private String summarizeThemeDownloadRequest(@Nullable Object requestUrl) {
         String baseUrl = String.valueOf(callMethodQuietly(requestUrl, "getBaseUrl"));
         return "baseUrl=" + baseUrl
-                + ", category=" + String.valueOf(callMethodQuietly(requestUrl, "getParameter", "category"))
-                + ", device=" + String.valueOf(callMethodQuietly(requestUrl, "getParameter", "device"))
-                + ", model=" + String.valueOf(callMethodQuietly(requestUrl, "getParameter", "model"))
-                + ", version=" + String.valueOf(callMethodQuietly(requestUrl, "getParameter", "version"))
+                + ", category=" + readUrlParameter(baseUrl, "category")
+                + ", urlDevice=" + readUrlParameter(baseUrl, "device")
+                + ", urlVersion=" + readUrlParameter(baseUrl, "version")
+                + ", diff=" + isThemeRearDiffDownloadRequest(requestUrl)
                 + ", isSupportRearScreen="
                 + String.valueOf(callMethodQuietly(requestUrl, "getParameter", "isSupportRearScreen"));
     }
@@ -2590,23 +2657,65 @@ public class ModuleMain extends XposedModule {
         );
     }
 
+    /**
+     * AI 应用卡链路的「18 Pro Max 设备身份伪装」开关。
+     * <p>
+     * 这个伪装是**页面级**的：只要用户还在 AI 应用卡链路里，所有经 DeviceUtils 取设备名的请求
+     * 都要声称自己是 18 Pro Max（服务端据此发 madrid 设备池）；离开后必须立刻恢复真实身份，
+     * 否则主题商店的背屏壁纸列表与详情也会跟着声称自己是 18 Pro Max，服务端改发 madrid 池——
+     * 表现就是「背屏创意设计大赛」点进去无法显示、刷新后整个列表换成 18 系列。
+     * <p>
+     * 这里踩过三个坑，都别再犯：
+     * <ol>
+     *   <li><b>复位钩子必须沿继承链找。</b>宿主只在真正覆写时才声明生命周期方法：
+     *       {@code RearScreenAiAppListActivity} 声明 onCreate/onResume/onStop（无 onPause/onDestroy），
+     *       {@code RearScreenAiAppDetailActivity} 只声明了 onCreate——它连 onStop 都没有，
+     *       退出靠父类 {@code AbstractBaseActivity}。早期只在本类上找 onPause/onDestroy，
+     *       找不到就静默跳过，于是标志位一旦置 true 就再也回不来。</li>
+     *   <li><b>不能用单个 boolean。</b>列表页打开详情页时，列表页的 onStop 会晚于详情页的
+     *       onResume，简单开关会被交错顺序反转。改成「活跃 AI 页面实例集合」，集合清空才算离开。</li>
+     *   <li><b>进入钩子只能挂本类声明的。</b>退出钩子挂父类是安全的（不在集合里的实例删了等于没删），
+     *       但若把父类的 onResume 拿来当进入钩子，主题商店每个 Activity 都会被塞进集合，恒定常开。</li>
+     * </ol>
+     */
     private void installThemeAiAppIndexSyncHooks(@NonNull ClassLoader classLoader) {
-        Class<?> activityClass = findFirstClass(
-                classLoader,
-                Constants.THEME_REAR_SCREEN_AI_APP_ACTIVITY,
-                Constants.THEME_AI_REAR_SCREEN_LIST_ACTIVITY);
-        if (activityClass == null) {
+        boolean anyTarget = false;
+        for (String candidate : Constants.THEME_AI_APP_FLOW_ACTIVITIES) {
+            Class<?> activityClass = findClass(candidate, classLoader);
+            if (activityClass == null) continue;
+            anyTarget = true;
+            installThemeAiAppLifecycleHooks(activityClass);
+        }
+        if (!anyTarget) {
             log(Log.DEBUG, Constants.LOG_TAG, "Theme AI app index sync target missing");
+        }
+    }
+
+    private void installThemeAiAppLifecycleHooks(@NonNull Class<?> activityClass) {
+        Method exit = findLifecycleHandlerInHierarchy(
+                activityClass, Constants.THEME_AI_APP_EXIT_METHODS);
+        if (exit == null) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "AI app page has no usable exit hook, skip identity spoof on "
+                            + activityClass.getName());
             return;
         }
-
+        hookMethodIfPresent(
+                exit,
+                exit.getDeclaringClass().getName() + "#" + exit.getName()
+                        + " -> " + activityClass.getSimpleName(),
+                chain -> {
+                    markThemeAiAppFlowVisible(chain.getThisObject(), false);
+                    return chain.proceed();
+                }
+        );
         hookMethodIfPresent(
                 activityClass,
                 "onCreate",
                 new Class[]{Bundle.class},
                 activityClass.getName() + "#onCreate",
                 chain -> {
-                    themeAiAppPageVisible = true;
+                    markThemeAiAppFlowVisible(chain.getThisObject(), true);
                     syncAiGeneratedAppCardsToSubscreenIndex();
                     return chain.proceed();
                 }
@@ -2617,31 +2726,53 @@ public class ModuleMain extends XposedModule {
                 new Class[]{},
                 activityClass.getName() + "#onResume",
                 chain -> {
-                    themeAiAppPageVisible = true;
+                    markThemeAiAppFlowVisible(chain.getThisObject(), true);
                     syncAiGeneratedAppCardsToSubscreenIndex();
                     return chain.proceed();
                 }
         );
-        hookMethodIfPresent(
-                activityClass,
-                "onPause",
-                new Class[]{},
-                activityClass.getName() + "#onPause",
-                chain -> {
-                    themeAiAppPageVisible = false;
-                    return chain.proceed();
-                }
-        );
-        hookMethodIfPresent(
-                activityClass,
-                "onDestroy",
-                new Class[]{},
-                activityClass.getName() + "#onDestroy",
-                chain -> {
-                    themeAiAppPageVisible = false;
-                    return chain.proceed();
-                }
-        );
+    }
+
+    /**
+     * 按「方法优先级优先、继承层级其次」找退出点：先沿整条继承链找 onStop，再找 onPause，
+     * 最后才退到 onDestroy。这样即便某个页面自己声明了 onDestroy，只要父类有 onStop 也优先用
+     * onStop（页面不可见就复位，比等销毁及时）。
+     */
+    @Nullable
+    private static Method findLifecycleHandlerInHierarchy(
+            @NonNull Class<?> targetClass,
+            @NonNull String[] methodNames
+    ) {
+        for (String name : methodNames) {
+            for (Class<?> current = targetClass;
+                    current != null && current != Object.class;
+                    current = current.getSuperclass()) {
+                Method method = findDeclaredMethod(current, name);
+                if (method != null) return method;
+            }
+        }
+        return null;
+    }
+
+    private void markThemeAiAppFlowVisible(@Nullable Object activity, boolean entered) {
+        if (activity == null) return;
+        boolean visible;
+        synchronized (themeAiAppFlowActivities) {
+            if (entered) {
+                themeAiAppFlowActivities.add(activity);
+            } else {
+                themeAiAppFlowActivities.remove(activity);
+            }
+            visible = !themeAiAppFlowActivities.isEmpty();
+        }
+        markThemeAiAppPageVisible(visible);
+    }
+
+    private void markThemeAiAppPageVisible(boolean visible) {
+        if (themeAiAppPageVisible == visible) return;
+        themeAiAppPageVisible = visible;
+        log(Log.DEBUG, Constants.LOG_TAG,
+                "AI app page identity spoof " + (visible ? "ON" : "OFF"));
     }
 
     private void runThemeDatabaseSelectionSync(

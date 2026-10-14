@@ -44,6 +44,12 @@ object BatteryRingHost {
             percentPosition = {
                 BatteryPercentPosition.fromPref(PrefsBridge.readBatteryPercentPosition(module))
             },
+            // 水平偏移的默认值随位置预设变，所以先把位置算出来再交给布局解析，只读一次偏好。
+            layout = { position ->
+                BatteryRingLayout.of(position) { key ->
+                    PrefsBridge.readBatteryLayout(module, key)
+                }
+            },
         )
     }
 
@@ -70,6 +76,11 @@ object BatteryRingHost {
             percentPosition = {
                 BatteryPercentPosition.fromPref(PrefsBridge.readBatteryPercentPositionForRemote())
             },
+            layout = { position ->
+                BatteryRingLayout.of(position) { key ->
+                    PrefsBridge.readBatteryLayoutForRemote(key)
+                }
+            },
         )
     }
 
@@ -77,6 +88,7 @@ object BatteryRingHost {
         activity: Activity,
         colors: () -> BatteryColorOverrides,
         percentPosition: () -> BatteryPercentPosition,
+        layout: (BatteryPercentPosition) -> BatteryRingLayout,
     ) {
         val geometry = BatteryRingGeometry.forDevice(Build.DEVICE) ?: return
         // The contour is calibrated for the rear panel, not the front camera cutout.
@@ -84,7 +96,8 @@ object BatteryRingHost {
         val parent = activity.window.decorView as? ViewGroup ?: return
         ring?.let { (it.parent as? ViewGroup)?.removeView(it) }
         // 覆盖色在挂载时读一次；改颜色后重新进入背屏桌面即可生效，绘制线程不再读偏好。
-        val view = BatteryRingView(activity, geometry, colors(), percentPosition())
+        val position = percentPosition()
+        val view = BatteryRingView(activity, geometry, colors(), position, layout(position))
         ring = view
         parent.addView(view, ViewGroup.LayoutParams(-1, -1))
     }
@@ -153,20 +166,23 @@ private class BatteryRingView(
     private val geometry: BatteryRingGeometry.Profile,
     private val overrides: BatteryColorOverrides,
     private val percentPosition: BatteryPercentPosition,
+    private val layout: BatteryRingLayout,
 ) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
-    private val contour = geometry.contourPath()
-    private val measure = PathMeasure(contour, true)
+    // 绘制轨道按样式定：连体轮廓一条，上下双环两条。各段长度只量一次。
+    private val ringPaths = geometry.ringPaths(layout.ringStyle, layout.ringScalePercent)
+    private val ringMeasures = ringPaths.map { PathMeasure(it, true) }
+    private val ringLengths = ringMeasures.map { it.length }
     private val progress = Path()
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         textAlign = Paint.Align.CENTER
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        textSize = 38f
+        textSize = layout.percentTextSize.toFloat()
         setShadowLayer(4f, 0f, 1.5f, 0x99000000.toInt())
     }
     private val systemUiResources = runCatching {
@@ -261,18 +277,35 @@ private class BatteryRingView(
                 if (id == 0) current.fallbackColor else resources.getColor(id, null)
             }.getOrDefault(current.fallbackColor)
         }
+        // 底轨先铺满整圈，已充部分随后盖在上面。放在电量判断之外：0% 时更要画，
+        // 否则电量见底反而整圈消失，看起来像功能坏了。
+        if (layout.ringTrackVisible) {
+            paint.color = trackColorOf(color)
+            paint.strokeWidth = layout.ringStrokeWidth.toFloat()
+            ringPaths.forEach { canvas.drawPath(it, paint) }
+        }
         if (displayedPercent > 0f) {
             paint.color = color
-            paint.strokeWidth = BatteryRingGeometry.STROKE_WIDTH
+            paint.strokeWidth = layout.ringStrokeWidth.toFloat()
             if (displayedPercent >= 100f) {
-                canvas.drawPath(contour, paint)
+                // 满电直接画整条轨道：省掉分段拼接，闭合处也不会留一道接缝。
+                ringPaths.forEach { canvas.drawPath(it, paint) }
             } else {
                 progress.reset()
-                measure.getSegment(0f, measure.length * displayedPercent / 100f, progress, true)
+                // 双环时进度按各段长度分配：下环绕满才从上环起笔。
+                val stops = ringProgressStops(displayedPercent, ringLengths)
+                ringMeasures.forEachIndexed { index, measure ->
+                    val stop = stops[index]
+                    if (stop > 0f) measure.getSegment(0f, stop, progress, true)
+                }
                 canvas.drawPath(progress, paint)
             }
         }
-        geometry.percentTextAnchor(percentPosition)?.let { anchor ->
+        geometry.percentTextAnchor(
+            percentPosition,
+            layout.percentOffsetXPercent,
+            layout.percentOffsetYPercent,
+        )?.let { anchor ->
             textPaint.color = color
             val metrics = textPaint.fontMetrics
             val baseline = anchor.y - (metrics.ascent + metrics.descent) / 2f

@@ -43,6 +43,7 @@ import hook.HyperBackscreen.ui.updater.UpdateDialog
 import hook.HyperBackscreen.ui.updater.UpdateInfo
 import hook.HyperBackscreen.ui.battery.BatteryColorSlot
 import hook.HyperBackscreen.ui.battery.BatteryPercentPosition
+import hook.HyperBackscreen.ui.battery.BatteryRingLayout
 import hook.HyperBackscreen.ui.util.AppLanguage
 import hook.HyperBackscreen.ui.util.RearDisplayCompatibility
 import hook.HyperBackscreen.ui.util.ThemeMode
@@ -102,6 +103,15 @@ internal fun RearScreenApp() {
     }
     var batteryPercentPosition by remember {
         mutableStateOf(BatteryPercentPosition.fromPref(PrefsBridge.readBatteryPercentPositionForUi(context)))
+    }
+    // 位置 / 线条缩放 / 粗细 / 数字字号存成一组字符串偏好，读出来就地收进合法区间。
+    // 水平偏移的兜底要跟着位置预设走，所以把当前位置一起传进去。
+    var batteryLayout by remember {
+        mutableStateOf(
+            BatteryRingLayout.of(batteryPercentPosition) { key ->
+                PrefsBridge.readBatteryLayoutForUi(context, key)
+            }
+        )
     }
     var autoWallpaperInterval by remember {
         mutableStateOf(AutoWallpaperInterval.fromPref(PrefsBridge.readAutoWallpaperIntervalForUi(context)))
@@ -197,6 +207,20 @@ internal fun RearScreenApp() {
                 batteryColorCharging = values.batteryColorCharging
                 batteryColorLow = values.batteryColorLow
                 batteryPercentPosition = BatteryPercentPosition.fromPref(values.batteryPercentPosition)
+                batteryLayout = BatteryRingLayout.of(
+                    batteryPercentPosition,
+                    mapOf(
+                        Constants.KEY_BATTERY_PERCENT_OFFSET_X to values.batteryPercentOffsetX,
+                        Constants.KEY_BATTERY_PERCENT_OFFSET_X_LEFT to values.batteryPercentOffsetXLeft,
+                        Constants.KEY_BATTERY_PERCENT_OFFSET_X_RIGHT to values.batteryPercentOffsetXRight,
+                        Constants.KEY_BATTERY_PERCENT_OFFSET_Y to values.batteryPercentOffsetY,
+                        Constants.KEY_BATTERY_RING_SCALE to values.batteryRingScale,
+                        Constants.KEY_BATTERY_RING_STROKE to values.batteryRingStroke,
+                        Constants.KEY_BATTERY_PERCENT_TEXT_SIZE to values.batteryPercentTextSize,
+                        Constants.KEY_BATTERY_RING_TRACK to values.batteryRingTrack,
+                        Constants.KEY_BATTERY_RING_STYLE to values.batteryRingStyle,
+                    )::get
+                )
                 autoWallpaperInterval = AutoWallpaperInterval.fromPref(values.autoWallpaperIntervalMinutes)
                 disableLongPress = values.disableLongPress
                 removeWallpaperLimit = values.removeWallpaperLimit
@@ -316,6 +340,7 @@ internal fun RearScreenApp() {
             batteryColorCharging = batteryColorCharging,
             batteryColorLow = batteryColorLow,
             batteryPercentPosition = batteryPercentPosition,
+            batteryLayout = batteryLayout,
             disableRearScreenCover = disableRearScreenCover,
             disableDoubleTapWake = disableDoubleTapWake,
             doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
@@ -416,7 +441,19 @@ internal fun RearScreenApp() {
             },
             onBatteryPercentPositionChange = { position ->
                 batteryPercentPosition = position
+                // 切位置时立刻按新位置重读一次布局：水平偏移左右各存一份，切过去要落到该侧
+                // 自己上次调好的值，不能等偏好回读（会先闪一下旧值）。
+                batteryLayout = BatteryRingLayout.of(position) { key ->
+                    PrefsBridge.readBatteryLayoutForUi(context, key)
+                }
                 PrefsBridge.writeBatteryPercentPositionFromUi(context, position.prefValue)
+            },
+            onBatteryLayoutChange = { layout ->
+                batteryLayout = layout
+                // 一项一条偏好；键清单由布局自己给出（水平偏移按当前所在侧取键），加项时不用改这里。
+                layout.entries(batteryPercentPosition).forEach { (key, value) ->
+                    PrefsBridge.writeBatteryLayoutFromUi(context, key, value)
+                }
             },
             onDisableRearScreenCoverChange = { newValue ->
                 disableRearScreenCover = newValue

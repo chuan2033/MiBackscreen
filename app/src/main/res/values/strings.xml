@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="home_battery_ring_title">Rear-screen battery</string>
+    <string name="battery_enable_title">Battery display</string>
     <string name="function_group_system">System Framework</string>
     <string name="function_group_subscreen">Rear Screen</string>
     <string name="function_group_theme">Themes</string>
     <string name="function_group_voice">Super Xiao Ai</string>
-    <string name="function_battery_color_title">Edit battery display colors</string>
-    <string name="function_battery_color_summary">Set colors for idle, charging and low battery; follows the system by default</string>
+    <string name="function_battery_color_title">Rear-screen battery</string>
     <string name="auto_wallpaper_interval_title">Rotate rear-screen wallpaper</string>
     <string name="auto_wallpaper_interval_summary">%1$s; counts down while the rear screen is visible</string>
     <string name="auto_wallpaper_interval_off">Off</string>
@@ -17,7 +16,8 @@
     <string name="battery_color_state_charging">Charging</string>
     <string name="battery_color_state_low">Low battery</string>
     <string name="battery_color_follow_system">Follow system</string>
-    <string name="battery_color_state_title">Power state</string>
+    <string name="battery_color_state_title">Battery ring</string>
+    <string name="battery_color_custom_title">Custom color</string>
     <string name="battery_color_rgba_label">RGBA</string>
     <string name="battery_color_hex_label">HEX</string>
     <string name="battery_color_reset_system">Reset to system</string>
@@ -25,6 +25,17 @@
     <string name="battery_percent_position_off">Hidden</string>
     <string name="battery_percent_position_left">Between cameras, left</string>
     <string name="battery_percent_position_right">Between cameras, right</string>
+    <string name="battery_percent_offset_x_title">Percentage horizontal</string>
+    <string name="battery_percent_offset_y_title">Percentage vertical</string>
+    <string name="battery_ring_scale_title">Battery line size</string>
+    <string name="battery_ring_stroke_title">Line thickness</string>
+    <string name="battery_ring_track_title">Show track</string>
+    <string name="battery_ring_style_contour">Outline</string>
+    <string name="battery_ring_style_twin">Dual rings</string>
+    <string name="battery_percent_text_size_title">Number size</string>
+    <string name="battery_percent_show_title">Show on rear screen</string>
+    <string name="battery_layout_reset">Reset to default</string>
+    <string name="battery_layout_dialog_summary">Default: %1$s | Range: %2$s ~ %3$s</string>
     <string name="battery_color_unsupported_model">This model\'s rear screen differs from the calibrated geometry; the battery display is not supported yet</string>
     <string name="battery_color_invalid_value">Invalid color. Use #RRGGBB or #AARRGGBB</string>
     <string name="home_root_permission_required">Please grant this app Root access. Some features require Root access.</string>
@@ -52,6 +63,7 @@
     <string name="common_back">Back</string>
     <string name="common_select_all">Select All</string>
     <string name="common_confirm">Confirm</string>
+    <string name="common_cancel">Cancel</string>
     <string name="common_version">Version %1$s</string>
     <string name="about_version">Version %1$s (%2$d)</string>
     <string name="compat_rear_display_hidden_title">Rear display compatibility warning</string>
@@ -179,6 +191,7 @@
     <string name="log_progress">Generating log · Progress: %1$d/%2$d</string>
     <string name="log_exporting">Exporting log</string>
     <string name="log_export_complete">Log exported</string>
+    <string name="log_saved_to">Also saved to %1$s</string>
     <string name="log_export_view">Log exported. Tap to view</string>
     <string name="log_export_start">Export log</string>
     <string name="log_stage_count">%1$d/%2$d</string>

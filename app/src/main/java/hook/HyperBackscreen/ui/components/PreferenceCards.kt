@@ -114,26 +114,33 @@ internal fun ColumnScope.AnimatedPreferenceVisibility(
  *
  * 只渲染行与展开内容，卡片容器由调用方提供，便于把多个分组合并在同一个盒子内。
  * 折叠状态只存在本地 UI，不涉及导航栈，因此不会影响已有二级页面。
+ *
+ * [iconRes] 可空：页面内的普通折叠项没有专属图标，不必为了它去凑一张图。
  */
 @Composable
 internal fun ColumnScope.CollapsibleFunctionGroup(
     title: String,
-    @DrawableRes iconRes: Int,
+    @DrawableRes iconRes: Int? = null,
     initiallyExpanded: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
     // 用标题做 key，否则同页多个分组会共用同一个 saveable 状态（展开一个就全展开）。
     var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
-    // BasicComponent 是基础行组件，没有自带尾部箭头，两端插槽完全自控。
-    BasicComponent(
-        title = title,
-        startAction = {
+    val startAction: (@Composable () -> Unit)? = if (iconRes != null) {
+        {
             Image(
                 painter = painterResource(iconRes),
                 contentDescription = null,
                 modifier = Modifier.size(24.dp)
             )
-        },
+        }
+    } else {
+        null
+    }
+    // BasicComponent 是基础行组件，没有自带尾部箭头，两端插槽完全自控。
+    BasicComponent(
+        title = title,
+        startAction = startAction,
         endActions = {
             Crossfade(
                 targetState = expanded,

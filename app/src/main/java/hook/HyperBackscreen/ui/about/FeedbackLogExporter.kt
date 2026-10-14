@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.app.LocaleManager
 import android.content.res.Configuration
 import android.os.Build
+import android.os.Environment
 import androidx.core.content.FileProvider
 import hook.HyperBackscreen.BuildConfig
 import hook.HyperBackscreen.R
@@ -30,10 +31,16 @@ import java.util.concurrent.TimeUnit
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
+/** 一次日志导出的产物：私有缓存里的压缩包，以及它在手机存储根目录的副本（没发布成为 null）。 */
+internal data class LogExportResult(
+    val archive: File,
+    val sharedPath: File?,
+)
+
 internal object FeedbackLogExporter {
     const val TOTAL_STEPS = 12
     private const val COMMAND_TIMEOUT_SECONDS = 20L
-    private const val FEEDBACK_SCHEMA_VERSION = 7
+    private const val FEEDBACK_SCHEMA_VERSION = 8
     private const val MAX_AI_INDEX_BYTES = 2 * 1024 * 1024
     private const val MAX_LSPOSED_OUTPUT_BYTES = 256 * 1024
     private const val MAX_LOGCAT_OUTPUT_BYTES = 1024 * 1024
@@ -44,13 +51,28 @@ internal object FeedbackLogExporter {
     private const val MAX_SYSTEM_DIAGNOSTICS_OUTPUT_BYTES = 512 * 1024
     private const val MAX_RESOURCE_REPORT_OUTPUT_BYTES = 1024 * 1024
     private const val MAX_THEME_MANAGER_FILES_OUTPUT_BYTES = 512 * 1024
+    private const val MAX_PUBLISH_OUTPUT_BYTES = 8 * 1024
+
+    /** 复制命令成功后打印的标记，用来判断这次发布到底成没成。 */
+    private const val PUBLISH_MARKER = "MIBS_PUBLISHED"
+
+    /**
+     * 本模块在 `cache/feedback` 里写下的产物统一前缀。
+     *
+     * 判据必须是「前缀 + 保留期」，不能逐个枚举具体名字：导出物早期叫
+     * `MiBackscreen-diag-*.txt`，后来改名成 `MiBackscreen-feedback-*`，而清理规则
+     * 只认新前缀 —— 老文件从此永远留在缓存里（实测 2026-10-13 仍有 7 个 10-07/10-08 的 diag）。
+     */
+    private const val ARCHIVE_PREFIX = "MiBackscreen-"
+    private const val PARTIAL_SUFFIX = ".partial"
+    private const val ARCHIVE_RETENTION_DAYS = 1L
 
     private data class DatabaseSnapshot(
         val files: List<File>,
         val report: String,
     )
 
-    fun create(context: Context, onProgress: (Int, Int) -> Unit = { _, _ -> }): File? {
+    fun create(context: Context, onProgress: (Int, Int) -> Unit = { _, _ -> }): LogExportResult? {
         var staging: File? = null
         var partial: File? = null
         return try {
@@ -59,10 +81,7 @@ internal object FeedbackLogExporter {
             val appearance = buildAppearanceReport(appContext)
             val directory = File(appContext.cacheDir, "feedback")
             if (!directory.exists() && !directory.mkdirs()) return null
-            directory.listFiles()
-                ?.filter { it.isFile && it.name.startsWith("MiBackscreen-feedback-")
-                    && it.lastModified() < System.currentTimeMillis() - TimeUnit.DAYS.toMillis(1) }
-                ?.forEach { it.delete() }
+            purgeStaleArchives(appContext)
 
             val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()) + "-${System.nanoTime()}"
             val output = File(directory, "MiBackscreen-feedback-$timestamp.zip")
@@ -115,8 +134,15 @@ internal object FeedbackLogExporter {
             }
             check(partialOutput.renameTo(output)) { "Unable to finish feedback archive" }
             DiagnosticLogStore.appendLocal(appContext, "feedback archive created: ${output.name}")
+            // 另存一份到手机存储根目录：文件管理器、数据线都能直接取走，不必再走分享面板。
+            val shared = publishToSharedStorage(output)
+            DiagnosticLogStore.appendLocal(
+                appContext,
+                if (shared != null) "feedback archive published: ${shared.absolutePath}"
+                else "feedback archive not published (shared storage unavailable)"
+            )
             onProgress(TOTAL_STEPS, TOTAL_STEPS)
-            output
+            LogExportResult(output, shared)
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (error: Exception) {
@@ -137,6 +163,34 @@ internal object FeedbackLogExporter {
         appendLine("missing_data_hint=Each root-backed report records collection errors when root access is unavailable.")
     }
 
+    /**
+     * 清掉缓存目录里的历史产物。
+     *
+     * `cache/feedback` 是本模块独占的目录，所以判据只按「本模块产物前缀 + 保留期」，
+     * 不逐个枚举具体名字（改名一次就会漏掉一批，见 [ARCHIVE_PREFIX]）。
+     * `*.partial` 是写到一半的中间产物，永远不可用，任何年龄都直接删。
+     *
+     * 除了导出前清一次，应用启动时也会清一次（[hook.HyperBackscreen.app.ModuleApp]）——
+     * 否则「再也不导出」的用户，缓存只会一直涨。
+     *
+     * @return 实际删掉的文件数
+     */
+    @JvmStatic
+    fun purgeStaleArchives(context: Context): Int {
+        val directory = File(context.applicationContext.cacheDir, "feedback")
+        val files = directory.listFiles() ?: return 0
+        val expireBefore = System.currentTimeMillis() -
+            TimeUnit.DAYS.toMillis(ARCHIVE_RETENTION_DAYS)
+        var removed = 0
+        files.forEach { file ->
+            if (!file.isFile || !file.name.startsWith(ARCHIVE_PREFIX)) return@forEach
+            val partial = file.name.endsWith(PARTIAL_SUFFIX)
+            if (!partial && file.lastModified() >= expireBefore) return@forEach
+            if (file.delete()) removed++
+        }
+        return removed
+    }
+
     fun share(context: Context, file: File) {
         check(file.isFile && file.length() > 0L) { "Feedback archive is missing or empty" }
         val uri = FileProvider.getUriForFile(
@@ -152,6 +206,26 @@ internal object FeedbackLogExporter {
         context.startActivity(
             Intent.createChooser(sendIntent, context.getString(R.string.log_share_title)),
         )
+    }
+
+    /**
+     * 把压缩包另存一份到手机存储根目录（/storage/emulated/0）。
+     *
+     * 不走普通文件 API：zip 不是媒体文件，分区存储下应用没有权限直接往公共目录写，
+     * 走 MediaStore 也只能落到 Download 子目录，都到不了根目录。模块本身有 root，
+     * 直接借 su 复制并补上读权限最直接，拷完文件管理器和数据线立刻就能看到。
+     *
+     * @return 根目录下的目标文件；root 不可用或复制失败时为 null（此时缓存里那份仍在）。
+     */
+    @Suppress("DEPRECATION")
+    private fun publishToSharedStorage(archive: File): File? {
+        val directory = Environment.getExternalStorageDirectory() ?: return null
+        val target = File(directory, archive.name)
+        val command = "cp -f ${shellQuote(archive.absolutePath)} ${shellQuote(target.absolutePath)}; " +
+            "if [ -f ${shellQuote(target.absolutePath)} ]; then " +
+            "chmod 0644 ${shellQuote(target.absolutePath)} 2>/dev/null; echo $PUBLISH_MARKER; fi"
+        val output = runRootCommand(command, MAX_PUBLISH_OUTPUT_BYTES)
+        return if (output.contains(PUBLISH_MARKER)) target else null
     }
 
     private fun buildDeviceReport(context: Context): String = buildString {
@@ -342,7 +416,7 @@ internal object FeedbackLogExporter {
             "[ -n \"\$user_id\" ] || user_id=0; " +
             "base=\"/data/system/theme_magic/users/\$user_id\"; " +
             "echo '=== filesystem ==='; df -h \"\$base\" 2>&1; " +
-            "for root in \"\$base/rearScreen\" \"\$base/rearScreenAiApp_Theme\" \"\$base/back_screen_card\" \"\$base/subscreencenter/config\" \"/product/media/rearscreen/appcard\" \"/system/media/rearscreen/appcard\"; do " +
+            "for root in \"\$base/mibackscreen_18\" \"\$base/rearScreen\" \"\$base/rearScreenAiApp_Theme\" \"\$base/back_screen_card\" \"\$base/subscreencenter/config\" \"/product/media/rearscreen/appcard\" \"/system/media/rearscreen/appcard\"; do " +
             "echo; echo \"=== manifest: \$root ===\"; " +
             "if [ -d \"\$root\" ]; then find \"\$root\" -maxdepth 5 -type d 2>/dev/null | while IFS= read -r d; do stat -c '%n|type=dir|modified=%y|mode=%a|owner=%U:%G' \"\$d\" 2>&1; done; else echo 'MISSING'; fi; " +
             "echo; echo \"=== files: \$root ===\"; " +
@@ -367,7 +441,7 @@ internal object FeedbackLogExporter {
             "echo '=== resource probe ==='; date '+generated_at=%Y-%m-%d %H:%M:%S %z'; echo \"current_user=\$user_id\"; " +
             "print_path() { p=\"\$1\"; if [ -e \"\$p\" ]; then ls -ldZ \"\$p\" 2>&1; stat -c 'path=%n type=%F size=%s modified=%y mode=%a owner=%U:%G' \"\$p\" 2>&1; else echo \"MISSING: \$p\"; fi; }; " +
             "echo; echo '=== parent directories ==='; " +
-            "for p in /data /data/system /data/system/theme /data/system/theme/rearScreen /data/system/theme/rearScreenWhite /data/system/theme/rights /data/system/theme_magic /data/system/theme_magic/users \"/data/system/theme_magic/users/\$user_id\" \"\$base\" \"\$base/rearScreen\" \"\$base/rearScreenAiApp_Theme\" \"\$base/back_screen_card\" \"\$base/subscreencenter\" \"\$base/subscreencenter/config\" /product/media/rearscreen /product/media/rearscreen/appcard /system/media/rearscreen /system/media/rearscreen/appcard /product/etc/precust_theme/theme/.data/content/rearscreen /product/etc/precust_theme/theme/.data/meta/rearscreen /product/etc/precust_theme/theme/.data/preview/theme /product/etc/precust_theme/theme/.data/rights/theme ${Constants.AI_MATE_PEEKO_PREVIEW_PATH} ${Constants.AI_MATE_LUMI_PREVIEW_PATH}; do print_path \"\$p\"; done; " +
+            "for p in /data /data/system /data/system/theme /data/system/theme/rearScreen /data/system/theme/rearScreenWhite /data/system/theme/rights /data/system/theme_magic /data/system/theme_magic/users \"/data/system/theme_magic/users/\$user_id\" \"\$base\" \"\$base/mibackscreen_18\" \"\$base/mibackscreen_18/appcard\" \"\$base/mibackscreen_18/precust_theme\" \"\$base/mibackscreen_18/template\" \"\$base/mibackscreen_18/template/normal\" \"\$base/mibackscreen_18/template/default\" \"\$base/rearScreen\" \"\$base/rearScreenAiApp_Theme\" \"\$base/back_screen_card\" \"\$base/subscreencenter\" \"\$base/subscreencenter/config\" /product/media/rearscreen /product/media/rearscreen/appcard /system/media/rearscreen /system/media/rearscreen/appcard /product/etc/precust_theme/theme/.data/content/rearscreen /product/etc/precust_theme/theme/.data/meta/rearscreen /product/etc/precust_theme/theme/.data/preview/theme /product/etc/precust_theme/theme/.data/rights/theme ${Constants.AI_MATE_PEEKO_PREVIEW_PATH} ${Constants.AI_MATE_LUMI_PREVIEW_PATH}; do print_path \"\$p\"; done; " +
             "settings --user \"\$user_id\" get secure theme_rear_widget 2>/dev/null > \"\$tmp\"; " +
             "for f in \"\$base/subscreencenter/config/widget.json\" \"\$base/rearScreen/runtime.json\"; do [ -f \"\$f\" ] && cat \"\$f\" >> \"\$tmp\"; done; " +
             "if [ -d \"\$base/rearScreen\" ]; then find \"\$base/rearScreen\" -maxdepth 2 -type f -name editConfig 2>/dev/null | sort | tail -n 80 | while IFS= read -r f; do echo \"\$f\" >> \"\$tmp\"; cat \"\$f\" >> \"\$tmp\"; done; fi; " +
@@ -414,6 +488,14 @@ internal object FeedbackLogExporter {
             "echo; echo '=== mibackscreen addon module ==='; " +
             "if [ -x /data/adb/ksu/bin/ksud ]; then /data/adb/ksu/bin/ksud module list 2>&1 | grep -A20 -B2 'mibackscreen_18_personalization\\|MiBackscreen' || true; else echo 'ksud unavailable'; fi; " +
             "for f in /data/adb/modules/mibackscreen_18_personalization/module.prop /data/adb/modules/mibackscreen_18_personalization/disable; do echo; echo \"--- \$f ---\"; if [ -e \"\$f\" ]; then cat \"\$f\" 2>&1; else echo 'MISSING'; fi; done; " +
+            "state=/data/adb/mibackscreen_18_personalization_state; " +
+            "echo; echo '=== mibackscreen KSU runtime state ==='; " +
+            "if [ -d \"\$state\" ]; then ls -lZ \"\$state\" 2>&1; " +
+            "for f in \"\$state\"/*.log \"\$state\"/appcard_owned_ids; do [ -f \"\$f\" ] || continue; echo; echo \"--- \$f (tail) ---\"; tail -c 65536 \"\$f\" 2>&1; done; " +
+            "else echo \"MISSING: \$state (module never ran, or an old module version without state logging)\"; fi; " +
+            "echo; echo '=== mibackscreen resource dir expected by the app ==='; " +
+            "res=/data/system/theme_magic/users/\$(am get-current-user 2>/dev/null)/mibackscreen_18; " +
+            "if [ -d \"\$res\" ]; then echo \"PRESENT: \$res\"; else echo \"MISSING: \$res\"; fi; " +
             "echo; echo '=== rear resource mounts ==='; mount 2>/dev/null | grep -E 'media/rearscreen|precust_theme/theme/.data' || echo 'No MiBackscreen resource mounts'; " +
             "echo; echo '=== related packages ==='; " +
             "for pkg in ${Constants.TARGET_PACKAGE} ${Constants.THEME_STORE_PACKAGE} ${Constants.PERSONAL_ASSISTANT_PACKAGE} ${Constants.VOICE_ASSIST_PACKAGE} ${Constants.MODULE_PACKAGE}; do " +

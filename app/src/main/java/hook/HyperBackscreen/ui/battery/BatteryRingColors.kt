@@ -41,3 +41,14 @@ internal fun parseBatteryColor(value: String): Int? {
 
 /** 反解成 `#AARRGGBB`。 */
 internal fun formatBatteryColor(argb: Int): String = String.format("#%08X", argb)
+
+/**
+ * 底轨色：线条颜色按 [BatteryRingLayout.RING_TRACK_ALPHA_SCALE] 压暗。
+ *
+ * 只动 alpha、不动色相，底轨于是始终和用户选的线条色同色系；线条本身是半透明时底轨
+ * 按同比例更淡，不会出现底轨比线条还显眼的情况。
+ */
+internal fun trackColorOf(argb: Int): Int {
+    val alpha = ((argb ushr 24) * BatteryRingLayout.RING_TRACK_ALPHA_SCALE).toInt()
+    return (argb and 0x00FFFFFF) or (alpha shl 24)
+}

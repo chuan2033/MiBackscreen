@@ -9,7 +9,6 @@ import hook.HyperBackscreen.R
 import hook.HyperBackscreen.common.PackageListCodec
 import hook.HyperBackscreen.ui.AutoWallpaperInterval
 import hook.HyperBackscreen.ui.battery.BatteryRingGeometry
-import hook.HyperBackscreen.ui.components.AnimatedPreferenceVisibility
 import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.components.CollapsibleFunctionGroup
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -19,8 +18,6 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 @Composable
 internal fun FunctionPage(
-    enableBatteryRing: Boolean,
-    onEnableBatteryRingChange: (Boolean) -> Unit,
     onBatteryColorClick: () -> Unit,
     enable18ProFeatures: Boolean,
     onEnable18ProFeaturesChange: (Boolean) -> Unit,
@@ -81,20 +78,13 @@ internal fun FunctionPage(
                 title = stringResource(R.string.function_group_subscreen),
                 iconRes = R.drawable.group_subscreen
             ) {
-                // 几何按校准机型实测，其他机型背屏不绘制，这里也不显示无法生效的开关。
+                // 几何按校准机型实测，其他机型背屏不绘制，入口也不显示。
+                // 电量总开关已经收到二级页里，这里只留常驻入口。
                 if (batteryRingSupported) {
-                    SwitchPreference(
-                        checked = enableBatteryRing,
-                        onCheckedChange = onEnableBatteryRingChange,
-                        title = stringResource(R.string.home_battery_ring_title)
+                    ArrowPreference(
+                        title = stringResource(R.string.function_battery_color_title),
+                        onClick = onBatteryColorClick
                     )
-                    AnimatedPreferenceVisibility(visible = enableBatteryRing) {
-                        ArrowPreference(
-                            title = stringResource(R.string.function_battery_color_title),
-                            summary = stringResource(R.string.function_battery_color_summary),
-                            onClick = onBatteryColorClick
-                        )
-                    }
                 }
                 SwitchPreference(
                     checked = disableLongPress,

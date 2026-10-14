@@ -34,6 +34,27 @@ public final class PrefsBridge {
     /** 背屏电量显示颜色覆盖，空字符串表示跟随系统（SystemUI 电池资源色）。 */
     public static final String DEFAULT_BATTERY_COLOR = "";
     public static final String DEFAULT_BATTERY_PERCENT_POSITION = "off";
+    /**
+     * 电量位置微调，单位：模组尺寸的百分比，在预设锚点上叠加。
+     *
+     * 水平偏移左右各存一份（`_left` / `_right` 两个键），默认值跟着「数字电量」的位置预设走
+     * （右侧 +10%、左侧 -10%），没法压成一个常量，所以空串表示「该侧没调过，按该侧默认来」，
+     * 由 `BatteryRingLayout.percentOffsetX(position, read)` 落地；下面这个键是历史遗留的单槽，
+     * 只在两个分侧键都为空时当迁移回退读一次，不再写入。
+     * 垂直默认 0，表示留在模组垂直中心。
+     */
+    public static final String DEFAULT_BATTERY_PERCENT_OFFSET_X = "";
+    public static final String DEFAULT_BATTERY_PERCENT_OFFSET_Y = "0";
+    /** 电量线条缩放，单位：百分比；100 表示严格贴模组轮廓。 */
+    public static final String DEFAULT_BATTERY_RING_SCALE = "100";
+    /** 电量线条笔画粗细，单位：背屏像素。 */
+    public static final String DEFAULT_BATTERY_RING_STROKE = "10";
+    /** 百分比数字字号，单位：背屏像素。 */
+    public static final String DEFAULT_BATTERY_PERCENT_TEXT_SIZE = "38";
+    /** 未充部分的底轨，默认不画；"1" 开 / "0" 关。 */
+    public static final String DEFAULT_BATTERY_RING_TRACK = "0";
+    /** 线条样式，默认连体轮廓（contour）；另一个取值是上下双环（twin）。 */
+    public static final String DEFAULT_BATTERY_RING_STYLE = "contour";
     public static final String DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES = "0";
     public static final boolean DEFAULT_REMOVE_APP_CARD_LIMIT = true;
     public static final boolean DEFAULT_FIX_REAR_SCREEN_APPLY = false;
@@ -315,6 +336,18 @@ public final class PrefsBridge {
         writeStringFromUi(context, Constants.KEY_BATTERY_PERCENT_POSITION, value);
     }
 
+    /** 电量位置 / 线条缩放（UI 侧）；三个键共用一条通道，默认值按 key 决定。 */
+    @NonNull
+    public static String readBatteryLayoutForUi(@NonNull Context context, @NonNull String key) {
+        return readStringForUi(context, key, batteryLayoutDefault(key));
+    }
+
+    public static void writeBatteryLayoutFromUi(@NonNull Context context,
+                                                @NonNull String key,
+                                                @NonNull String value) {
+        writeStringFromUi(context, key, value);
+    }
+
     /** 电量颜色覆盖（Hook 侧）：空字符串表示跟随系统。 */
     @NonNull
     public static String readBatteryColor(@NonNull XposedModule module, @NonNull String key) {
@@ -327,6 +360,33 @@ public final class PrefsBridge {
                 module,
                 Constants.KEY_BATTERY_PERCENT_POSITION,
                 DEFAULT_BATTERY_PERCENT_POSITION);
+    }
+
+    /** 电量位置 / 线条缩放（Hook 侧）。 */
+    @NonNull
+    public static String readBatteryLayout(@NonNull XposedModule module, @NonNull String key) {
+        return readStringForHook(module, key, batteryLayoutDefault(key));
+    }
+
+    @NonNull
+    private static String batteryLayoutDefault(@NonNull String key) {
+        switch (key) {
+            case Constants.KEY_BATTERY_RING_SCALE:
+                return DEFAULT_BATTERY_RING_SCALE;
+            case Constants.KEY_BATTERY_RING_STROKE:
+                return DEFAULT_BATTERY_RING_STROKE;
+            case Constants.KEY_BATTERY_PERCENT_TEXT_SIZE:
+                return DEFAULT_BATTERY_PERCENT_TEXT_SIZE;
+            case Constants.KEY_BATTERY_RING_TRACK:
+                return DEFAULT_BATTERY_RING_TRACK;
+            case Constants.KEY_BATTERY_RING_STYLE:
+                return DEFAULT_BATTERY_RING_STYLE;
+            case Constants.KEY_BATTERY_PERCENT_OFFSET_Y:
+                return DEFAULT_BATTERY_PERCENT_OFFSET_Y;
+            default:
+                // 水平偏移（含左右分侧键）：空串 = 该侧没调过，按该侧默认值来。
+                return DEFAULT_BATTERY_PERCENT_OFFSET_X;
+        }
     }
 
     @NonNull
@@ -710,6 +770,16 @@ public final class PrefsBridge {
         return value == null ? DEFAULT_BATTERY_PERCENT_POSITION : value;
     }
 
+    /** 电量位置 / 线条缩放（快捷面板 / 宿主进程内的模块缓存）。 */
+    @NonNull
+    public static String readBatteryLayoutForRemote(@NonNull String key) {
+        String def = batteryLayoutDefault(key);
+        SharedPreferences prefs = remotePrefsFromModule();
+        if (prefs == null) return def;
+        String value = prefs.getString(key, def);
+        return value == null ? def : value;
+    }
+
     public static boolean requestEnableBatteryRingWrite(@NonNull Context context, boolean enabled) {
         return requestPanelPreferenceWrite(context, Constants.KEY_ENABLE_BATTERY_RING, enabled);
     }
@@ -820,6 +890,15 @@ public final class PrefsBridge {
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_CHARGING);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_LOW);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_POSITION);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_OFFSET_X);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_OFFSET_X_LEFT);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_OFFSET_X_RIGHT);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_OFFSET_Y);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_RING_SCALE);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_RING_STROKE);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_TEXT_SIZE);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_RING_TRACK);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_RING_STYLE);
             flushUiStringPreference(
                     localPrefs,
                     remotePrefs,
@@ -866,6 +945,51 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_BATTERY_PERCENT_POSITION,
                     DEFAULT_BATTERY_PERCENT_POSITION);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_PERCENT_OFFSET_X,
+                    DEFAULT_BATTERY_PERCENT_OFFSET_X);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_PERCENT_OFFSET_X_LEFT,
+                    DEFAULT_BATTERY_PERCENT_OFFSET_X);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_PERCENT_OFFSET_X_RIGHT,
+                    DEFAULT_BATTERY_PERCENT_OFFSET_X);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_PERCENT_OFFSET_Y,
+                    DEFAULT_BATTERY_PERCENT_OFFSET_Y);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_RING_SCALE,
+                    DEFAULT_BATTERY_RING_SCALE);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_RING_STROKE,
+                    DEFAULT_BATTERY_RING_STROKE);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_PERCENT_TEXT_SIZE,
+                    DEFAULT_BATTERY_PERCENT_TEXT_SIZE);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_RING_TRACK,
+                    DEFAULT_BATTERY_RING_TRACK);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_RING_STYLE,
+                    DEFAULT_BATTERY_RING_STYLE);
             syncStringKey(
                     localPrefs,
                     remotePrefs,
