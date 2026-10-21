@@ -21,6 +21,8 @@ internal data class BatteryRingLayout(
     val ringStrokeWidth: Int,
     /** 百分比数字字号，单位：背屏像素。 */
     val percentTextSize: Int,
+    /** 百分比数字字重，100~900；400 常规、700 加粗。 */
+    val percentTextWeight: Int,
     /** 是否在未充部分画一圈底轨。 */
     val ringTrackVisible: Boolean,
     /** 线条样式：连体轮廓 / 上下双环。 */
@@ -37,6 +39,7 @@ internal data class BatteryRingLayout(
         Constants.KEY_BATTERY_RING_SCALE to encode(ringScalePercent),
         Constants.KEY_BATTERY_RING_STROKE to encode(ringStrokeWidth),
         Constants.KEY_BATTERY_PERCENT_TEXT_SIZE to encode(percentTextSize),
+        Constants.KEY_BATTERY_PERCENT_TEXT_WEIGHT to encode(percentTextWeight),
         Constants.KEY_BATTERY_RING_TRACK to encode(ringTrackVisible),
         Constants.KEY_BATTERY_RING_STYLE to ringStyle.prefValue,
     )
@@ -52,6 +55,16 @@ internal data class BatteryRingLayout(
         const val PERCENT_TEXT_SIZE_MAX = 56
 
         /**
+         * 数字字重的可调区间与档位。
+         *
+         * 按 100 一档量化：系统字体是可变字重，但相邻档位之间的差异肉眼几乎看不出来，
+         * 留给用户连续拖动只会在 537 这种数值上纠结，实际渲染还可能被就近匹配掉。
+         */
+        const val PERCENT_TEXT_WEIGHT_MIN = 300
+        const val PERCENT_TEXT_WEIGHT_MAX = 900
+        const val PERCENT_TEXT_WEIGHT_STEP = 100
+
+        /**
          * 底轨的透明度 = 线条颜色的透明度乘这个系数。
          *
          * 底轨不单独占一个颜色槽：它表达的是「这段线还没充到」，用线条自己的颜色压暗最自然，
@@ -64,6 +77,8 @@ internal data class BatteryRingLayout(
         const val DEFAULT_RING_SCALE = 100
         const val DEFAULT_RING_STROKE = 10
         const val DEFAULT_PERCENT_TEXT_SIZE = 38
+        /** 与旧版本固定 BOLD 一致，升级后观感不变。 */
+        const val DEFAULT_PERCENT_TEXT_WEIGHT = 700
         const val DEFAULT_RING_TRACK = false
 
         private const val TRACK_ON = "1"
@@ -127,6 +142,7 @@ internal data class BatteryRingLayout(
             ringScalePercent = DEFAULT_RING_SCALE,
             ringStrokeWidth = DEFAULT_RING_STROKE,
             percentTextSize = DEFAULT_PERCENT_TEXT_SIZE,
+            percentTextWeight = DEFAULT_PERCENT_TEXT_WEIGHT,
             ringTrackVisible = DEFAULT_RING_TRACK,
             ringStyle = BatteryRingStyle.DEFAULT,
         )
@@ -164,6 +180,13 @@ internal data class BatteryRingLayout(
                     PERCENT_TEXT_SIZE_MIN,
                     PERCENT_TEXT_SIZE_MAX,
                     DEFAULT_PERCENT_TEXT_SIZE),
+                // 旧版本没有这个键，读到的空值落在 700（原固定 BOLD），升级后观感不变。
+                percentTextWeight = quantizeWeight(
+                    clamp(
+                        read(Constants.KEY_BATTERY_PERCENT_TEXT_WEIGHT),
+                        PERCENT_TEXT_WEIGHT_MIN,
+                        PERCENT_TEXT_WEIGHT_MAX,
+                        DEFAULT_PERCENT_TEXT_WEIGHT)),
                 // 只有明确的 "1" 才算开：旧版本没有这个键，读到的空串要落在「关」上，
                 // 否则升级后每台机器的背屏都会凭空多出一圈底轨。
                 ringTrackVisible = read(Constants.KEY_BATTERY_RING_TRACK)?.trim() == TRACK_ON,
@@ -171,6 +194,18 @@ internal data class BatteryRingLayout(
                 ringStyle = BatteryRingStyle.fromPref(
                     read(Constants.KEY_BATTERY_RING_STYLE)),
             )
+        }
+
+        /**
+         * 把任意字重对齐到最近的档位并夹进可调区间。
+         *
+         * 滑杆给的是连续值，这里统一收口：读偏好、写偏好、恢复默认都走它，
+         * 免得存下 537 这种数值、翻到设置页再显示成一个不像字的数字。
+         */
+        fun quantizeWeight(weight: Int): Int {
+            val stepped = ((weight + PERCENT_TEXT_WEIGHT_STEP / 2) / PERCENT_TEXT_WEIGHT_STEP) *
+                PERCENT_TEXT_WEIGHT_STEP
+            return stepped.coerceIn(PERCENT_TEXT_WEIGHT_MIN, PERCENT_TEXT_WEIGHT_MAX)
         }
 
         fun encode(value: Int): String = value.toString()

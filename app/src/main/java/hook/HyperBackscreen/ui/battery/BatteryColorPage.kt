@@ -462,6 +462,9 @@ private enum class BatteryLayoutUnit {
 
     /** 背屏像素，直接显示数值。 */
     PIXEL,
+
+    /** 字重（100~900），无量纲，直接显示数值。 */
+    WEIGHT,
 }
 
 /**
@@ -481,7 +484,8 @@ private enum class BatteryLayoutField(
     RING_STROKE(R.string.battery_ring_stroke_title, BatteryLayoutUnit.PIXEL),
     PERCENT_X(R.string.battery_percent_offset_x_title, BatteryLayoutUnit.OFFSET),
     PERCENT_Y(R.string.battery_percent_offset_y_title, BatteryLayoutUnit.OFFSET),
-    PERCENT_TEXT_SIZE(R.string.battery_percent_text_size_title, BatteryLayoutUnit.PIXEL);
+    PERCENT_TEXT_SIZE(R.string.battery_percent_text_size_title, BatteryLayoutUnit.PIXEL),
+    PERCENT_TEXT_WEIGHT(R.string.battery_percent_text_weight_title, BatteryLayoutUnit.WEIGHT);
 
     fun read(layout: BatteryRingLayout): Int = when (this) {
         RING_TRACK -> if (layout.ringTrackVisible) 1 else 0
@@ -490,6 +494,7 @@ private enum class BatteryLayoutField(
         PERCENT_X -> layout.percentOffsetXPercent
         PERCENT_Y -> layout.percentOffsetYPercent
         PERCENT_TEXT_SIZE -> layout.percentTextSize
+        PERCENT_TEXT_WEIGHT -> layout.percentTextWeight
     }
 
     fun write(layout: BatteryRingLayout, value: Int): BatteryRingLayout = when (this) {
@@ -499,6 +504,8 @@ private enum class BatteryLayoutField(
         PERCENT_X -> layout.copy(percentOffsetXPercent = value)
         PERCENT_Y -> layout.copy(percentOffsetYPercent = value)
         PERCENT_TEXT_SIZE -> layout.copy(percentTextSize = value)
+        PERCENT_TEXT_WEIGHT ->
+            layout.copy(percentTextWeight = BatteryRingLayout.quantizeWeight(value))
     }
 
     /**
@@ -512,6 +519,8 @@ private enum class BatteryLayoutField(
         RING_STROKE -> BatteryRingLayout.RING_STROKE_MIN..BatteryRingLayout.RING_STROKE_MAX
         PERCENT_TEXT_SIZE ->
             BatteryRingLayout.PERCENT_TEXT_SIZE_MIN..BatteryRingLayout.PERCENT_TEXT_SIZE_MAX
+        PERCENT_TEXT_WEIGHT ->
+            BatteryRingLayout.PERCENT_TEXT_WEIGHT_MIN..BatteryRingLayout.PERCENT_TEXT_WEIGHT_MAX
         // 开关不用区间，给个占位值让调用方不必特判。
         RING_TRACK -> 0..1
     }
@@ -523,11 +532,12 @@ private enum class BatteryLayoutField(
     fun defaultValueFor(position: BatteryPercentPosition): Int =
         read(BatteryRingLayout.defaultFor(position))
 
-    /** 偏移量带符号显示（+0 没有意义，按 0 处理）；线条大小带百分号；粗细与字号是像素值。 */
+    /** 偏移量带符号显示（+0 没有意义，按 0 处理）；线条大小带百分号；粗细、字号与字重是纯数值。 */
     fun format(value: Int): String = when (unit) {
         BatteryLayoutUnit.OFFSET -> if (value > 0) "+$value%" else "$value%"
         BatteryLayoutUnit.PERCENT -> "$value%"
         BatteryLayoutUnit.PIXEL -> value.toString()
+        BatteryLayoutUnit.WEIGHT -> value.toString()
     }
 }
 
@@ -538,11 +548,12 @@ private val BatteryRingFields = listOf(
     BatteryLayoutField.RING_STROKE
 )
 
-/** 「数字电量」折叠里的可调项：数字相对摄像头模组的偏移与字号。 */
+/** 「数字电量」折叠里的可调项：数字相对摄像头模组的偏移、字号与字重。 */
 private val BatteryPercentFields = listOf(
     BatteryLayoutField.PERCENT_X,
     BatteryLayoutField.PERCENT_Y,
-    BatteryLayoutField.PERCENT_TEXT_SIZE
+    BatteryLayoutField.PERCENT_TEXT_SIZE,
+    BatteryLayoutField.PERCENT_TEXT_WEIGHT
 )
 
 /**
@@ -699,13 +710,17 @@ private fun BatteryRearScreenPreview(
     val context = LocalContext.current
     val lensMain = remember(geometry) { decodeDrawable(context, mainLensRes(geometry)) }
     val lensSecondary = remember(geometry) { decodeDrawable(context, secondaryLensRes(geometry)) }
-    // 字号随偏好变，每次绘制前设一遍；其余属性固定，建一次就够。
+    // 字号与字重随偏好变，每次绘制前设一遍；其余属性固定，建一次就够。
     val percentPaint = remember {
         AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
             textAlign = AndroidPaint.Align.CENTER
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             setShadowLayer(4f, 0f, 1.5f, 0x99000000.toInt())
         }
+    }
+    // 字重变化时才重建 Typeface，拖动滑杆不会每帧新建。
+    val percentTypeface = remember(layout.percentTextWeight) {
+        Typeface.create(Typeface.DEFAULT, layout.percentTextWeight, false)
     }
     val panelColor = MiuixTheme.colorScheme.surfaceContainerHighest
     val outlineColor = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.12f)
@@ -814,6 +829,7 @@ private fun BatteryRearScreenPreview(
             )?.let { anchor ->
                 percentPaint.color = color.toArgb()
                 percentPaint.textSize = layout.percentTextSize.toFloat()
+                percentPaint.typeface = percentTypeface
                 val metrics = percentPaint.fontMetrics
                 val baseline = anchor.y - (metrics.ascent + metrics.descent) / 2f
                 drawIntoCanvas { canvas ->

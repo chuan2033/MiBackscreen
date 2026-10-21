@@ -7,11 +7,20 @@
     <string name="function_group_voice">超级小爱</string>
     <string name="function_battery_color_title">背屏电量自定义</string>
     <string name="auto_wallpaper_interval_title">定时切换背屏壁纸</string>
-    <string name="auto_wallpaper_interval_summary">%1$s；背屏可见时计时并切换</string>
     <string name="auto_wallpaper_interval_off">关闭</string>
     <string name="auto_wallpaper_interval_one_minute">每 1 分钟</string>
     <string name="auto_wallpaper_interval_five_minutes">每 5 分钟</string>
     <string name="auto_wallpaper_interval_fifteen_minutes">每 15 分钟</string>
+    <string name="rear_screen_off_timeout_title">背屏息屏时间</string>
+    <string name="keep_rear_screen_on_in_game_title">游戏时保持背屏常亮</string>
+    <string name="keep_rear_screen_on_in_game_summary">横屏游戏时系统会主动关闭背屏，开启后保持常亮；会增加耗电与发热，重启手机后生效</string>
+    <string name="rear_screen_off_timeout_system">跟随系统</string>
+    <string name="rear_screen_off_timeout_always">一直亮屏</string>
+    <string name="rear_screen_off_timeout_one_minute">1 分钟后息屏</string>
+    <string name="rear_screen_off_timeout_three_minutes">3 分钟后息屏</string>
+    <string name="rear_screen_off_timeout_five_minutes">5 分钟后息屏</string>
+    <string name="rear_screen_off_timeout_ten_minutes">10 分钟后息屏</string>
+    <string name="rear_screen_off_timeout_thirty_minutes">30 分钟后息屏</string>
     <string name="battery_color_state_idle">未充电</string>
     <string name="battery_color_state_charging">充电中</string>
     <string name="battery_color_state_low">低电量</string>
@@ -33,6 +42,7 @@
     <string name="battery_ring_style_contour">整体轮廓</string>
     <string name="battery_ring_style_twin">上下双环</string>
     <string name="battery_percent_text_size_title">数字大小</string>
+    <string name="battery_percent_text_weight_title">数字粗细</string>
     <string name="battery_percent_show_title">在背屏显示</string>
     <string name="battery_layout_reset">恢复默认</string>
     <string name="battery_layout_dialog_summary">默认值: %1$s | 范围: %2$s ~ %3$s</string>
@@ -42,6 +52,16 @@
     <string name="home_enable_18_pro_features_title">开启18pro系列新背屏功能</string>
     <string name="config_show_function_count_title">显示功能数量</string>
     <string name="config_show_function_count_summary">在底部功能标签上显示已开启的功能数量</string>
+    <string name="config_backup_title">配置备份</string>
+    <string name="config_backup_action_title">备份配置</string>
+    <string name="config_backup_action_summary">导出到根目录 %1$s</string>
+    <string name="config_restore_action_title">恢复配置</string>
+    <string name="config_restore_action_summary">从 %1$s 读回；背屏电量相关设置需重进背屏生效</string>
+    <string name="config_backup_done">已备份 %1$d 项配置到 %2$s</string>
+    <string name="config_backup_done_overwrite">已备份 %1$d 项配置，覆盖了 %2$s 的备份</string>
+    <string name="config_backup_failed">备份失败：需要 root 权限写入手机存储根目录</string>
+    <string name="config_restore_done">已恢复 %1$d 项配置（备份时间 %2$s）</string>
+    <string name="config_restore_failed">恢复失败：没找到可用的备份文件，或内容无法识别</string>
     <plurals name="enabled_function_count">
         <item quantity="other">已开启 %1$d 项功能</item>
     </plurals>
@@ -83,6 +103,8 @@
     <string name="home_remove_app_card_limit_title">移除应用卡数量限制</string>
     <string name="home_fix_apply_title">修复背屏壁纸应用失败</string>
     <string name="home_fix_apply_summary">需搭配主题破解模块使用</string>
+    <string name="face_enrollment_compat_title">修复人脸录入兼容</string>
+    <string name="face_enrollment_compat_summary">AI陪伴需要录入人脸时打开</string>
     <string name="home_status_activated">已激活</string>
     <string name="home_status_inactive">未激活</string>
     <string name="home_status_inactive_summary">请在 LSPosed 中启用模块，然后重启作用域</string>

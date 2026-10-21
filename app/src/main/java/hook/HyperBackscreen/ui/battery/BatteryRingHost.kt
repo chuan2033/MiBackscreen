@@ -181,7 +181,8 @@ private class BatteryRingView(
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         textAlign = Paint.Align.CENTER
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        // 字重按偏好取（100~900）。旧版本固定 BOLD，默认值仍是 700，升级后观感不变。
+        typeface = Typeface.create(Typeface.DEFAULT, layout.percentTextWeight, false)
         textSize = layout.percentTextSize.toFloat()
         setShadowLayer(4f, 0f, 1.5f, 0x99000000.toInt())
     }

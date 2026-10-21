@@ -113,6 +113,8 @@ public class ModuleMain extends XposedModule {
     private volatile long lastThemeDatabaseSyncedAtElapsed;
     private volatile long lastAiAppIndexSyncedAtElapsed;
     private volatile long lastRearWakeDecisionLoggedAtElapsed;
+    /** 背屏息屏超时覆盖最近一次生效值，只在变化时记日志（该方法每次电源状态刷新都会调）。 */
+    private volatile long lastRearScreenOffTimeoutAppliedMs = Long.MIN_VALUE;
     private volatile long lastSubscreenAppInfoModified = Long.MIN_VALUE;
     private volatile long lastSubscreenAppInfoLength = Long.MIN_VALUE;
     private volatile int lastSubscreenAppInfoCount = Integer.MIN_VALUE;
@@ -434,6 +436,25 @@ public class ModuleMain extends XposedModule {
         }
     }
 
+    /**
+     * PowerGroup#getGroupId() 是包可见方法，只能按声明方法查找后 setAccessible。
+     * 取不到就返回 null，调用方据此放行原逻辑。
+     */
+    @Nullable
+    private static Integer readPowerGroupId(@Nullable Object powerGroup) {
+        if (powerGroup == null) return null;
+        Method method = findDeclaredMethod(
+                powerGroup.getClass(),
+                Constants.SYSTEM_POWER_GROUP_GET_GROUP_ID_METHOD);
+        if (method == null) return null;
+        try {
+            Object value = method.invoke(powerGroup);
+            return value instanceof Integer ? (Integer) value : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
     private void installSystemHooksOnce(@NonNull ClassLoader classLoader) {
         if (systemHooksInstalled) return;
         synchronized (this) {
@@ -544,6 +565,76 @@ public class ModuleMain extends XposedModule {
                                             + joinPackageNames(packageNames));
                             return true;
                         }
+                    }
+                    return chain.proceed();
+                }
+        );
+        // 背屏息屏超时：系统给背屏（display group 1）的倒计时只来自 subscreen_display_time
+        // （默认 10 秒，游戏模式还会改写），这里按模块偏好覆盖返回值。UI 侧同时把档位写进
+        // 该设置项作兜底，两层指向同一档位；偏好为「跟随系统」时不覆盖、原样放行。
+        Class<?> powerGroupClass = findClass(Constants.SYSTEM_POWER_GROUP_CLASS, classLoader);
+        if (powerGroupClass == null) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "System hook target missing: " + Constants.SYSTEM_POWER_GROUP_CLASS);
+        } else {
+            hookMethodIfPresent(
+                    powerManagerServiceImplClass,
+                    Constants.SYSTEM_ADJUST_SCREEN_OFF_TIMEOUT_METHOD,
+                    new Class[]{powerGroupClass, long.class},
+                    Constants.SYSTEM_POWER_MANAGER_SERVICE_IMPL_CLASS + "#"
+                            + Constants.SYSTEM_ADJUST_SCREEN_OFF_TIMEOUT_METHOD,
+                    chain -> {
+                        long overrideMillis = PrefsBridge.readRearScreenOffTimeoutMillis(this);
+                        // 游戏（主屏高负载）期间如果开了「保持背屏亮」，强制按「一直亮屏」处理：
+                        // 游戏模式会把 subscreen_display_time 改写成 30 秒，只抬设置值挡不住。
+                        if (overrideMillis <= 0L
+                                && RearScreenGameModeState.isActive()
+                                && PrefsBridge.shouldKeepRearScreenOnInGame(this)) {
+                            overrideMillis = Constants.REAR_SCREEN_OFF_TIMEOUT_ALWAYS_MS;
+                        }
+                        if (overrideMillis <= 0L) {
+                            return chain.proceed();
+                        }
+                        Integer groupIdValue = readPowerGroupId(chain.getArgs().get(0));
+                        if (groupIdValue == null
+                                || groupIdValue != Constants.SYSTEM_SECONDARY_DISPLAY_GROUP_ID) {
+                            return chain.proceed();
+                        }
+                        if (overrideMillis != lastRearScreenOffTimeoutAppliedMs) {
+                            lastRearScreenOffTimeoutAppliedMs = overrideMillis;
+                            log(Log.INFO, Constants.LOG_TAG,
+                                    "Rear screen off timeout override: " + overrideMillis + " ms");
+                        }
+                        return overrideMillis;
+                    }
+            );
+        }
+        // 游戏时保持背屏亮：DualScreenCoverManager.updateHighLoadSceneMode(int, boolean) 在主屏
+        // 进入高负载（横屏大型游戏）时直接调用 goToSleepSecondaryDisplay(..., "mainScreen:highLoadGameMode", 0)
+        // 关掉背屏，日志原文 "Secondary screen turned OFF, Main screen keep ON"。这条路径不走超时，
+        // 只能在这里拦；开关开启时整段跳过，连 mScreenStates 也不更新 —— 否则状态会记成
+        // 「背屏已关」而实际还亮着，后续双击唤醒/电源键判断都会错。
+        hookMethodIfPresent(
+                coverManagerClass,
+                Constants.SYSTEM_UPDATE_HIGH_LOAD_SCENE_METHOD,
+                new Class[]{int.class, boolean.class},
+                Constants.SYSTEM_DUAL_SCREEN_COVER_MANAGER_CLASS + "#"
+                        + Constants.SYSTEM_UPDATE_HIGH_LOAD_SCENE_METHOD,
+                chain -> {
+                    if (chain.getArgs().size() < 2 || !(chain.getArgs().get(1) instanceof Boolean)) {
+                        return chain.proceed();
+                    }
+                    boolean highLoad = (Boolean) chain.getArgs().get(1);
+                    boolean keepRearScreenOn =
+                            highLoad && PrefsBridge.shouldKeepRearScreenOnInGame(this);
+                    if (RearScreenGameModeState.setActive(highLoad)) {
+                        log(Log.INFO, Constants.LOG_TAG, "High load game mode: " + highLoad
+                                + ", keep rear screen on: " + keepRearScreenOn);
+                    }
+                    if (keepRearScreenOn) {
+                        log(Log.INFO, Constants.LOG_TAG,
+                                "Rear screen kept on in high load game mode");
+                        return null;
                     }
                     return chain.proceed();
                 }
@@ -1732,20 +1823,33 @@ public class ModuleMain extends XposedModule {
         // Theme Manager 11.5.3.1: k(Context) is the enrollment-count query only.
         // Keep the credential gate, enrollment UI, content audit and authentication intact.
         Class<?> helper = findClass("com.rearScreen.helper.RearScreenBiometricHelper", classLoader);
-        if (helper == null) return;
+        if (helper == null) {
+            // 原来是静默返回：类名随主题商店版本漂移时完全查不到痕迹，是诊断盲区。
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Face enrollment hook target missing:"
+                            + " com.rearScreen.helper.RearScreenBiometricHelper");
+            return;
+        }
         Method method = findDeclaredMethod(helper, "k", Context.class);
         if (method == null || method.getReturnType() != int.class
-                || !java.lang.reflect.Modifier.isStatic(method.getModifiers())) return;
-        hookMethodIfPresent(method, "RearScreenBiometricHelper#k", chain -> {
+                || !java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Face enrollment hook signature mismatch: k(android.content.Context):int");
+            return;
+        }
+        boolean installed = hookMethodIfPresent(method, "RearScreenBiometricHelper#k", chain -> {
             Object original = chain.proceed();
             if (!(original instanceof Integer count) || count > 0
-                    || !PrefsBridge.shouldFixRearScreenApply(this)) return original;
+                    || !PrefsBridge.shouldFixFaceEnrollment(this)) return original;
             if (chain.getArgs().isEmpty() || !(chain.getArgs().get(0) instanceof Context context)) {
                 return original;
             }
             int actual = ThemeFaceEnrollment.read(context);
             return actual >= 0 ? actual : original;
         });
+        log(installed ? Log.INFO : Log.WARN, Constants.LOG_TAG,
+                installed ? "Face enrollment compatibility hook installed"
+                        : "Face enrollment compatibility hook not installed");
     }
 
 

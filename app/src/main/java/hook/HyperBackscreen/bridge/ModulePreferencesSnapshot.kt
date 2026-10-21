@@ -29,9 +29,13 @@ internal data class ModulePreferencesSnapshot(
     val batteryRingScale: String = PrefsBridge.DEFAULT_BATTERY_RING_SCALE,
     val batteryRingStroke: String = PrefsBridge.DEFAULT_BATTERY_RING_STROKE,
     val batteryPercentTextSize: String = PrefsBridge.DEFAULT_BATTERY_PERCENT_TEXT_SIZE,
+    val batteryPercentTextWeight: String = PrefsBridge.DEFAULT_BATTERY_PERCENT_TEXT_WEIGHT,
     val batteryRingTrack: String = PrefsBridge.DEFAULT_BATTERY_RING_TRACK,
     val batteryRingStyle: String = PrefsBridge.DEFAULT_BATTERY_RING_STYLE,
     val autoWallpaperIntervalMinutes: String = PrefsBridge.DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES,
+    val rearScreenOffTimeout: String = PrefsBridge.DEFAULT_REAR_SCREEN_OFF_TIMEOUT,
+    val keepRearScreenOnInGame: Boolean = PrefsBridge.DEFAULT_KEEP_REAR_SCREEN_ON_IN_GAME,
+    val faceEnrollmentCompat: Boolean = PrefsBridge.DEFAULT_FACE_ENROLLMENT_COMPAT,
 ) {
     companion object {
         private val keys = setOf(
@@ -58,9 +62,13 @@ internal data class ModulePreferencesSnapshot(
             Constants.KEY_BATTERY_RING_SCALE,
             Constants.KEY_BATTERY_RING_STROKE,
             Constants.KEY_BATTERY_PERCENT_TEXT_SIZE,
+            Constants.KEY_BATTERY_PERCENT_TEXT_WEIGHT,
             Constants.KEY_BATTERY_RING_TRACK,
             Constants.KEY_BATTERY_RING_STYLE,
             Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES,
+            Constants.KEY_REAR_SCREEN_OFF_TIMEOUT,
+            Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME,
+            Constants.KEY_FACE_ENROLLMENT_COMPAT,
         )
 
         /** One in-memory snapshot, with no Binder call or cache write during observation. */
@@ -107,12 +115,29 @@ internal data class ModulePreferencesSnapshot(
                     ?: PrefsBridge.DEFAULT_BATTERY_RING_STROKE,
                 batteryPercentTextSize = value(Constants.KEY_BATTERY_PERCENT_TEXT_SIZE) as? String
                     ?: PrefsBridge.DEFAULT_BATTERY_PERCENT_TEXT_SIZE,
+                batteryPercentTextWeight = value(Constants.KEY_BATTERY_PERCENT_TEXT_WEIGHT) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_PERCENT_TEXT_WEIGHT,
                 batteryRingTrack = value(Constants.KEY_BATTERY_RING_TRACK) as? String
                     ?: PrefsBridge.DEFAULT_BATTERY_RING_TRACK,
                 batteryRingStyle = value(Constants.KEY_BATTERY_RING_STYLE) as? String
                     ?: PrefsBridge.DEFAULT_BATTERY_RING_STYLE,
                 autoWallpaperIntervalMinutes = value(Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES) as? String
                     ?: PrefsBridge.DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES,
+                rearScreenOffTimeout = value(Constants.KEY_REAR_SCREEN_OFF_TIMEOUT) as? String
+                    ?: PrefsBridge.DEFAULT_REAR_SCREEN_OFF_TIMEOUT,
+                keepRearScreenOnInGame = boolean(
+                    Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME,
+                    PrefsBridge.DEFAULT_KEEP_REAR_SCREEN_ON_IN_GAME,
+                ),
+                // 迁移：新键从未写过时沿用「修复背屏壁纸应用失败」，
+                // 与 PrefsBridge.readFaceEnrollmentCompatForUi 的回退保持一致。
+                faceEnrollmentCompat = boolean(
+                    Constants.KEY_FACE_ENROLLMENT_COMPAT,
+                    boolean(
+                        Constants.KEY_FIX_REAR_SCREEN_APPLY,
+                        PrefsBridge.DEFAULT_FIX_REAR_SCREEN_APPLY,
+                    ),
+                ),
             )
         }
 

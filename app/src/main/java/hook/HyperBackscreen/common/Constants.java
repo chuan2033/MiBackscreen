@@ -32,14 +32,26 @@ public final class Constants {
     // 线条笔画粗细与数字字号，单位是背屏像素（背屏按 976x596 参考尺寸绘制，不用折算）。
     public static final String KEY_BATTERY_RING_STROKE = "battery_ring_stroke";
     public static final String KEY_BATTERY_PERCENT_TEXT_SIZE = "battery_percent_text_size";
+    // 百分比数字字重，100~900（400 常规 / 700 加粗），默认 700 —— 与旧版本固定 BOLD 的观感一致。
+    public static final String KEY_BATTERY_PERCENT_TEXT_WEIGHT = "battery_percent_text_weight";
     // 是否在未充部分画一圈低透明度底轨；"1" 开 / "0" 关。
     public static final String KEY_BATTERY_RING_TRACK = "battery_ring_track";
     // 电量线条样式：contour = 绕模组一整圈的连体轮廓，twin = 上下两个独立圆环。
     public static final String KEY_BATTERY_RING_STYLE = "battery_ring_style";
     public static final String KEY_AUTO_WALLPAPER_INTERVAL_MINUTES =
             "auto_wallpaper_interval_minutes";
+    // 背屏息屏超时覆盖。"0" = 跟随系统（不写 subscreen_display_time），其余为毫秒值。
+    // 背屏（display group 1）的息屏倒计时只由系统设置 subscreen_display_time 决定
+    // （默认 10 秒，游戏模式会把它改写成 30 秒并在游戏进程退出后重置回 10 秒）。
+    public static final String KEY_REAR_SCREEN_OFF_TIMEOUT = "rear_screen_off_timeout";
+    // 游戏（主屏高负载）时系统会主动关背屏；开启后拦掉那次主动关屏，
+    // 并在游戏期间把背屏超时抬到「一直亮屏」。默认关：会让游戏功耗优化失效。
+    public static final String KEY_KEEP_REAR_SCREEN_ON_IN_GAME = "keep_rear_screen_on_in_game";
     public static final String KEY_REMOVE_APP_CARD_LIMIT = "remove_app_card_limit";
     public static final String KEY_FIX_REAR_SCREEN_APPLY = "fix_rear_screen_apply";
+    // 主题商店人脸录入计数兼容。原来挂在 fix_rear_screen_apply（名字与实现不符），
+    // 现已独立；未写过该键时回退读 fix_rear_screen_apply，保证老用户行为不变。
+    public static final String KEY_FACE_ENROLLMENT_COMPAT = "face_enrollment_compat";
     public static final String KEY_FLOATING_NAV_BAR = "floating_nav_bar";
     public static final String KEY_LIQUID_GLASS = "liquid_glass";
     public static final String KEY_BOTTOM_BAR_BLUR = "bottom_bar_blur";
@@ -75,6 +87,25 @@ public final class Constants {
             "com.android.server.power.PowerManagerServiceImpl";
     public static final String SYSTEM_SHOW_COVER_VIEW_METHOD = "showCoverView";
     public static final String SYSTEM_IS_SCREEN_SKIPPED_WAKEUP_METHOD = "isScreenSkippedWakeup";
+    // 背屏息屏超时：PowerManagerServiceImpl.adjustScreenOffTimeoutIfNeededLocked(PowerGroup, long)
+    // 对 groupId == 1 直接返回 mSecondaryDisplayScreenOffTimeout（来自系统设置
+    // subscreen_display_time），其余组原样返回传入值。模块在这里按偏好覆盖返回值，
+    // 同时把值写进该设置项做兜底 —— 两层都指向同一档位。
+    public static final String SYSTEM_ADJUST_SCREEN_OFF_TIMEOUT_METHOD =
+            "adjustScreenOffTimeoutIfNeededLocked";
+    public static final String SYSTEM_POWER_GROUP_CLASS = "com.android.server.power.PowerGroup";
+    public static final String SYSTEM_POWER_GROUP_GET_GROUP_ID_METHOD = "getGroupId";
+    public static final String SYSTEM_SUBSCREEN_DISPLAY_TIME_SETTING = "subscreen_display_time";
+    public static final int SYSTEM_SECONDARY_DISPLAY_GROUP_ID = 1;
+    // 「一直亮屏」写入值取 int 上限（约 24.8 天）：Settings.System 只存 int，
+    // 且 lastUserActivityTime + timeout 用 long 累加不会溢出。
+    public static final int REAR_SCREEN_OFF_TIMEOUT_ALWAYS_MS = Integer.MAX_VALUE;
+    // 游戏时保持背屏亮：DualScreenCoverManager.updateHighLoadSceneMode(int, boolean) 在
+    // 主屏进入高负载（横屏大型游戏）时调用 goToSleepSecondaryDisplay(..., "mainScreen:highLoadGameMode", 0)
+    // 直接关掉背屏（日志原文 "Secondary screen turned OFF, Main screen keep ON"）。
+    // 该路径不走超时，只能拦这一处；同时把超时抬到上限，避免 10/30 秒后自己熄掉。
+    public static final String SYSTEM_UPDATE_HIGH_LOAD_SCENE_METHOD = "updateHighLoadSceneMode";
+    public static final String SYSTEM_HIGH_LOAD_GAME_DETAILS = "mainScreen:highLoadGameMode";
     public static final String SYSTEM_POWER_MANAGER_SERVICE_IMPL_FIELD = "mPowerManagerServiceImpl";
     public static final String SYSTEM_ACTIVITY_TASK_MANAGER_FIELD = "mActivityTaskManager";
     public static final String SYSTEM_FOREGROUND_APP_PACKAGE_FIELD = "mForegroundAppPackageName";

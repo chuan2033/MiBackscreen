@@ -8,6 +8,7 @@ import androidx.compose.ui.res.stringResource
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.common.PackageListCodec
 import hook.HyperBackscreen.ui.AutoWallpaperInterval
+import hook.HyperBackscreen.ui.RearScreenOffTimeout
 import hook.HyperBackscreen.ui.battery.BatteryRingGeometry
 import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.components.CollapsibleFunctionGroup
@@ -25,7 +26,10 @@ internal fun FunctionPage(
     removeWallpaperLimit: Boolean,
     removeAppCardLimit: Boolean,
     autoWallpaperInterval: AutoWallpaperInterval,
+    rearScreenOffTimeout: RearScreenOffTimeout,
+    keepRearScreenOnInGame: Boolean,
     fixRearScreenApply: Boolean,
+    faceEnrollmentCompat: Boolean,
     disableRearScreenCover: Boolean,
     doubleTapWakeDisabledPackages: String,
     enablePickup: Boolean,
@@ -33,7 +37,10 @@ internal fun FunctionPage(
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
     onRemoveAppCardLimitChange: (Boolean) -> Unit,
     onAutoWallpaperIntervalChange: (AutoWallpaperInterval) -> Unit,
+    onRearScreenOffTimeoutChange: (RearScreenOffTimeout) -> Unit,
+    onKeepRearScreenOnInGameChange: (Boolean) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
+    onFaceEnrollmentCompatChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onEnablePickupChange: (Boolean) -> Unit,
     onAddDisabledAppsClick: () -> Unit
@@ -100,14 +107,25 @@ internal fun FunctionPage(
                     items = AutoWallpaperInterval.entries.map { stringResource(it.labelRes) },
                     selectedIndex = autoWallpaperInterval.ordinal,
                     title = stringResource(R.string.auto_wallpaper_interval_title),
-                    summary = stringResource(
-                        R.string.auto_wallpaper_interval_summary,
-                        stringResource(autoWallpaperInterval.labelRes),
-                    ),
                     onSelectedIndexChange = { index ->
                         AutoWallpaperInterval.entries.getOrNull(index)
                             ?.let(onAutoWallpaperIntervalChange)
                     }
+                )
+                WindowDropdownPreference(
+                    items = RearScreenOffTimeout.entries.map { stringResource(it.labelRes) },
+                    selectedIndex = rearScreenOffTimeout.ordinal,
+                    title = stringResource(R.string.rear_screen_off_timeout_title),
+                    onSelectedIndexChange = { index ->
+                        RearScreenOffTimeout.entries.getOrNull(index)
+                            ?.let(onRearScreenOffTimeoutChange)
+                    }
+                )
+                SwitchPreference(
+                    checked = keepRearScreenOnInGame,
+                    onCheckedChange = onKeepRearScreenOnInGameChange,
+                    title = stringResource(R.string.keep_rear_screen_on_in_game_title),
+                    summary = stringResource(R.string.keep_rear_screen_on_in_game_summary)
                 )
             }
 
@@ -120,6 +138,12 @@ internal fun FunctionPage(
                     onCheckedChange = onFixRearScreenApplyChange,
                     title = stringResource(R.string.home_fix_apply_title),
                     summary = stringResource(R.string.home_fix_apply_summary)
+                )
+                SwitchPreference(
+                    checked = faceEnrollmentCompat,
+                    onCheckedChange = onFaceEnrollmentCompatChange,
+                    title = stringResource(R.string.face_enrollment_compat_title),
+                    summary = stringResource(R.string.face_enrollment_compat_summary)
                 )
                 SwitchPreference(
                     checked = removeWallpaperLimit,

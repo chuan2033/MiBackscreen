@@ -44,8 +44,10 @@ import hook.HyperBackscreen.ui.updater.UpdateInfo
 import hook.HyperBackscreen.ui.battery.BatteryColorSlot
 import hook.HyperBackscreen.ui.battery.BatteryPercentPosition
 import hook.HyperBackscreen.ui.battery.BatteryRingLayout
+import hook.HyperBackscreen.ui.config.PreferencesBackup
 import hook.HyperBackscreen.ui.util.AppLanguage
 import hook.HyperBackscreen.ui.util.RearDisplayCompatibility
+import hook.HyperBackscreen.ui.util.RearScreenTimeoutSync
 import hook.HyperBackscreen.ui.util.ThemeMode
 import hook.HyperBackscreen.ui.util.ThemePrefs
 import java.util.concurrent.TimeUnit
@@ -116,6 +118,9 @@ internal fun RearScreenApp() {
     var autoWallpaperInterval by remember {
         mutableStateOf(AutoWallpaperInterval.fromPref(PrefsBridge.readAutoWallpaperIntervalForUi(context)))
     }
+    var rearScreenOffTimeout by remember {
+        mutableStateOf(RearScreenOffTimeout.fromPref(PrefsBridge.readRearScreenOffTimeoutForUi(context)))
+    }
     var disableLongPress by remember {
         mutableStateOf(PrefsBridge.readDisableLongPressForUi(context))
     }
@@ -130,6 +135,12 @@ internal fun RearScreenApp() {
     }
     var fixRearScreenApply by remember {
         mutableStateOf(PrefsBridge.readFixRearScreenApplyForUi(context))
+    }
+    var faceEnrollmentCompat by remember {
+        mutableStateOf(PrefsBridge.readFaceEnrollmentCompatForUi(context))
+    }
+    var keepRearScreenOnInGame by remember {
+        mutableStateOf(PrefsBridge.readKeepRearScreenOnInGameForUi(context))
     }
     var floatingNavBar by remember {
         mutableStateOf(PrefsBridge.readFloatingNavBar(context))
@@ -217,16 +228,20 @@ internal fun RearScreenApp() {
                         Constants.KEY_BATTERY_RING_SCALE to values.batteryRingScale,
                         Constants.KEY_BATTERY_RING_STROKE to values.batteryRingStroke,
                         Constants.KEY_BATTERY_PERCENT_TEXT_SIZE to values.batteryPercentTextSize,
+                        Constants.KEY_BATTERY_PERCENT_TEXT_WEIGHT to values.batteryPercentTextWeight,
                         Constants.KEY_BATTERY_RING_TRACK to values.batteryRingTrack,
                         Constants.KEY_BATTERY_RING_STYLE to values.batteryRingStyle,
                     )::get
                 )
                 autoWallpaperInterval = AutoWallpaperInterval.fromPref(values.autoWallpaperIntervalMinutes)
+                rearScreenOffTimeout = RearScreenOffTimeout.fromPref(values.rearScreenOffTimeout)
                 disableLongPress = values.disableLongPress
                 removeWallpaperLimit = values.removeWallpaperLimit
                 enableAppCard = values.enableAppCard
                 removeAppCardLimit = values.removeAppCardLimit
                 fixRearScreenApply = values.fixRearScreenApply
+                faceEnrollmentCompat = values.faceEnrollmentCompat
+                keepRearScreenOnInGame = values.keepRearScreenOnInGame
                 enablePickup = values.enablePickup
                 themeSettingsShortcut = values.themeSettingsShortcut
                 disableRearScreenCover = values.disableRearScreenCover
@@ -327,7 +342,10 @@ internal fun RearScreenApp() {
             removeWallpaperLimit = removeWallpaperLimit,
             removeAppCardLimit = removeAppCardLimit,
             autoWallpaperInterval = autoWallpaperInterval,
+            rearScreenOffTimeout = rearScreenOffTimeout,
+            keepRearScreenOnInGame = keepRearScreenOnInGame,
             fixRearScreenApply = fixRearScreenApply,
+            faceEnrollmentCompat = faceEnrollmentCompat,
             floatingNavBar = floatingNavBar,
             liquidGlass = liquidGlass,
             bottomBarBlur = bottomBarBlur,
@@ -378,10 +396,25 @@ internal fun RearScreenApp() {
                         .putExtra(Constants.EXTRA_INTERVAL_MINUTES, interval.minutes)
                 )
             },
+            onRearScreenOffTimeoutChange = { timeout ->
+                rearScreenOffTimeout = timeout
+                PrefsBridge.writeRearScreenOffTimeoutFromUi(context, timeout.prefValue)
+                RearScreenTimeoutSync.apply(timeout)
+            },
             onFixRearScreenApplyChange = { newValue ->
                 fixRearScreenApply = newValue
                 PrefsBridge.writeFixRearScreenApplyFromUi(context, newValue)
                 refreshScopes(Constants.TARGET_PACKAGE, Constants.THEME_STORE_PACKAGE)
+            },
+            onFaceEnrollmentCompatChange = { newValue ->
+                faceEnrollmentCompat = newValue
+                PrefsBridge.writeFaceEnrollmentCompatFromUi(context, newValue)
+                refreshScopes(Constants.THEME_STORE_PACKAGE)
+            },
+            onKeepRearScreenOnInGameChange = { newValue ->
+                // 钩子在 system_server（android 作用域），无法单独重启作用域，改完需重启手机。
+                keepRearScreenOnInGame = newValue
+                PrefsBridge.writeKeepRearScreenOnInGameFromUi(context, newValue)
             },
             onFloatingNavBarChange = { newValue ->
                 floatingNavBar = newValue
@@ -490,6 +523,55 @@ internal fun RearScreenApp() {
                 themeSettingsShortcut = enabled
                 PrefsBridge.writeThemeSettingsShortcutFromUi(context, enabled)
                 refreshScopes(Constants.THEME_STORE_PACKAGE)
+            },
+            onBackupPreferences = {
+                scope.launch(Dispatchers.IO) {
+                    val result = PreferencesBackup.backup(context)
+                    withContext(Dispatchers.Main) {
+                        feedback.show(
+                            when {
+                                result == null -> context.getString(R.string.config_backup_failed)
+                                result.previousExportedAt != null -> context.getString(
+                                    R.string.config_backup_done_overwrite,
+                                    result.keyCount,
+                                    result.previousExportedAt,
+                                )
+                                else -> context.getString(
+                                    R.string.config_backup_done,
+                                    result.keyCount,
+                                    result.path,
+                                )
+                            }
+                        )
+                    }
+                }
+            },
+            onRestorePreferences = {
+                scope.launch(Dispatchers.IO) {
+                    val result = PreferencesBackup.restore(context)
+                    withContext(Dispatchers.Main) {
+                        if (result == null) {
+                            feedback.show(context.getString(R.string.config_restore_failed))
+                        } else {
+                            // 外观类偏好不在 ModulePreferencesSnapshot 的观察集合里，手动回读一次；
+                            // 背屏电量等参数在挂载时读取，提示用户重进背屏桌面。
+                            floatingNavBar = PrefsBridge.readFloatingNavBar(context)
+                            liquidGlass = PrefsBridge.readLiquidGlass(context)
+                            bottomBarBlur = PrefsBridge.readBottomBarBlur(context)
+                            showFunctionCount = PrefsBridge.readShowFunctionCount(context)
+                            checkUpdates = PrefsBridge.readCheckUpdates(context)
+                            themeSettingsShortcut =
+                                PrefsBridge.readThemeSettingsShortcutForUi(context)
+                            feedback.show(
+                                context.getString(
+                                    R.string.config_restore_done,
+                                    result.keyCount,
+                                    result.exportedAt ?: "-",
+                                )
+                            )
+                        }
+                    }
+                }
             }
         )
 

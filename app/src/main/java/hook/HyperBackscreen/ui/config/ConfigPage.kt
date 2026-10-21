@@ -37,7 +37,9 @@ internal fun ConfigPage(
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     themeSettingsShortcut: Boolean,
-    onThemeSettingsShortcutChange: (Boolean) -> Unit
+    onThemeSettingsShortcutChange: (Boolean) -> Unit,
+    onBackupPreferences: () -> Unit,
+    onRestorePreferences: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -135,6 +137,20 @@ internal fun ConfigPage(
             onCheckedChange = onShowFunctionCountChange,
             title = stringResource(R.string.config_show_function_count_title),
             summary = stringResource(R.string.config_show_function_count_summary)
+        )
+    }
+
+    SmallTitle(text = stringResource(R.string.config_backup_title), insideMargin = PaddingValues(16.dp, 8.dp))
+    CardBlock(pressFeedbackType = PressFeedbackType.None) {
+        ArrowPreference(
+            title = stringResource(R.string.config_backup_action_title),
+            summary = stringResource(R.string.config_backup_action_summary, PreferencesBackup.FILE_NAME),
+            onClick = onBackupPreferences
+        )
+        ArrowPreference(
+            title = stringResource(R.string.config_restore_action_title),
+            summary = stringResource(R.string.config_restore_action_summary, PreferencesBackup.FILE_NAME),
+            onClick = onRestorePreferences
         )
     }
 }

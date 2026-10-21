@@ -10,6 +10,8 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import hook.HyperBackscreen.app.ModuleApp;
@@ -51,13 +53,21 @@ public final class PrefsBridge {
     public static final String DEFAULT_BATTERY_RING_STROKE = "10";
     /** 百分比数字字号，单位：背屏像素。 */
     public static final String DEFAULT_BATTERY_PERCENT_TEXT_SIZE = "38";
+    /** 百分比数字字重：400 常规 / 700 加粗，默认 700 保持旧版观感。 */
+    public static final String DEFAULT_BATTERY_PERCENT_TEXT_WEIGHT = "700";
     /** 未充部分的底轨，默认不画；"1" 开 / "0" 关。 */
     public static final String DEFAULT_BATTERY_RING_TRACK = "0";
     /** 线条样式，默认连体轮廓（contour）；另一个取值是上下双环（twin）。 */
     public static final String DEFAULT_BATTERY_RING_STYLE = "contour";
     public static final String DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES = "0";
+    /** 背屏息屏超时覆盖；"0" = 跟随系统，其余为毫秒值。 */
+    public static final String DEFAULT_REAR_SCREEN_OFF_TIMEOUT = "0";
     public static final boolean DEFAULT_REMOVE_APP_CARD_LIMIT = true;
     public static final boolean DEFAULT_FIX_REAR_SCREEN_APPLY = false;
+    /** 主题商店人脸录入计数兼容；默认关，与旧版「修复背屏壁纸应用失败」默认一致。 */
+    public static final boolean DEFAULT_FACE_ENROLLMENT_COMPAT = false;
+    /** 游戏（主屏高负载）时保持背屏亮；默认关 —— 开启会让游戏的功耗/发热优化失效。 */
+    public static final boolean DEFAULT_KEEP_REAR_SCREEN_ON_IN_GAME = false;
     private static final boolean DEFAULT_FLOATING_NAV_BAR = false;
     private static final boolean DEFAULT_LIQUID_GLASS = false;
     /** 三种底栏共用的背景模糊开关；默认开，保持与旧版观感一致。 */
@@ -71,6 +81,57 @@ public final class PrefsBridge {
     public static final String DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES = "";
     public static final boolean DEFAULT_THEME_SETTINGS_SHORTCUT = true;
     public static final String DEFAULT_PICKUP_ISLAND_SELECTION = "";
+
+    /**
+     * 配置备份覆盖的偏好键：只收「会改变行为或观感」的键。
+     * 一次性请求（app_card_install_request）与只读的历史回退键（battery_percent_offset_x）不收。
+     * 值统一按字符串备份，恢复时按这里的类型解析；文件里缺的键保持当前值。
+     */
+    private static final Map<String, Boolean> BACKUP_BOOLEAN_DEFAULTS = new LinkedHashMap<>();
+    private static final Map<String, String> BACKUP_STRING_DEFAULTS = new LinkedHashMap<>();
+
+    static {
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_ENABLE_18_PRO_FEATURES, DEFAULT_ENABLE_18_PRO_FEATURES);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_ENABLE_APP_CARD, DEFAULT_ENABLE_APP_CARD);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_REMOVE_WALLPAPER_LIMIT, DEFAULT_REMOVE_WALLPAPER_LIMIT);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_REMOVE_APP_CARD_LIMIT, DEFAULT_REMOVE_APP_CARD_LIMIT);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_ENABLE_BATTERY_RING, DEFAULT_ENABLE_BATTERY_RING);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_FACE_ENROLLMENT_COMPAT, DEFAULT_FACE_ENROLLMENT_COMPAT);
+        BACKUP_BOOLEAN_DEFAULTS.put(
+                Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME,
+                DEFAULT_KEEP_REAR_SCREEN_ON_IN_GAME);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_DISABLE_REAR_SCREEN_COVER, DEFAULT_DISABLE_REAR_SCREEN_COVER);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, DEFAULT_DISABLE_DOUBLE_TAP_WAKE);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_ENABLE_PICKUP, DEFAULT_ENABLE_PICKUP);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_THEME_SETTINGS_SHORTCUT, DEFAULT_THEME_SETTINGS_SHORTCUT);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_CHECK_UPDATES, DEFAULT_CHECK_UPDATES);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_FLOATING_NAV_BAR, DEFAULT_FLOATING_NAV_BAR);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_LIQUID_GLASS, DEFAULT_LIQUID_GLASS);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_BOTTOM_BAR_BLUR, DEFAULT_BOTTOM_BAR_BLUR);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_SHOW_FUNCTION_COUNT, DEFAULT_SHOW_FUNCTION_COUNT);
+
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_COLOR_IDLE, DEFAULT_BATTERY_COLOR);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_COLOR_CHARGING, DEFAULT_BATTERY_COLOR);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_COLOR_LOW, DEFAULT_BATTERY_COLOR);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_POSITION, DEFAULT_BATTERY_PERCENT_POSITION);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_OFFSET_X_LEFT, DEFAULT_BATTERY_PERCENT_OFFSET_X);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_OFFSET_X_RIGHT, DEFAULT_BATTERY_PERCENT_OFFSET_X);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_OFFSET_Y, DEFAULT_BATTERY_PERCENT_OFFSET_Y);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_RING_SCALE, DEFAULT_BATTERY_RING_SCALE);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_RING_STROKE, DEFAULT_BATTERY_RING_STROKE);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_TEXT_SIZE, DEFAULT_BATTERY_PERCENT_TEXT_SIZE);
+        BACKUP_STRING_DEFAULTS.put(
+                Constants.KEY_BATTERY_PERCENT_TEXT_WEIGHT,
+                DEFAULT_BATTERY_PERCENT_TEXT_WEIGHT);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_RING_TRACK, DEFAULT_BATTERY_RING_TRACK);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_RING_STYLE, DEFAULT_BATTERY_RING_STYLE);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES, DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_REAR_SCREEN_OFF_TIMEOUT, DEFAULT_REAR_SCREEN_OFF_TIMEOUT);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES, DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_PICKUP_ISLAND_SELECTION, DEFAULT_PICKUP_ISLAND_SELECTION);
+    }
 
     private PrefsBridge() {
     }
@@ -265,6 +326,24 @@ public final class PrefsBridge {
         return def;
     }
 
+    /** 新键存在就用新键；不存在时回退读 legacyKey（只读，不回写），用于拆开关时的平滑迁移。 */
+    private static boolean readForHookWithLegacy(@NonNull XposedModule module,
+                                                 @NonNull String key,
+                                                 @NonNull String legacyKey,
+                                                 boolean def) {
+        try {
+            SharedPreferences remotePrefs = module.getRemotePreferences(Constants.PREF_GROUP);
+            if (remotePrefs != null) {
+                if (remotePrefs.contains(key)) return remotePrefs.getBoolean(key, def);
+                if (remotePrefs.contains(legacyKey)) return remotePrefs.getBoolean(legacyKey, def);
+                return def;
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "Failed to read " + key, e);
+        }
+        return def;
+    }
+
     @NonNull
     private static String readStringForHook(@NonNull XposedModule module, @NonNull String key, @NonNull String def) {
         try {
@@ -377,6 +456,8 @@ public final class PrefsBridge {
                 return DEFAULT_BATTERY_RING_STROKE;
             case Constants.KEY_BATTERY_PERCENT_TEXT_SIZE:
                 return DEFAULT_BATTERY_PERCENT_TEXT_SIZE;
+            case Constants.KEY_BATTERY_PERCENT_TEXT_WEIGHT:
+                return DEFAULT_BATTERY_PERCENT_TEXT_WEIGHT;
             case Constants.KEY_BATTERY_RING_TRACK:
                 return DEFAULT_BATTERY_RING_TRACK;
             case Constants.KEY_BATTERY_RING_STYLE:
@@ -412,6 +493,97 @@ public final class PrefsBridge {
                 module,
                 Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES,
                 DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES));
+    }
+
+    @NonNull
+    public static String readRearScreenOffTimeoutForUi(@NonNull Context context) {
+        return normalizeRearScreenOffTimeout(readStringForUi(
+                context,
+                Constants.KEY_REAR_SCREEN_OFF_TIMEOUT,
+                DEFAULT_REAR_SCREEN_OFF_TIMEOUT));
+    }
+
+    public static void writeRearScreenOffTimeoutFromUi(
+            @NonNull Context context,
+            @NonNull String value
+    ) {
+        writeStringFromUi(
+                context,
+                Constants.KEY_REAR_SCREEN_OFF_TIMEOUT,
+                normalizeRearScreenOffTimeout(value));
+    }
+
+    /** 背屏息屏超时覆盖值（毫秒）；0 表示跟随系统。 */
+    public static long readRearScreenOffTimeoutMillis(@NonNull XposedModule module) {
+        return parseRearScreenOffTimeoutMillis(readStringForHook(
+                module,
+                Constants.KEY_REAR_SCREEN_OFF_TIMEOUT,
+                DEFAULT_REAR_SCREEN_OFF_TIMEOUT));
+    }
+
+    @NonNull
+    private static String normalizeRearScreenOffTimeout(@Nullable String value) {
+        return String.valueOf(parseRearScreenOffTimeoutMillis(value));
+    }
+
+    private static long parseRearScreenOffTimeoutMillis(@Nullable String value) {
+        if (value == null) return 0L;
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) return 0L;
+        try {
+            long millis = Long.parseLong(trimmed);
+            if (millis <= 0L) return 0L;
+            // 系统设置 subscreen_display_time 是 int，超过 int 上限按上限处理。
+            return Math.min(millis, Constants.REAR_SCREEN_OFF_TIMEOUT_ALWAYS_MS);
+        } catch (NumberFormatException error) {
+            return 0L;
+        }
+    }
+
+    /**
+     * 导出会改变行为/观感的偏好（布尔值转成 "true"/"false"，其余保持字符串）。
+     * 顺序与 [BACKUP_BOOLEAN_DEFAULTS] / [BACKUP_STRING_DEFAULTS] 一致，方便人工比对。
+     */
+    @NonNull
+    public static Map<String, String> exportPreferencesForBackup(@NonNull Context context) {
+        Map<String, String> values = new LinkedHashMap<>();
+        for (Map.Entry<String, Boolean> entry : BACKUP_BOOLEAN_DEFAULTS.entrySet()) {
+            values.put(entry.getKey(),
+                    String.valueOf(readForUi(context, entry.getKey(), entry.getValue())));
+        }
+        for (Map.Entry<String, String> entry : BACKUP_STRING_DEFAULTS.entrySet()) {
+            values.put(entry.getKey(),
+                    readStringForUi(context, entry.getKey(), entry.getValue()));
+        }
+        return values;
+    }
+
+    /**
+     * 把备份里的偏好写回（本地 + 远程双写）。文件里缺的键保持当前值，
+     * 所以旧备份不会清掉新版本新增的键。
+     *
+     * @return 实际写入的键数量
+     */
+    public static int applyPreferencesFromBackup(
+            @NonNull Context context,
+            @NonNull Map<String, String> values
+    ) {
+        int applied = 0;
+        for (Map.Entry<String, Boolean> entry : BACKUP_BOOLEAN_DEFAULTS.entrySet()) {
+            String raw = values.get(entry.getKey());
+            if (raw == null) continue;
+            String trimmed = raw.trim();
+            writeFromUi(context, entry.getKey(),
+                    "true".equalsIgnoreCase(trimmed) || "1".equals(trimmed));
+            applied++;
+        }
+        for (String key : BACKUP_STRING_DEFAULTS.keySet()) {
+            String raw = values.get(key);
+            if (raw == null) continue;
+            writeStringFromUi(context, key, raw);
+            applied++;
+        }
+        return applied;
     }
 
     public static boolean writeEnable18ProFeaturesFromUi(@NonNull Context context, boolean enabled) {
@@ -502,6 +674,48 @@ public final class PrefsBridge {
 
     public static void writeFixRearScreenApplyFromUi(@NonNull Context context, boolean enabled) {
         writeFromUi(context, Constants.KEY_FIX_REAR_SCREEN_APPLY, enabled);
+    }
+
+    /**
+     * 人脸兼容原来是「修复背屏壁纸应用失败」的副产物，没有自己的键。
+     * 新键从未写过时沿用旧开关的值，避免老用户升级后功能悄悄失效；一旦用户动过新开关，
+     * 就以新键为准（旧键不再影响人脸）。
+     */
+    public static boolean readFaceEnrollmentCompatForUi(@NonNull Context context) {
+        SharedPreferences localPrefs = local(context);
+        String pendingKey = PENDING_UI_PREFIX + Constants.KEY_FACE_ENROLLMENT_COMPAT;
+        if (localPrefs.contains(pendingKey)) {
+            return localPrefs.getBoolean(pendingKey, DEFAULT_FACE_ENROLLMENT_COMPAT);
+        }
+        SharedPreferences remote = remote();
+        if (remote != null && remote.contains(Constants.KEY_FACE_ENROLLMENT_COMPAT)) {
+            boolean value = remote.getBoolean(
+                    Constants.KEY_FACE_ENROLLMENT_COMPAT, DEFAULT_FACE_ENROLLMENT_COMPAT);
+            localPrefs.edit()
+                    .putBoolean(Constants.KEY_FACE_ENROLLMENT_COMPAT, value)
+                    .apply();
+            return value;
+        }
+        if (localPrefs.contains(Constants.KEY_FACE_ENROLLMENT_COMPAT)) {
+            return localPrefs.getBoolean(
+                    Constants.KEY_FACE_ENROLLMENT_COMPAT, DEFAULT_FACE_ENROLLMENT_COMPAT);
+        }
+        return readForUi(context, Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
+    }
+
+    public static void writeFaceEnrollmentCompatFromUi(@NonNull Context context, boolean enabled) {
+        writeFromUi(context, Constants.KEY_FACE_ENROLLMENT_COMPAT, enabled);
+    }
+
+    public static boolean readKeepRearScreenOnInGameForUi(@NonNull Context context) {
+        return readForUi(
+                context,
+                Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME,
+                DEFAULT_KEEP_REAR_SCREEN_ON_IN_GAME);
+    }
+
+    public static void writeKeepRearScreenOnInGameFromUi(@NonNull Context context, boolean enabled) {
+        writeFromUi(context, Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME, enabled);
     }
 
     public static boolean readEnablePickupForUi(@NonNull Context context) {
@@ -685,6 +899,22 @@ public final class PrefsBridge {
 
     public static boolean shouldFixRearScreenApply(@NonNull XposedModule module) {
         return readForHook(module, Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
+    }
+
+    /** 人脸兼容的 hook 侧读取；新键未设置时回退旧键（见 {@link #readFaceEnrollmentCompatForUi}）。 */
+    public static boolean shouldFixFaceEnrollment(@NonNull XposedModule module) {
+        return readForHookWithLegacy(
+                module,
+                Constants.KEY_FACE_ENROLLMENT_COMPAT,
+                Constants.KEY_FIX_REAR_SCREEN_APPLY,
+                DEFAULT_FACE_ENROLLMENT_COMPAT);
+    }
+
+    public static boolean shouldKeepRearScreenOnInGame(@NonNull XposedModule module) {
+        return readForHook(
+                module,
+                Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME,
+                DEFAULT_KEEP_REAR_SCREEN_ON_IN_GAME);
     }
 
     public static boolean shouldEnablePickup(@NonNull XposedModule module) {
@@ -881,6 +1111,8 @@ public final class PrefsBridge {
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REMOVE_APP_CARD_LIMIT);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_FIX_REAR_SCREEN_APPLY);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_FACE_ENROLLMENT_COMPAT);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_REAR_SCREEN_COVER);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_THEME_SETTINGS_SHORTCUT);
@@ -903,10 +1135,20 @@ public final class PrefsBridge {
                     localPrefs,
                     remotePrefs,
                     Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES);
+            flushUiStringPreference(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_REAR_SCREEN_OFF_TIMEOUT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT, DEFAULT_REMOVE_WALLPAPER_LIMIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_APP_CARD_LIMIT, DEFAULT_REMOVE_APP_CARD_LIMIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
+            syncFaceEnrollmentCompatKey(localPrefs, remotePrefs);
+            syncBooleanKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME,
+                    DEFAULT_KEEP_REAR_SCREEN_ON_IN_GAME);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_PICKUP, DEFAULT_ENABLE_PICKUP);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_APP_CARD, DEFAULT_ENABLE_APP_CARD);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_APP_CARD_INSTALL_REQUEST, false);
@@ -995,6 +1237,11 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES,
                     DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_REAR_SCREEN_OFF_TIMEOUT,
+                    DEFAULT_REAR_SCREEN_OFF_TIMEOUT);
             long pending = localPrefs.getAll().keySet().stream()
                     .filter(key -> key.startsWith(PENDING_UI_PREFIX) || key.startsWith(PENDING_PANEL_PREFIX))
                     .count();
@@ -1041,6 +1288,34 @@ public final class PrefsBridge {
             remotePrefs.edit().putBoolean(key, def).apply();
             localPrefs.edit().putBoolean(key, def).apply();
         }
+    }
+
+    /**
+     * 人脸兼容的首次同步：新键从未写过时，把旧开关（fix_rear_screen_apply）的值抄过来。
+     *
+     * <p>不能直接用 {@link #syncBooleanKey}：它在两边都没有键时会写入默认值 false，
+     * 那样「未写过」这个信号就丢了，老用户升级后已开的人脸兼容会被静默关掉。
+     */
+    private static void syncFaceEnrollmentCompatKey(@NonNull SharedPreferences localPrefs,
+                                                    @NonNull SharedPreferences remotePrefs) {
+        String key = Constants.KEY_FACE_ENROLLMENT_COMPAT;
+        if (localPrefs.contains(PENDING_UI_PREFIX + key)) return;
+        if (remotePrefs.contains(key)) {
+            localPrefs.edit()
+                    .putBoolean(key, remotePrefs.getBoolean(key, DEFAULT_FACE_ENROLLMENT_COMPAT))
+                    .apply();
+            return;
+        }
+        boolean migrated = DEFAULT_FACE_ENROLLMENT_COMPAT;
+        if (remotePrefs.contains(Constants.KEY_FIX_REAR_SCREEN_APPLY)) {
+            migrated = remotePrefs.getBoolean(
+                    Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
+        } else if (localPrefs.contains(Constants.KEY_FIX_REAR_SCREEN_APPLY)) {
+            migrated = localPrefs.getBoolean(
+                    Constants.KEY_FIX_REAR_SCREEN_APPLY, DEFAULT_FIX_REAR_SCREEN_APPLY);
+        }
+        remotePrefs.edit().putBoolean(key, migrated).apply();
+        localPrefs.edit().putBoolean(key, migrated).apply();
     }
 
     private static void syncStringKey(@NonNull SharedPreferences localPrefs,

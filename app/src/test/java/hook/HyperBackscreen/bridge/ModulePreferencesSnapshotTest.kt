@@ -56,8 +56,45 @@ class ModulePreferencesSnapshotTest {
             Constants.KEY_DISABLE_DOUBLE_TAP_WAKE to true,
             Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES to "selected.package",
         ))
-        assertEquals(ModulePreferencesSnapshot(false, false, false, false, true, false, true, false, true,
-            "selected.package", false), ModulePreferencesSnapshot.read(cache.preferences))
+        // 人脸兼容已拆成独立键；新键未写过时沿用旧开关，这里 fix_rear_screen_apply=true 会带出 true。
+        val expected = ModulePreferencesSnapshot(false, false, false, false, true, false, true, false, true,
+            "selected.package", false).copy(faceEnrollmentCompat = true)
+        assertEquals(expected, ModulePreferencesSnapshot.read(cache.preferences))
+    }
+
+    @Test fun faceEnrollmentFallsBackToLegacySwitchUntilIndependentKeyIsWritten() {
+        val cache = Cache()
+        cache.values[Constants.KEY_FIX_REAR_SCREEN_APPLY] = true
+        assertTrue(ModulePreferencesSnapshot.read(cache.preferences).faceEnrollmentCompat)
+
+        // 一旦写了新键（哪怕是 false），就以新键为准，不再跟随旧开关。
+        cache.values[Constants.KEY_FACE_ENROLLMENT_COMPAT] = false
+        assertFalse(ModulePreferencesSnapshot.read(cache.preferences).faceEnrollmentCompat)
+
+        cache.values[Constants.KEY_FIX_REAR_SCREEN_APPLY] = false
+        cache.values[Constants.KEY_FACE_ENROLLMENT_COMPAT] = true
+        val snapshot = ModulePreferencesSnapshot.read(cache.preferences)
+        assertTrue(snapshot.faceEnrollmentCompat)
+        assertFalse(snapshot.fixRearScreenApply)
+    }
+
+    @Test fun keepRearScreenOnInGameIsObservedIndependently() {
+        val cache = Cache()
+        var snapshot = ModulePreferencesSnapshot.read(cache.preferences)
+        assertFalse(snapshot.keepRearScreenOnInGame)
+        val before = snapshot
+        ModulePreferencesSnapshot.observe(cache.preferences, Runnable {
+            snapshot = ModulePreferencesSnapshot.read(cache.preferences)
+        }).use {
+            cache.put(Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME, true)
+            assertTrue(snapshot.keepRearScreenOnInGame)
+            assertEquals(
+                before,
+                snapshot.copy(
+                    keepRearScreenOnInGame = PrefsBridge.DEFAULT_KEEP_REAR_SCREEN_ON_IN_GAME,
+                ),
+            )
+        }
     }
 
     @Test fun pending18ProToggleIsObservedAndPreservesIndependentSettings() {
