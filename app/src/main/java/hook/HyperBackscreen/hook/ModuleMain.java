@@ -65,6 +65,9 @@ import hook.HyperBackscreen.common.RearScreenWakeMatcher;
 import hook.HyperBackscreen.common.ThemeResourceAccess;
 import hook.HyperBackscreen.ui.SwipePanelHost;
 import hook.HyperBackscreen.ui.battery.BatteryRingHost;
+import hook.HyperBackscreen.hook.target.SubScreenTargets;
+import hook.HyperBackscreen.hook.target.TargetMembers;
+import hook.HyperBackscreen.hook.target.TargetResolver;
 import io.github.libxposed.api.XposedModule;
 
 public class ModuleMain extends XposedModule {
@@ -100,7 +103,6 @@ public class ModuleMain extends XposedModule {
     private volatile boolean systemHooksInstalled = false;
     private volatile boolean hooksInstalled = false;
     private volatile boolean themeStoreHooksInstalled = false;
-    private volatile boolean pickupHooksInstalled = false;
     private volatile boolean personalAssistantHooksInstalled = false;
     private final Set<Object> themeSettingsShortcutControllers =
             Collections.newSetFromMap(new WeakHashMap<>());
@@ -144,8 +146,7 @@ public class ModuleMain extends XposedModule {
     public void onPackageReady(@NonNull PackageReadyParam param) {
         String packageName = param.getPackageName();
         if (BuildConfig.DEBUG && (Constants.TARGET_PACKAGE.equals(packageName)
-                || Constants.THEME_STORE_PACKAGE.equals(packageName)
-                || Constants.VOICE_ASSIST_PACKAGE.equals(packageName))) {
+                || Constants.THEME_STORE_PACKAGE.equals(packageName))) {
             hookMethodIfPresent(findDeclaredMethod(Instrumentation.class, "callApplicationOnCreate", Application.class),
                     "debug host probe", chain -> {
                         Object result = chain.proceed();
@@ -158,15 +159,6 @@ public class ModuleMain extends XposedModule {
                         }
                         return result;
                     });
-        }
-
-        if (Constants.VOICE_ASSIST_PACKAGE.equals(packageName)) {
-            synchronized (this) {
-                if (!pickupHooksInstalled) {
-                    pickupHooksInstalled = PickupCodeHook.install(this, param.getClassLoader());
-                }
-            }
-            return;
         }
 
         if (Constants.PERSONAL_ASSISTANT_PACKAGE.equals(packageName)) {
@@ -196,6 +188,7 @@ public class ModuleMain extends XposedModule {
                 if (hooksInstalled) return;
                 try {
                     SwipePanelHost.setLoadedModuleApkPath(getModuleApplicationInfo().sourceDir);
+                    installTargetResolver(packageName);
                     installLongPressHooks(param.getClassLoader());
                     installSubscreenAppWidgetGateHooks(param.getClassLoader());
                     installAppCardLimitHook(param.getClassLoader());
@@ -513,6 +506,11 @@ public class ModuleMain extends XposedModule {
                 chain -> {
                     Object groupIdValue = chain.getArgs().get(0);
                     Object detailsValue = chain.getArgs().get(1);
+                    if (RearScreenScheduleHost.shouldBlockRearWake(this, groupIdValue)) {
+                        log(Log.DEBUG, Constants.LOG_TAG,
+                                "Rear screen wake skipped by schedule: " + detailsValue);
+                        return true;
+                    }
                     if (groupIdValue instanceof Integer
                             && RearScreenWakeMatcher.isRearDoubleTapWake(
                                     (Integer) groupIdValue,
@@ -543,6 +541,11 @@ public class ModuleMain extends XposedModule {
                 chain -> {
                     Object groupIdValue = chain.getArgs().get(0);
                     Object detailsValue = chain.getArgs().get(1);
+                    if (RearScreenScheduleHost.shouldBlockRearWake(this, groupIdValue)) {
+                        log(Log.DEBUG, Constants.LOG_TAG,
+                                "Rear screen wake skipped by schedule: " + detailsValue);
+                        return true;
+                    }
                     if (groupIdValue instanceof Integer
                             && RearScreenWakeMatcher.isRearDoubleTapWake(
                                     (Integer) groupIdValue,
@@ -584,6 +587,15 @@ public class ModuleMain extends XposedModule {
                     Constants.SYSTEM_POWER_MANAGER_SERVICE_IMPL_CLASS + "#"
                             + Constants.SYSTEM_ADJUST_SCREEN_OFF_TIMEOUT_METHOD,
                     chain -> {
+                        RearScreenScheduleHost.onPowerManagerService(chain.getThisObject());
+                        Integer groupIdValue = readPowerGroupId(chain.getArgs().get(0));
+                        boolean rearGroup = groupIdValue != null
+                                && groupIdValue == Constants.SYSTEM_SECONDARY_DISPLAY_GROUP_ID;
+                        // 定时关闭背屏优先于其它档位：窗口内把超时压到 1 秒，
+                        // 背屏按系统自己的熄灭流程关掉，之后靠 isScreenSkippedWakeup 挡住唤醒。
+                        if (rearGroup && PrefsBridge.isRearScreenScheduleActiveNow(this)) {
+                            return (long) Constants.REAR_SCREEN_SCHEDULE_OFF_TIMEOUT_MS;
+                        }
                         long overrideMillis = PrefsBridge.readRearScreenOffTimeoutMillis(this);
                         // 游戏（主屏高负载）期间如果开了「保持背屏亮」，强制按「一直亮屏」处理：
                         // 游戏模式会把 subscreen_display_time 改写成 30 秒，只抬设置值挡不住。
@@ -595,9 +607,7 @@ public class ModuleMain extends XposedModule {
                         if (overrideMillis <= 0L) {
                             return chain.proceed();
                         }
-                        Integer groupIdValue = readPowerGroupId(chain.getArgs().get(0));
-                        if (groupIdValue == null
-                                || groupIdValue != Constants.SYSTEM_SECONDARY_DISPLAY_GROUP_ID) {
+                        if (!rearGroup) {
                             return chain.proceed();
                         }
                         if (overrideMillis != lastRearScreenOffTimeoutAppliedMs) {
@@ -609,6 +619,8 @@ public class ModuleMain extends XposedModule {
                     }
             );
         }
+        // 时间窗边界没人会触发电源状态重算，交给这个低频线程；只在跨边界时动作。
+        RearScreenScheduleHost.install(this);
         // 游戏时保持背屏亮：DualScreenCoverManager.updateHighLoadSceneMode(int, boolean) 在主屏
         // 进入高负载（横屏大型游戏）时直接调用 goToSleepSecondaryDisplay(..., "mainScreen:highLoadGameMode", 0)
         // 关掉背屏，日志原文 "Secondary screen turned OFF, Main screen keep ON"。这条路径不走超时，
@@ -689,13 +701,52 @@ public class ModuleMain extends XposedModule {
         }
         return null;
     }
-    private void installSubscreenAppWidgetGateHooks(@NonNull ClassLoader classLoader) {
-        hookBooleanTrueIfPresent(
-                classLoader,
-                Constants.SUBSCREEN_DEVICE_CONFIG_CLASS,
-                Constants.SUBSCREEN_DEVICE_CONFIG_APP_WIDGET_METHOD);
+    /**
+     * 给背屏中心进程装上目标定位器：DexKit 桥、按宿主版本缓存、判据失配时回退到旧类名。
+     */
+    private void installTargetResolver(@NonNull String packageName) {
+        Context context = null;
+        String apkPath = null;
+        long versionCode = 0L;
+        try {
+            Class<?> activityThread = Class.forName("android.app.ActivityThread");
+            Object thread = activityThread.getDeclaredMethod("currentActivityThread").invoke(null);
+            Object systemContext = thread == null
+                    ? null
+                    : activityThread.getDeclaredMethod("getSystemContext").invoke(thread);
+            Object application = activityThread.getDeclaredMethod("currentApplication").invoke(null);
+            context = systemContext instanceof Context ? (Context) systemContext
+                    : application instanceof Context ? (Context) application : null;
+            if (context != null) {
+                android.content.pm.PackageInfo info = context.getPackageManager()
+                        .getPackageInfo(packageName, 0);
+                apkPath = info.applicationInfo.publicSourceDir != null
+                        ? info.applicationInfo.publicSourceDir
+                        : info.applicationInfo.sourceDir;
+                versionCode = info.getLongVersionCode();
+                // 系统 Context 属于 android 包，没有数据目录；缓存要写进宿主自己的 files。
+                context = context.createPackageContext(packageName, 0);
+            }
+        } catch (Throwable error) {
+            log(Log.WARN, Constants.LOG_TAG, "Target resolver init failed: " + error);
+        }
+        TargetResolver.install(context, apkPath, versionCode,
+                message -> log(Log.DEBUG, Constants.LOG_TAG, message));
+        log(Log.INFO, Constants.LOG_TAG,
+                "Target resolver: " + TargetResolver.state() + ", host version " + versionCode
+                        + ", apk " + apkPath);
+    }
 
-        Class<?> guideSettingsClass = findClass(Constants.SUBSCREEN_GUIDE_SETTINGS_CLASS, classLoader);
+    private void installSubscreenAppWidgetGateHooks(@NonNull ClassLoader classLoader) {
+        Class<?> deviceConfigClass = TargetResolver.resolveClass(classLoader, SubScreenTargets.DEVICE_CONFIG);
+        if (deviceConfigClass != null) {
+            hookBooleanTrueIfPresent(
+                    deviceConfigClass,
+                    Constants.SUBSCREEN_DEVICE_CONFIG_CLASS,
+                    Constants.SUBSCREEN_DEVICE_CONFIG_APP_WIDGET_METHOD);
+        }
+
+        Class<?> guideSettingsClass = TargetResolver.resolveClass(classLoader, SubScreenTargets.GUIDE_SETTINGS);
         if (guideSettingsClass != null) {
             hookMethodIfPresent(
                     guideSettingsClass,
@@ -728,8 +779,8 @@ public class ModuleMain extends XposedModule {
      * 新增项与保存都作用在同一副本上，落盘数据完整。
      */
     private void installAppCardLimitHook(@NonNull ClassLoader classLoader) {
-        Class<?> binderClass = findClass(Constants.SUBSCREEN_SERVICE_BINDER_CLASS, classLoader);
-        Class<?> listManagerClass = findClass(Constants.SUBSCREEN_APP_LIST_MANAGER_CLASS, classLoader);
+        Class<?> binderClass = TargetResolver.resolveClass(classLoader, SubScreenTargets.SERVICE_BINDER);
+        Class<?> listManagerClass = TargetResolver.resolveClass(classLoader, SubScreenTargets.APP_LIST_MANAGER);
         if (binderClass == null || listManagerClass == null) {
             log(Log.WARN, Constants.LOG_TAG, "App card limit targets missing: "
                     + Constants.SUBSCREEN_SERVICE_BINDER_CLASS + ", "
@@ -858,7 +909,7 @@ public class ModuleMain extends XposedModule {
     ) {
         Object listenersValue = getFieldValue(listManager, "a");
         if (!(listenersValue instanceof Collection<?> listeners) || listeners.isEmpty()) return;
-        Class<?> entryClass = findClass(Constants.SUBSCREEN_LAUNCHER_ENTRY_CLASS, classLoader);
+        Class<?> entryClass = TargetResolver.resolveClass(classLoader, SubScreenTargets.LAUNCHER_ENTRY);
         if (entryClass == null) return;
         ArrayList<Object> payload = new ArrayList<>(items);
         int notified = 0;
@@ -934,7 +985,7 @@ public class ModuleMain extends XposedModule {
      * 是同一套 UI，只是入口换成卡片。
      */
     private void installModuleEntryClickHook(@NonNull ClassLoader classLoader) {
-        Class<?> holderClass = findClass(Constants.SUBSCREEN_LAUNCHER_HOLDER_CLASS, classLoader);
+        Class<?> holderClass = TargetResolver.resolveClass(classLoader, SubScreenTargets.LAUNCHER_HOLDER);
         if (holderClass == null) {
             log(Log.WARN, Constants.LOG_TAG,
                     "Module entry click target missing: " + Constants.SUBSCREEN_LAUNCHER_HOLDER_CLASS);
@@ -1050,8 +1101,8 @@ public class ModuleMain extends XposedModule {
     }
 
     private void hookSubscreenLauncherPanelGesture(@NonNull ClassLoader classLoader) {
-        Class<?> gestureClass = findClass(
-                Constants.SUBSCREEN_LAUNCHER_PANEL_GESTURE_CLASS, classLoader);
+        Class<?> gestureClass = TargetResolver.resolveClass(
+                classLoader, SubScreenTargets.LAUNCHER_GESTURE);
         if (gestureClass == null) {
             log(Log.DEBUG, Constants.LOG_TAG,
                     "App widget gesture hook target missing: "
@@ -1470,12 +1521,15 @@ public class ModuleMain extends XposedModule {
             log(Log.WARN, Constants.LOG_TAG, "Theme hook target missing: " + Constants.THEME_REAR_VIEWMODEL_CLASS);
             return;
         }
-        Method applyCheckMethod = findFirstDeclaredMethod(
-                viewModelClass,
-                new Class[]{List.class},
-                Constants.THEME_APPLY_CHECK_METHOD_18PRO,
-                Constants.THEME_APPLY_CHECK_METHOD_OS4,
-                Constants.THEME_APPLY_CHECK_METHOD);
+        Method applyCheckMethod = TargetMembers.uniqueMethod(viewModelClass, boolean.class, List.class);
+        if (applyCheckMethod == null) {
+            applyCheckMethod = findFirstDeclaredMethod(
+                    viewModelClass,
+                    new Class[]{List.class},
+                    Constants.THEME_APPLY_CHECK_METHOD_18PRO,
+                    Constants.THEME_APPLY_CHECK_METHOD_OS4,
+                    Constants.THEME_APPLY_CHECK_METHOD);
+        }
         if (applyCheckMethod == null) {
             log(Log.WARN, Constants.LOG_TAG,
                     "Hook targets missing: " + Constants.THEME_REAR_VIEWMODEL_CLASS
@@ -2436,11 +2490,19 @@ public class ModuleMain extends XposedModule {
             log(Log.DEBUG, Constants.LOG_TAG, "AI entry hook target missing: " + className);
             return;
         }
+        hookBooleanTrueIfPresent(targetClass, className, methodName);
+    }
+
+    private void hookBooleanTrueIfPresent(
+            @NonNull Class<?> targetClass,
+            @NonNull String label,
+            @NonNull String methodName
+    ) {
         hookMethodIfPresent(
                 targetClass,
                 methodName,
                 new Class[]{},
-                className + "#" + methodName,
+                label + "#" + methodName,
                 chain -> PrefsBridge.shouldEnable18ProFeatures(this) ? true : chain.proceed()
         );
     }

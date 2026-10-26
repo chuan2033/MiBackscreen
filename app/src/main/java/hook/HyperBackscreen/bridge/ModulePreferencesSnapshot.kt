@@ -11,7 +11,6 @@ internal data class ModulePreferencesSnapshot(
     val enableAppCard: Boolean,
     val removeAppCardLimit: Boolean,
     val fixRearScreenApply: Boolean,
-    val enablePickup: Boolean,
     val disableRearScreenCover: Boolean,
     val themeSettingsShortcut: Boolean,
     val disableDoubleTapWake: Boolean,
@@ -35,6 +34,10 @@ internal data class ModulePreferencesSnapshot(
     val autoWallpaperIntervalMinutes: String = PrefsBridge.DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES,
     val rearScreenOffTimeout: String = PrefsBridge.DEFAULT_REAR_SCREEN_OFF_TIMEOUT,
     val keepRearScreenOnInGame: Boolean = PrefsBridge.DEFAULT_KEEP_REAR_SCREEN_ON_IN_GAME,
+    val rearScreenScheduleEnabled: Boolean = PrefsBridge.DEFAULT_REAR_SCREEN_SCHEDULE_ENABLED,
+    val rearScreenScheduleStart: String = PrefsBridge.DEFAULT_REAR_SCREEN_SCHEDULE_START,
+    val rearScreenScheduleEnd: String = PrefsBridge.DEFAULT_REAR_SCREEN_SCHEDULE_END,
+    val rearScreenScheduleMode: String = PrefsBridge.DEFAULT_REAR_SCREEN_SCHEDULE_MODE,
     val faceEnrollmentCompat: Boolean = PrefsBridge.DEFAULT_FACE_ENROLLMENT_COMPAT,
 ) {
     companion object {
@@ -46,7 +49,6 @@ internal data class ModulePreferencesSnapshot(
             Constants.KEY_ENABLE_BATTERY_RING,
             Constants.KEY_REMOVE_APP_CARD_LIMIT,
             Constants.KEY_FIX_REAR_SCREEN_APPLY,
-            Constants.KEY_ENABLE_PICKUP,
             Constants.KEY_DISABLE_REAR_SCREEN_COVER,
             Constants.KEY_THEME_SETTINGS_SHORTCUT,
             Constants.KEY_DISABLE_DOUBLE_TAP_WAKE,
@@ -68,6 +70,10 @@ internal data class ModulePreferencesSnapshot(
             Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES,
             Constants.KEY_REAR_SCREEN_OFF_TIMEOUT,
             Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME,
+            Constants.KEY_REAR_SCREEN_SCHEDULE_ENABLED,
+            Constants.KEY_REAR_SCREEN_SCHEDULE_START,
+            Constants.KEY_REAR_SCREEN_SCHEDULE_END,
+            Constants.KEY_REAR_SCREEN_SCHEDULE_MODE,
             Constants.KEY_FACE_ENROLLMENT_COMPAT,
         )
 
@@ -87,7 +93,6 @@ internal data class ModulePreferencesSnapshot(
                 enableBatteryRing = boolean(Constants.KEY_ENABLE_BATTERY_RING, PrefsBridge.DEFAULT_ENABLE_BATTERY_RING),
                 removeAppCardLimit = boolean(Constants.KEY_REMOVE_APP_CARD_LIMIT, PrefsBridge.DEFAULT_REMOVE_APP_CARD_LIMIT),
                 fixRearScreenApply = boolean(Constants.KEY_FIX_REAR_SCREEN_APPLY, PrefsBridge.DEFAULT_FIX_REAR_SCREEN_APPLY),
-                enablePickup = boolean(Constants.KEY_ENABLE_PICKUP, PrefsBridge.DEFAULT_ENABLE_PICKUP),
                 disableRearScreenCover = boolean(Constants.KEY_DISABLE_REAR_SCREEN_COVER, PrefsBridge.DEFAULT_DISABLE_REAR_SCREEN_COVER),
                 themeSettingsShortcut = boolean(Constants.KEY_THEME_SETTINGS_SHORTCUT, PrefsBridge.DEFAULT_THEME_SETTINGS_SHORTCUT),
                 disableDoubleTapWake = boolean(Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, PrefsBridge.DEFAULT_DISABLE_DOUBLE_TAP_WAKE),
@@ -129,6 +134,16 @@ internal data class ModulePreferencesSnapshot(
                     Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME,
                     PrefsBridge.DEFAULT_KEEP_REAR_SCREEN_ON_IN_GAME,
                 ),
+                rearScreenScheduleEnabled = boolean(
+                    Constants.KEY_REAR_SCREEN_SCHEDULE_ENABLED,
+                    PrefsBridge.DEFAULT_REAR_SCREEN_SCHEDULE_ENABLED,
+                ),
+                rearScreenScheduleStart = value(Constants.KEY_REAR_SCREEN_SCHEDULE_START) as? String
+                    ?: PrefsBridge.DEFAULT_REAR_SCREEN_SCHEDULE_START,
+                rearScreenScheduleEnd = value(Constants.KEY_REAR_SCREEN_SCHEDULE_END) as? String
+                    ?: PrefsBridge.DEFAULT_REAR_SCREEN_SCHEDULE_END,
+                rearScreenScheduleMode = value(Constants.KEY_REAR_SCREEN_SCHEDULE_MODE) as? String
+                    ?: PrefsBridge.DEFAULT_REAR_SCREEN_SCHEDULE_MODE,
                 // 迁移：新键从未写过时沿用「修复背屏壁纸应用失败」，
                 // 与 PrefsBridge.readFaceEnrollmentCompatForUi 的回退保持一致。
                 faceEnrollmentCompat = boolean(

@@ -1,88 +1,84 @@
 <p align="center">
   <img src="icon.png" alt="MiBackscreen" width="140">
 </p>
+<h1  align="center">MiBackscreen</h1>
 
-# MiBackscreen
+<p  align="center">
+  <a href="./README_EN.md">English</a> · <a href="https://github.com/chuan2033/MiBackscreen">项目主页</a>
+</p>
 
-[English](README_EN.md) · [项目主页](https://github.com/chuan2033/MiBackscreen) · [下载](https://github.com/chuan2033/MiBackscreen/releases)
+<p  align="center">
+ 基于 Modern Xposed 的小米背屏模块。当前分支 `feat/18pro-max-rear-screen` 包含新版背屏中心、主题商店和负一屏应用卡适配。分支名及请求中使用的机型标识不代表实际设备支持范围。
+</p>
 
-基于 Modern Xposed 的小米背屏模块。当前分支 `feat/18pro-max-rear-screen` 包含新版背屏中心、主题商店和负一屏应用卡适配。分支名及请求中使用的机型标识不代表实际设备支持范围。
+<p  align="center">
+  <a href="https://github.com/chuan2033/MiBackscreen/releases"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/chuan2033/MiBackscreen?display_name=release"></a>
+ <a href="https://github.com/chuan2033/MiBackscreen/stargazers"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/chuan2033/MiBackscreen?style=flat"></a>
+ <a href="https://github.com/chuan2033/MiBackscreen/issues"><img alt="GitHub Issues" src="https://img.shields.io/github/issues/chuan2033/MiBackscreen"></a>
+  <a href="https://developer.android.com/"><img src="https://img.shields.io/badge/Android-16%2B-3DDC84?logo=android&logoColor=white" alt="Android"></a>
+ <a href="https://github.com/LSPosed/LSPosed"><img src="https://img.shields.io/badge/Framework-LSPosed%20%2F%20Xposed-5C6BC0" alt="Framework"></a>
+</p>
 
-## 功能与默认值
+## 功能
 
-| 功能 | 默认 | 使用说明 |
+| 功能 | 默认 | 说明 |
 | --- | --- | --- |
-| 背屏电量环 | 关 | 小米 17 Pro Max 背屏桌面沿摄像头轮廓显示电量，每 1% 更新；充电绿色、未充电低于 20% 红色，其余白色 |
-| 18 Pro 功能 | 开 | 统一控制 AI 背屏入口、18 Pro 机型及下载请求适配、背屏应用卡解锁、负一屏应用卡商店适配和 AI 应用卡索引同步 |
-| 禁用长按切换壁纸 | 开 | 背屏长按不进入编辑 |
-| 定时切换背屏壁纸 | 关 | 可选每 1、5 或 15 分钟按列表顺序循环；AOD 可见时计时，智能显示隐藏背屏时暂停，重新显示且到期后切换一次 |
-| 移除壁纸数量限制 | 开 | 解除主题商店的 15 张限制 |
-| 背屏应用卡 / 移除应用卡数量限制 | 开 / 开 | 官方上滑列表中显示 MiBackscreen 卡片；点击进入快捷面板 |
-| 修复背屏壁纸应用 | 关 | 修复资源访问及应用状态同步；确认切换与取消编辑保持不同语义 |
-| 取件码增强 | 开 | 小爱取件卡片进入分组选择页，选择显示在岛上的码；新批次不混入旧批次 |
-| 禁用背屏保护提示 | 关 | 拦截要求先熄灭正屏的提示 |
-| 按应用禁用双击唤醒 | 关，名单为空 | 功能页进入选择应用；关掉开关保留名单，仅匹配当前主屏前台相关应用 |
-| 主题商店模块入口 | 开 | 妙享背屏设置页显示快捷入口 |
+| 背屏电量环 | 关 | 沿摄像头轮廓显示电量，每 1% 更新；充电绿、低电红、其余白 |
+| 18 Pro 功能 | 开 | AI 背屏入口、机型与下载适配、应用卡解锁、负一屏商店适配、AI 索引同步 |
+| 禁用长按切换壁纸 | 开 | 长按不进编辑 |
+| 定时切换背屏壁纸 | 关 | 每 1 / 5 / 15 分钟按列表循环；AOD 可见时计时 |
+| 移除壁纸数量限制 | 开 | 解除主题商店 15 张限制 |
+| 背屏应用卡 / 移除数量限制 | 开 / 开 | 上滑列表显示 MiBackscreen 卡片，点击开快捷面板 |
+| 修复背屏壁纸应用 | 关 | 修复资源访问与应用状态同步 |
+| 禁用背屏保护提示 | 关 | 拦截「先熄灭正屏」的提示 |
+| 按应用禁用双击唤醒 | 关，名单为空 | 功能页选应用；关开关保留名单 |
+| 背屏息屏时间 | 跟随系统 | 一直亮屏或 1 / 3 / 5 / 10 / 30 分钟后息屏，只作用于背屏 |
+| 游戏时保持背屏常亮 | 关 | 横屏游戏时系统会关背屏，开启后保持常亮，增加耗电发热 |
+| 定时关闭背屏 | 关 | 每天时间窗内黑屏或息屏，不被通知、双击点亮，到点恢复 |
+| 配置备份 / 恢复 | — | 导出全部设置到存储根目录 `MiBackscreen-config.json`，可读回 |
+| 人脸录入兼容 | 关 | AI 陪伴要求录入人脸时打开 |
+| 主题商店模块入口 | 开 | 妙享背屏设置页显示入口 |
 
-外观支持系统/浅色/深色、动态取色、普通或悬浮底栏及液态玻璃。悬浮底栏、液态玻璃默认关闭，底栏模糊及启动检查更新默认开启。
+外观支持系统/浅色/深色、动态取色、普通/悬浮底栏、液态玻璃（后两者默认关）。功能页角标显示已开启数量（1–12），可在设置里隐藏。
 
-“功能”页提供“18 Pro 功能”总开关。切换会请求停止背屏、主题商店和智能助理，重新打开后刷新相关能力。关闭后，各宿主按原有逻辑判断入口和能力；已下载、已应用的内容与附加模块资源保留，取件码、长按和数量限制等独立设置继续按各自开关生效。撤下附加资源需在 KSU/Magisk 中停用附加模块并重启。
+电量环按 popsicle 的 976 × 596 校准，颜色优先读 SystemUI 电池资源；离开背屏桌面释放绘制层。18 Pro 总开关切换会请求重启背屏、主题商店和智能助理。
 
-电量环目前按 popsicle 的 976 × 596 背屏校准，起点为摄像头底部中心，依次经过右侧、顶部、左侧，满电闭合。颜色优先读取 SystemUI 电池资源，电量进度线叠加在原有壁纸上。切换会刷新背屏中心；离开背屏桌面时释放绘制层，背屏熄灭时停止过渡动画。
+## 安装
 
-底部“功能”标签默认显示已开启功能数量（1–10），全部关闭时不显示角标。每个功能开关计 1，包括背屏电量环、定时切换壁纸、18 Pro 功能和应用选择页中的双击唤醒总开关，不按应用名单数量累加。在“设置 → 外观 → 显示功能数量”可隐藏角标，三种底栏均支持。
+- Android 16+（API 36），LSPosed 或兼容 Modern Xposed 的框架。
+- Hook 依赖宿主类与方法签名，系统或宿主更新后需重新核验。实测机型：小米 17 Pro Max（popsicle / 2509FPN0BC），HyperOS 4。
 
-快捷面板从官方应用卡入口打开，底部上滑关闭。面板支持长按、壁纸上限、应用卡上限三个开关；写入失败会回滚。模块 App 离线修改保留待同步值，连接 LSPosed 服务后补交；待同步不表示宿主已经生效。
-
-## 环境与安装
-
-- 最低 Android API 36；使用支持 Modern Xposed 的 LSPosed / 兼容框架。模块元数据声明最低 API 101、目标 API 102，代码依赖 API 102。
-- 仓库历史实测设备为小米 17 Pro Max（popsicle / 2509FPN0BC），Android 17 / API 37、HyperOS 4，副屏 976 × 596。实测结果不代表跨设备或跨固件完整兼容。
-- Hook 依赖宿主类和方法签名。系统、背屏中心、主题商店或小爱更新后，需要重新核验。
-- 主题商店含 AI 背屏资源与人脸录入数量兼容逻辑；人脸读取失败按未知处理。萌宠实际应用全链路仍待真机验证。
-
-安装 APK，在框架中启用模块并勾选以下五个作用域，然后重启手机使所有 Hook 加载：
+启用模块并勾选 4 个作用域，重启手机：
 
 | 作用域 | 用途 |
 | --- | --- |
-| `system` | 背屏保护提示、按应用拦截双击唤醒 |
-| `com.xiaomi.subscreencenter` | 长按、定时切换壁纸、应用卡及快捷面板、确认壁纸选择同步 |
-| `com.android.thememanager` | 壁纸数量/应用、设置入口、AI 背屏与人脸数量兼容 |
-| `com.miui.voiceassist` | 取件码识别结果展示、通知点击及刷新 |
-| `com.miui.personalassistant` | 负一屏背屏应用卡商店请求适配 |
+| `system` | 背屏保护提示、双击唤醒拦截、息屏时间、游戏保持亮、定时关闭 |
+| `com.xiaomi.subscreencenter` | 长按、壁纸轮换、应用卡与快捷面板 |
+| `com.android.thememanager` | 壁纸数量/应用、设置入口、AI 与人脸兼容 |
+| `com.miui.personalassistant` | 负一屏应用卡商店适配 |
 
-主页“已激活”表示模块服务已连接，不证明所有 Hook 成功。配置由 Hook 下次读取生效；壁纸/应用卡等部分开关还会请求停止相关宿主，需 root 并重新打开对应应用。APK 更新后需重新加载相关宿主进程，系统 Hook 更新需重启手机。“重启作用域”包含系统、小爱、背屏、主题商店和智能助理；勾选“系统”并点击“确定”后，模块通过 root 执行整机重启；同时选择应用时只发送一次重启命令。仅选择应用则停止对应应用，普通设置开关的自动刷新不会重启手机。
+「重启作用域」含系统、背屏、主题商店和智能助理；勾选系统会整机重启。主页「已激活」只表示服务已连接，不证明 Hook 成功。
 
-若提示 `vendor.display.builtin_presentation=0`，检查隐藏背屏/防屏幕共享类模块，它们可能影响背屏截图或自定义壁纸。
+若提示 `vendor.display.builtin_presentation=0`，检查隐藏背屏/防屏幕共享类模块。
 
 ## 反馈
 
-复现后立即打开“主页 → 日志”，在重新应用壁纸或重启宿主之前生成反馈 ZIP。关闭进度卡片不会取消任务；完成后手动点击分享，失败可重试，不会自动发送。
-
-当前反馈格式为 schema 7：包括设备/宿主版本、配置、Hook 状态、取件选择、过滤日志、系统诊断、资源路径与文件元数据、editConfig 文本、主题商店 `rearScreen.db` 及 WAL/SHM 副本。另有 AI 应用卡双索引及 ID 对照、本地/远程/待同步配置快照、外观环境，以及面板打开退出、配置同步、取件码保存和刷新请求的持久日志；AI 数据库只报告结构，不复制内容。不复制用户壁纸图片/视频字节。包内可能包含取件码、应用名单及其他私人信息，分享前请检查。
-
-完整采集需要 root 和支持 `su -M` 的实现；无权限、超时或缺失文件会记入相应报告，ZIP 生成成功不表示每项采集成功。通过 [Issues](https://github.com/chuan2033/MiBackscreen/issues) 提供复现步骤、预期/实际行为、版本和必要截图，按需附经检查的反馈包。
+复现后立即在「主页 → 日志」生成反馈 ZIP（需 root），经检查后通过 [Issues](https://github.com/chuan2033/MiBackscreen/issues) 附上复现步骤与版本。包内含配置、日志与设备信息，分享前先看一遍。
 
 ## 构建
 
-需要 JDK 21、Android SDK 37、Build Tools 37.0.0；Wrapper 固定 Gradle 9.6.0。版本以 [app/build.gradle](app/build.gradle) 为准。设置本机 `JAVA_HOME` 和忽略的 `local.properties` 中的 `sdk.dir`，执行：
+JDK 21、Android SDK 37、Build Tools 37.0.0、Gradle 9.6.0（Wrapper）。配置 `JAVA_HOME` 与 `local.properties` 的 `sdk.dir`：
 
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --offline --console=plain
 .\gradlew.bat :app:assembleRelease --offline --console=plain
 ```
 
-没有依赖或 Wrapper 缓存时去掉 `--offline` 并联网准备依赖。Debug 输出为 `app/build/outputs/apk/debug/app-debug.apk`。
+无依赖缓存时去掉 `--offline`。Release 签名从 `local.properties` 或环境变量读 `RELEASE_STORE_FILE` / `RELEASE_STORE_PASSWORD` / `RELEASE_KEY_PASSWORD`（可选 `RELEASE_KEY_ALIAS`，默认 `hyperbackscreen`），未配置则输出未签名包。覆盖安装须同证书。
 
-Release 开启 R8 和资源收缩；配置签名后输出 `app/build/outputs/apk/release/app-release.apk`，未配置则为 `app-release-unsigned.apk`。签名从 `local.properties` 或同名环境变量读取 `RELEASE_STORE_FILE`、`RELEASE_STORE_PASSWORD`、`RELEASE_KEY_PASSWORD`，可选 `RELEASE_KEY_ALIAS`（默认 `hyperbackscreen`）。相对密钥路径基于 `app/`；未指定文件时检查 `app/release-key.jks`。显式指定密钥文件但配置不完整时构建报错。签名可用时 Debug 也使用该密钥，但保持不混淆；否则使用默认 Debug 签名。覆盖安装须与已安装版本证书一致。
+## 许可证
 
-编译通过后仍需在目标设备和宿主版本上验证 Hook 行为。
-
-## 许可证与致谢
-
-[GPL-3.0](LICENSE)。模块修改系统及宿主行为，不同固件可能存在兼容问题，请按已验证范围使用。
-
-下表列主要技术来源；App“开源许可”按运行依赖及本地移植来源归组列出，包括 Kotlin / kotlinx、JetBrains Compose、Material Color Utilities、Poko、注解库、Guava 和 libxposed 服务接口。清单维护于 [LicensePage.kt](app/src/main/java/hook/HyperBackscreen/ui/about/LicensePage.kt)。
+[GPL-3.0](LICENSE)。不同固件可能存在兼容问题，请按已验证范围使用。
 
 | 项目 | 许可证 | 用途 |
 | --- | --- | --- |

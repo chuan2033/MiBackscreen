@@ -44,6 +44,10 @@ android {
         targetSdk 36
         versionCode 14
         versionName "1.2.4"
+        // DexKit 只在 arm64 真机上跑，x86_64 只服务模拟器，整包体积省一半。
+        ndk {
+            abiFilters "arm64-v8a"
+        }
     }
 
     buildTypes {
@@ -74,6 +78,13 @@ android {
         compose true
     }
 
+    testOptions {
+        unitTests.all {
+            // 宿主 dex 分析工具用，正常运行测试时为空，相关用例自动跳过。
+            systemProperty 'host.apk.dir', System.getProperty('host.apk.dir') ?: System.getenv('HOST_APK_DIR') ?: ''
+        }
+    }
+
     packaging {
         resources {
             merges += ["META-INF/xposed/*"]
@@ -81,8 +92,7 @@ android {
     }
 }
 
-dependencies {
-    implementation 'androidx.activity:activity-compose:1.13.0'
+dependencies {    implementation 'androidx.activity:activity-compose:1.13.0'
     implementation 'top.yukonga.miuix.kmp:miuix-ui-android:0.9.4'
     implementation 'top.yukonga.miuix.kmp:miuix-preference-android:0.9.4'
     implementation 'top.yukonga.miuix.kmp:miuix-icons-android:0.9.4'
@@ -92,5 +102,8 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0'
     compileOnly 'io.github.libxposed:api:102.0.0'
     implementation files('libs/interface-102.0.0.jar', 'libs/service-102.0.0.jar')
+    // 按结构定位宿主混淆成员，替代硬编码混淆名。
+    implementation 'org.luckypray:dexkit:2.2.0'
+    testImplementation 'org.luckypray:dexkit:2.2.0'
     testImplementation 'junit:junit:4.13.2'
 }

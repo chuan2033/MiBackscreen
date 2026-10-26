@@ -98,7 +98,6 @@ internal object FeedbackLogExporter {
             val systemDiagnostics = collectSystemDiagnostics().also { onProgress(7, TOTAL_STEPS) }
             val hostLog = collectSubScreenCenterLog().also { onProgress(8, TOTAL_STEPS) }
             val databaseSnapshot = collectDatabaseSnapshot(databaseDirectory).also { onProgress(9, TOTAL_STEPS) }
-            val pickupState = buildPickupState(appContext, lsposedLog, logcat)
             val aiRuntime = collectAiIndex("rearScreenAiApp_Theme/runtimeAiApp.json").also { onProgress(10, TOTAL_STEPS) }
             val aiAppInfo = collectAiIndex("subscreencenter/config/appInfo.json").also { onProgress(11, TOTAL_STEPS) }
 
@@ -113,7 +112,6 @@ internal object FeedbackLogExporter {
                     zip.addText("ai-app-index/appInfo.txt", aiAppInfo)
                     zip.addText("ai-app-index/comparison.txt", AiAppIndexReport.build(aiRuntime, aiAppInfo))
                     zip.addText("hook-status.txt", buildHookStatus(lsposedLog))
-                    zip.addText("pickup-state.txt", pickupState)
                     zip.addText("system-diagnostics.txt", systemDiagnostics)
                     zip.addText("rear-screen-state.txt", rearScreenState)
                     zip.addText("rear-screen-files.txt", rearScreenFiles)
@@ -159,7 +157,7 @@ internal object FeedbackLogExporter {
         appendLine("feedback_schema=$FEEDBACK_SCHEMA_VERSION")
         appendLine("capture_time=${SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US).format(Date())}")
         appendLine("capture_hint=Generate this archive immediately after reproducing the issue, before reapplying the wallpaper or restarting related apps.")
-        appendLine("privacy_hint=This archive contains local/remote/pending preferences, app lists, pickup selections, appearance settings, AI app indexes, resource paths, editConfig text, file metadata, diagnostic events, filtered system logs, and the Theme Manager rear-screen database. User wallpaper image/video bytes are not copied.")
+        appendLine("privacy_hint=This archive contains local/remote/pending preferences, app lists, appearance settings, AI app indexes, resource paths, editConfig text, file metadata, diagnostic events, filtered system logs, and the Theme Manager rear-screen database. User wallpaper image/video bytes are not copied.")
         appendLine("missing_data_hint=Each root-backed report records collection errors when root access is unavailable.")
     }
 
@@ -242,7 +240,6 @@ internal object FeedbackLogExporter {
         appendPackageVersion(context, Constants.TARGET_PACKAGE)
         appendPackageVersion(context, Constants.THEME_STORE_PACKAGE)
         appendPackageVersion(context, Constants.PERSONAL_ASSISTANT_PACKAGE)
-        appendPackageVersion(context, Constants.VOICE_ASSIST_PACKAGE)
     }
 
     private fun StringBuilder.appendPackageVersion(context: Context, packageName: String) {
@@ -269,14 +266,12 @@ internal object FeedbackLogExporter {
         appendLine("enable_battery_ring=${PrefsBridge.readEnableBatteryRingForUi(context)}")
         appendLine("battery_percent_position=${PrefsBridge.readBatteryPercentPositionForUi(context)}")
         appendLine("remove_app_card_limit=${PrefsBridge.readRemoveAppCardLimitForUi(context)}")
-        appendLine("enable_pickup=${PrefsBridge.readEnablePickupForUi(context)}")
         appendLine("fix_rear_screen_apply=${PrefsBridge.readFixRearScreenApplyForUi(context)}")
         appendLine("face_enrollment_compat=${PrefsBridge.readFaceEnrollmentCompatForUi(context)}")
         appendLine("disable_rear_screen_cover=${PrefsBridge.readDisableRearScreenCoverForUi(context)}")
         appendLine("disable_double_tap_wake=${PrefsBridge.readDisableDoubleTapWakeForUi(context)}")
         appendLine("double_tap_wake_disabled_packages=${PrefsBridge.readDoubleTapWakeDisabledPackagesForUi(context)}")
         appendLine("theme_settings_shortcut=${PrefsBridge.readThemeSettingsShortcutForUi(context)}")
-        appendLine("pickup_island_selection=${PrefsBridge.readPickupIslandSelectionForUi(context)}")
         appendLine("floating_nav_bar=${PrefsBridge.readFloatingNavBar(context)}")
         appendLine("liquid_glass=${PrefsBridge.readLiquidGlass(context)}")
         appendLine("bottom_bar_blur=${PrefsBridge.readBottomBarBlur(context)}")
@@ -339,43 +334,6 @@ internal object FeedbackLogExporter {
             "No hook status lines found. See mibackscreen-lsposed.log for collection details.\n"
         } else {
             statusLines.joinToString(separator = "\n", postfix = "\n")
-        }
-    }
-
-    /**
-     * 取件码功能的现场快照：当前选择记录 + 小爱作用域里的 Hook 标记 + 最近的取件码日志。
-     * 远程排查「开关不生效 / 背屏卡片不更新」时，看这一个文件就能判断卡在哪一步。
-     */
-    private fun buildPickupState(context: Context, lsposedLog: String, logcat: String): String {
-        val selection = runCatching {
-            PrefsBridge.readPickupIslandSelectionForUi(context)
-        }.getOrDefault("")
-        val markers = listOf(
-            "Pickup card hook installed",
-            "Pickup card hook targets unavailable",
-            "Pickup confirmation hook installed",
-            "Pickup notification refresh hook installed",
-            "Unable to install pickup card hook",
-        )
-        val pickupLines = logcat.lineSequence().filter { it.contains("Pickup") }.toList().takeLast(40)
-        return buildString {
-            appendLine("# 取件码（PickupCodes）状态")
-            appendLine("pickup_island_selection=${selection.ifEmpty { "(empty)" }}")
-            appendLine("pickup_island_selection_length=${selection.length}")
-            appendLine()
-            appendLine("## 小爱作用域内的 Hook 标记（来自 mibackscreen-lsposed.log）")
-            markers.forEach { marker ->
-                val hits = lsposedLog.lineSequence().filter { it.contains(marker) }.toList()
-                appendLine("$marker=${hits.size}")
-                hits.takeLast(2).forEach { appendLine("  $it") }
-            }
-            appendLine()
-            appendLine("## 最近的取件码日志（来自 mibackscreen-logcat.log，最多 40 行）")
-            if (pickupLines.isEmpty()) {
-                appendLine("(none)")
-            } else {
-                pickupLines.forEach { appendLine(it) }
-            }
         }
     }
 
@@ -501,7 +459,7 @@ internal object FeedbackLogExporter {
             "if [ -d \"\$res\" ]; then echo \"PRESENT: \$res\"; else echo \"MISSING: \$res\"; fi; " +
             "echo; echo '=== rear resource mounts ==='; mount 2>/dev/null | grep -E 'media/rearscreen|precust_theme/theme/.data' || echo 'No MiBackscreen resource mounts'; " +
             "echo; echo '=== related packages ==='; " +
-            "for pkg in ${Constants.TARGET_PACKAGE} ${Constants.THEME_STORE_PACKAGE} ${Constants.PERSONAL_ASSISTANT_PACKAGE} ${Constants.VOICE_ASSIST_PACKAGE} ${Constants.MODULE_PACKAGE}; do " +
+            "for pkg in ${Constants.TARGET_PACKAGE} ${Constants.THEME_STORE_PACKAGE} ${Constants.PERSONAL_ASSISTANT_PACKAGE} ${Constants.MODULE_PACKAGE}; do " +
             "echo; echo \"--- package: \$pkg ---\"; " +
             "dumpsys package \"\$pkg\" 2>/dev/null | grep -Eai 'Package \\[|versionName|versionCode|codePath|resourcePath|dataDir|userId=|pkgFlags|privateFlags|enabled=|stopped=|firstInstallTime|lastUpdateTime|installerPackageName|targetSdk|uses-permission|granted=true' | head -n 220 || echo 'No package dump'; " +
             "done; " +

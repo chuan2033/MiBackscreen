@@ -36,7 +36,21 @@ class ModulePreferencesSnapshotTest {
     @Test fun emptyCachePreservesAllExistingDefaults() {
         val cache = Cache()
         val snapshot = ModulePreferencesSnapshot.read(cache.preferences)
-        assertEquals(ModulePreferencesSnapshot(true, true, true, true, false, true, false, true, false, "", true), snapshot)
+        assertEquals(
+            ModulePreferencesSnapshot(
+                disableLongPress = PrefsBridge.DEFAULT_DISABLE_LONG_PRESS_EDIT,
+                removeWallpaperLimit = PrefsBridge.DEFAULT_REMOVE_WALLPAPER_LIMIT,
+                enableAppCard = PrefsBridge.DEFAULT_ENABLE_APP_CARD,
+                removeAppCardLimit = PrefsBridge.DEFAULT_REMOVE_APP_CARD_LIMIT,
+                fixRearScreenApply = PrefsBridge.DEFAULT_FIX_REAR_SCREEN_APPLY,
+                disableRearScreenCover = PrefsBridge.DEFAULT_DISABLE_REAR_SCREEN_COVER,
+                themeSettingsShortcut = PrefsBridge.DEFAULT_THEME_SETTINGS_SHORTCUT,
+                disableDoubleTapWake = PrefsBridge.DEFAULT_DISABLE_DOUBLE_TAP_WAKE,
+                doubleTapWakeDisabledPackages = PrefsBridge.DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,
+                enable18ProFeatures = PrefsBridge.DEFAULT_ENABLE_18_PRO_FEATURES,
+            ),
+            snapshot
+        )
         assertEquals(1, cache.reads)
         assertTrue(cache.values.isEmpty())
     }
@@ -50,15 +64,24 @@ class ModulePreferencesSnapshotTest {
             Constants.KEY_ENABLE_18_PRO_FEATURES to false,
             Constants.KEY_REMOVE_APP_CARD_LIMIT to false,
             Constants.KEY_FIX_REAR_SCREEN_APPLY to true,
-            Constants.KEY_ENABLE_PICKUP to false,
             Constants.KEY_DISABLE_REAR_SCREEN_COVER to true,
             Constants.KEY_THEME_SETTINGS_SHORTCUT to false,
             Constants.KEY_DISABLE_DOUBLE_TAP_WAKE to true,
             Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES to "selected.package",
         ))
         // 人脸兼容已拆成独立键；新键未写过时沿用旧开关，这里 fix_rear_screen_apply=true 会带出 true。
-        val expected = ModulePreferencesSnapshot(false, false, false, false, true, false, true, false, true,
-            "selected.package", false).copy(faceEnrollmentCompat = true)
+        val expected = ModulePreferencesSnapshot(
+            disableLongPress = false,
+            removeWallpaperLimit = false,
+            enableAppCard = false,
+            removeAppCardLimit = false,
+            fixRearScreenApply = true,
+            disableRearScreenCover = true,
+            themeSettingsShortcut = false,
+            disableDoubleTapWake = true,
+            doubleTapWakeDisabledPackages = "selected.package",
+            enable18ProFeatures = false,
+        ).copy(faceEnrollmentCompat = true)
         assertEquals(expected, ModulePreferencesSnapshot.read(cache.preferences))
     }
 
@@ -183,33 +206,21 @@ class ModulePreferencesSnapshotTest {
         }
     }
 
-    @Test fun lateServiceReconciliationRefreshesPickupToggle() {
-        val cache = Cache()
-        var snapshot = ModulePreferencesSnapshot.read(cache.preferences)
-        assertTrue(snapshot.enablePickup)
-        ModulePreferencesSnapshot.observe(cache.preferences, Runnable {
-            snapshot = ModulePreferencesSnapshot.read(cache.preferences)
-        }).use {
-            cache.put(Constants.KEY_ENABLE_PICKUP, false)
-            assertFalse(snapshot.enablePickup)
-        }
-    }
-
     @Test fun pendingFalseAndEmptyListOverrideStaleCacheUntilCleared() {
         val cache = Cache()
-        val pendingToggle = PrefsBridge.PENDING_UI_PREFIX + Constants.KEY_ENABLE_PICKUP
+        val pendingToggle = PrefsBridge.PENDING_UI_PREFIX + Constants.KEY_ENABLE_APP_CARD
         val pendingList = PrefsBridge.PENDING_UI_PREFIX + Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES
-        cache.values[Constants.KEY_ENABLE_PICKUP] = true
+        cache.values[Constants.KEY_ENABLE_APP_CARD] = true
         cache.values[Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES] = "old.package"
         cache.values[pendingToggle] = false
         cache.values[pendingList] = ""
         val snapshot = ModulePreferencesSnapshot.read(cache.preferences)
-        assertFalse(snapshot.enablePickup)
+        assertFalse(snapshot.enableAppCard)
         assertEquals("", snapshot.doubleTapWakeDisabledPackages)
         cache.values.remove(pendingToggle)
         cache.values.remove(pendingList)
         val synced = ModulePreferencesSnapshot.read(cache.preferences)
-        assertTrue(synced.enablePickup)
+        assertTrue(synced.enableAppCard)
         assertEquals("old.package", synced.doubleTapWakeDisabledPackages)
     }
 
@@ -220,12 +231,12 @@ class ModulePreferencesSnapshotTest {
         ModulePreferencesSnapshot.observe(cache.preferences, Runnable {
             queued += { snapshots += ModulePreferencesSnapshot.read(cache.preferences) }
         }).use {
-            cache.put(Constants.KEY_ENABLE_PICKUP, false)
-            cache.put(Constants.KEY_ENABLE_PICKUP, true)
+            cache.put(Constants.KEY_ENABLE_APP_CARD, false)
+            cache.put(Constants.KEY_ENABLE_APP_CARD, true)
             queued.forEach { it() }
         }
         assertEquals(2, snapshots.size)
-        assertTrue(snapshots.all { it.enablePickup })
+        assertTrue(snapshots.all { it.enableAppCard })
     }
 
     @Test fun pendingChangesAndClearInvalidateButUnrelatedKeysAndDisposedListenersDoNot() {
@@ -233,13 +244,13 @@ class ModulePreferencesSnapshotTest {
         var notifications = 0
         val subscription = ModulePreferencesSnapshot.observe(cache.preferences, Runnable { notifications++ })
         cache.changed(Constants.KEY_FLOATING_NAV_BAR)
-        cache.changed(Constants.KEY_PICKUP_ISLAND_SELECTION)
+        cache.changed("unrelated_string_key")
         assertEquals(0, notifications)
-        cache.changed(PrefsBridge.PENDING_UI_PREFIX + Constants.KEY_ENABLE_PICKUP)
+        cache.changed(PrefsBridge.PENDING_UI_PREFIX + Constants.KEY_ENABLE_APP_CARD)
         cache.changed(null)
         assertEquals(2, notifications)
         subscription.close()
-        cache.put(Constants.KEY_ENABLE_PICKUP, false)
+        cache.put(Constants.KEY_ENABLE_APP_CARD, false)
         assertEquals(2, notifications)
     }
 }

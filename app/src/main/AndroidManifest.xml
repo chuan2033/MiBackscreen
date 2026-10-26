@@ -29,14 +29,6 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".ui.pickup.PickupCodesActivity"
-            android:exported="true"
-            android:excludeFromRecents="true"
-            android:launchMode="singleTask"
-            android:label="@string/pickup_title"
-            android:theme="@style/Theme.MiBackscreen" />
-
         <activity-alias
             android:name=".LauncherAlias"
             android:enabled="true"

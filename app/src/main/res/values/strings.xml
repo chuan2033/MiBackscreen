@@ -4,7 +4,6 @@
     <string name="function_group_system">System Framework</string>
     <string name="function_group_subscreen">Rear Screen</string>
     <string name="function_group_theme">Themes</string>
-    <string name="function_group_voice">Super Xiao Ai</string>
     <string name="function_battery_color_title">Rear-screen battery</string>
     <string name="auto_wallpaper_interval_title">Rotate rear-screen wallpaper</string>
     <string name="auto_wallpaper_interval_off">Off</string>
@@ -21,6 +20,16 @@
     <string name="rear_screen_off_timeout_five_minutes">Sleep after 5 minutes</string>
     <string name="rear_screen_off_timeout_ten_minutes">Sleep after 10 minutes</string>
     <string name="rear_screen_off_timeout_thirty_minutes">Sleep after 30 minutes</string>
+    <string name="rear_screen_schedule_title">Rear screen schedule</string>
+    <string name="rear_screen_schedule_start_title">Turn off at</string>
+    <string name="rear_screen_schedule_end_title">Turn on at</string>
+    <string name="rear_screen_schedule_summary_same_day">Every day %1$s to %2$s the rear screen stays off</string>
+    <string name="rear_screen_schedule_summary_next_day">Every day %1$s to %2$s next day the rear screen stays off</string>
+    <string name="rear_screen_schedule_summary_disabled">(same start and end, inactive)</string>
+    <string name="rear_screen_schedule_mode_title">During window</string>
+    <string name="rear_screen_schedule_mode_off">Turn off (black)</string>
+    <string name="rear_screen_schedule_mode_doze">Doze</string>
+    <string name="rear_screen_schedule_dialog_summary">The rear screen stays off in this window and will not light up for notifications</string>
     <string name="battery_color_state_idle">Not charging</string>
     <string name="battery_color_state_charging">Charging</string>
     <string name="battery_color_state_low">Low battery</string>
@@ -71,14 +80,6 @@
     <string name="app_picker_partial">Some selected apps are currently unavailable or hidden from this list. You can still deselect them.</string>
     <string name="ai_rear_screen_title">AI Companion</string>
     <string name="activity_open_failed">Could not open this page. Check that the required app is installed and enabled, then retry.</string>
-    <string name="pickup_title">Pickup codes</string>
-    <plurals name="pickup_count">
-        <item quantity="one">Recognized %1$d pickup code</item>
-        <item quantity="other">Recognized %1$d pickup codes</item>
-    </plurals>
-    <string name="pickup_empty">No pickup codes available</string>
-    <string name="pickup_select_all">Select all</string>
-    <string name="pickup_deselect_all">Deselect all</string>
     <!-- Common -->
     <string name="common_back">Back</string>
     <string name="common_select_all">Select All</string>
@@ -155,8 +156,6 @@
         <item quantity="one">%1$d app added</item>
         <item quantity="other">%1$d apps added</item>
     </plurals>
-    <string name="config_enable_pickup_title">Pickup code enhancement</string>
-    <string name="config_enable_pickup_summary">Filter the codes shown on the card</string>
     <string name="app_picker_title">Double-tap wake blocklist</string>
     <string name="app_picker_search_hint">Search apps</string>
     <string name="app_picker_loading">Loading apps...</string>
@@ -202,7 +201,6 @@
     <string name="restart_system">System Framework</string>
     <string name="restart_device_success">Reboot request sent</string>
     <string name="restart_device_failed">Could not reboot the phone (root may be unavailable)</string>
-    <string name="restart_voice_assist">Super Xiao Ai</string>
     <string name="restart_backscreen">Rear Screen</string>
     <string name="restart_theme_manager">Themes</string>
     <string name="restart_personal_assistant">Personal Assistant</string>
@@ -220,10 +218,8 @@
     <string name="log_close">Close</string>
     <string name="log_share_failed">Could not open sharing. Tap to retry</string>
     <string name="log_file_missing">Log file is unavailable. Generate it again</string>
-    <string name="pickup_refresh_failed">Saved, but could not request island refresh</string>
     <string name="log_failed_retry">Failed to generate log. Tap to retry</string>
     <string name="log_regenerate">Regenerate</string>
     <string name="settings_save_failed">Could not save this setting</string>
-    <string name="pickup_saved_pending">Saved locally; waiting for the module service</string>
     <string name="settings_saving">Saving…</string>
 </resources>

@@ -48,15 +48,15 @@ public class PrefsBridgeReadTest {
         MemoryPrefs remote = new MemoryPrefs();
         String key = Constants.KEY_ENABLE_18_PRO_FEATURES;
         local.values.put(PENDING + key, true);
-        local.values.put(Constants.KEY_ENABLE_PICKUP, true);
-        remote.values.put(Constants.KEY_ENABLE_PICKUP, true);
+        local.values.put(Constants.KEY_ENABLE_APP_CARD, true);
+        remote.values.put(Constants.KEY_ENABLE_APP_CARD, true);
         for (boolean enabled : new boolean[]{false, true}) {
             assertTrue(PrefsBridge.writeEnable18ProFeatures(local.prefs, remote.prefs, enabled));
             assertEquals(enabled, remote.values.get(key));
             assertEquals(enabled, local.values.get(key));
             assertFalse(local.values.containsKey(PENDING + key));
-            assertEquals(true, local.values.get(Constants.KEY_ENABLE_PICKUP));
-            assertEquals(true, remote.values.get(Constants.KEY_ENABLE_PICKUP));
+            assertEquals(true, local.values.get(Constants.KEY_ENABLE_APP_CARD));
+            assertEquals(true, remote.values.get(Constants.KEY_ENABLE_APP_CARD));
         }
     }
 

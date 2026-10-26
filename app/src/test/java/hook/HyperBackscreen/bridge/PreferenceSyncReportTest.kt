@@ -38,7 +38,7 @@ class PreferenceSyncReportTest {
 
     @Test fun stringValuesCannotInjectReportFieldsAndUnknownKeysAreExcluded() {
         val report = PreferenceSyncReport.build(mapOf(
-            Constants.KEY_PICKUP_ISLAND_SELECTION to "a\nfake=value",
+            Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES to "a\nfake=value",
             "unrelated_secret" to "do-not-export",
         ), null)
         assertTrue(report.contains("a\\nfake=value"))

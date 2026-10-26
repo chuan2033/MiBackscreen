@@ -4,7 +4,6 @@
     <string name="function_group_system">系统框架</string>
     <string name="function_group_subscreen">背屏</string>
     <string name="function_group_theme">主题壁纸</string>
-    <string name="function_group_voice">超级小爱</string>
     <string name="function_battery_color_title">背屏电量自定义</string>
     <string name="auto_wallpaper_interval_title">定时切换背屏壁纸</string>
     <string name="auto_wallpaper_interval_off">关闭</string>
@@ -21,6 +20,16 @@
     <string name="rear_screen_off_timeout_five_minutes">5 分钟后息屏</string>
     <string name="rear_screen_off_timeout_ten_minutes">10 分钟后息屏</string>
     <string name="rear_screen_off_timeout_thirty_minutes">30 分钟后息屏</string>
+    <string name="rear_screen_schedule_title">定时关闭背屏</string>
+    <string name="rear_screen_schedule_start_title">关闭时间</string>
+    <string name="rear_screen_schedule_end_title">开启时间</string>
+    <string name="rear_screen_schedule_summary_same_day">每天 %1$s 至 %2$s 背屏不亮，到点自动恢复</string>
+    <string name="rear_screen_schedule_summary_next_day">每天 %1$s 至次日 %2$s 背屏不亮，到点自动恢复</string>
+    <string name="rear_screen_schedule_summary_disabled">（起止相同，不会生效）</string>
+    <string name="rear_screen_schedule_mode_title">时间窗内</string>
+    <string name="rear_screen_schedule_mode_off">关闭背屏（黑屏）</string>
+    <string name="rear_screen_schedule_mode_doze">息屏</string>
+    <string name="rear_screen_schedule_dialog_summary">时间窗内背屏保持熄灭，也不会被通知点亮</string>
     <string name="battery_color_state_idle">未充电</string>
     <string name="battery_color_state_charging">充电中</string>
     <string name="battery_color_state_low">低电量</string>
@@ -70,13 +79,6 @@
     <string name="app_picker_partial">部分已选应用当前不可用或未向此列表开放，仍可取消选择。</string>
     <string name="ai_rear_screen_title">AI陪伴</string>
     <string name="activity_open_failed">无法打开此页面，请确认相关应用已安装并启用后重试。</string>
-    <string name="pickup_title">取件码</string>
-    <plurals name="pickup_count">
-        <item quantity="other">本次共识别到 %1$d 个取件码</item>
-    </plurals>
-    <string name="pickup_empty">暂无可显示的取件码</string>
-    <string name="pickup_select_all">全选</string>
-    <string name="pickup_deselect_all">取消全选</string>
     <!-- Common -->
     <string name="common_back">返回</string>
     <string name="common_select_all">全选</string>
@@ -152,8 +154,6 @@
     <plurals name="config_disabled_apps_count">
         <item quantity="other">已添加 %1$d 个应用</item>
     </plurals>
-    <string name="config_enable_pickup_title">取件码增强</string>
-    <string name="config_enable_pickup_summary">识别到多个取件码时，可以进行筛选</string>
     <string name="app_picker_title">双击亮屏黑名单</string>
     <string name="app_picker_search_hint">搜索应用</string>
     <string name="app_picker_loading">正在读取应用...</string>
@@ -199,7 +199,6 @@
     <string name="restart_system">系统框架</string>
     <string name="restart_device_success">重启请求已发送</string>
     <string name="restart_device_failed">重启手机失败（可能未获取 root 权限）</string>
-    <string name="restart_voice_assist">超级小爱</string>
     <string name="restart_backscreen">背屏</string>
     <string name="restart_theme_manager">主题壁纸</string>
     <string name="restart_personal_assistant">智能助理</string>
@@ -217,10 +216,8 @@
     <string name="log_close">关闭</string>
     <string name="log_share_failed">无法打开分享，请重试</string>
     <string name="log_file_missing">日志文件已失效，请重新生成</string>
-    <string name="pickup_refresh_failed">已保存，但未能发送灵动岛刷新请求</string>
     <string name="log_failed_retry">日志生成失败，点击重试</string>
     <string name="log_regenerate">重新生成</string>
     <string name="settings_save_failed">设置保存失败</string>
-    <string name="pickup_saved_pending">已保存到本地，等待模块服务同步</string>
     <string name="settings_saving">正在保存…</string>
 </resources>

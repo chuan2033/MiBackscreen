@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import hook.HyperBackscreen.app.ModuleApp;
 import hook.HyperBackscreen.common.Constants;
+import hook.HyperBackscreen.common.RearScreenSchedule;
 import hook.HyperBackscreen.common.RearScreenWakeMatcher;
 import hook.HyperBackscreen.hook.AutoWallpaperRotationPolicy;
 import io.github.libxposed.api.XposedModule;
@@ -62,6 +63,12 @@ public final class PrefsBridge {
     public static final String DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES = "0";
     /** 背屏息屏超时覆盖；"0" = 跟随系统，其余为毫秒值。 */
     public static final String DEFAULT_REAR_SCREEN_OFF_TIMEOUT = "0";
+    /** 定时关闭背屏：默认关，避免老用户升级后夜里背屏突然不亮。 */
+    public static final boolean DEFAULT_REAR_SCREEN_SCHEDULE_ENABLED = false;
+    public static final String DEFAULT_REAR_SCREEN_SCHEDULE_START = RearScreenSchedule.DEFAULT_START;
+    public static final String DEFAULT_REAR_SCREEN_SCHEDULE_END = RearScreenSchedule.DEFAULT_END;
+    /** 时间窗内形态：默认「关闭背屏」（黑屏）；`doze` 是停在息屏。 */
+    public static final String DEFAULT_REAR_SCREEN_SCHEDULE_MODE = Constants.DEFAULT_REAR_SCREEN_SCHEDULE_MODE;
     public static final boolean DEFAULT_REMOVE_APP_CARD_LIMIT = true;
     public static final boolean DEFAULT_FIX_REAR_SCREEN_APPLY = false;
     /** 主题商店人脸录入计数兼容；默认关，与旧版「修复背屏壁纸应用失败」默认一致。 */
@@ -75,12 +82,10 @@ public final class PrefsBridge {
     private static final boolean DEFAULT_SHOW_FUNCTION_COUNT = true;
     /** 启动时自动检查 GitHub Release 是否有新版；默认开。 */
     private static final boolean DEFAULT_CHECK_UPDATES = true;
-    public static final boolean DEFAULT_ENABLE_PICKUP = true;
     public static final boolean DEFAULT_DISABLE_REAR_SCREEN_COVER = false;
     public static final boolean DEFAULT_DISABLE_DOUBLE_TAP_WAKE = false;
     public static final String DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES = "";
     public static final boolean DEFAULT_THEME_SETTINGS_SHORTCUT = true;
-    public static final String DEFAULT_PICKUP_ISLAND_SELECTION = "";
 
     /**
      * 配置备份覆盖的偏好键：只收「会改变行为或观感」的键。
@@ -102,9 +107,11 @@ public final class PrefsBridge {
         BACKUP_BOOLEAN_DEFAULTS.put(
                 Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME,
                 DEFAULT_KEEP_REAR_SCREEN_ON_IN_GAME);
+        BACKUP_BOOLEAN_DEFAULTS.put(
+                Constants.KEY_REAR_SCREEN_SCHEDULE_ENABLED,
+                DEFAULT_REAR_SCREEN_SCHEDULE_ENABLED);
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_DISABLE_REAR_SCREEN_COVER, DEFAULT_DISABLE_REAR_SCREEN_COVER);
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, DEFAULT_DISABLE_DOUBLE_TAP_WAKE);
-        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_ENABLE_PICKUP, DEFAULT_ENABLE_PICKUP);
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_THEME_SETTINGS_SHORTCUT, DEFAULT_THEME_SETTINGS_SHORTCUT);
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_CHECK_UPDATES, DEFAULT_CHECK_UPDATES);
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_FLOATING_NAV_BAR, DEFAULT_FLOATING_NAV_BAR);
@@ -129,8 +136,16 @@ public final class PrefsBridge {
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_RING_STYLE, DEFAULT_BATTERY_RING_STYLE);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES, DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_REAR_SCREEN_OFF_TIMEOUT, DEFAULT_REAR_SCREEN_OFF_TIMEOUT);
+        BACKUP_STRING_DEFAULTS.put(
+                Constants.KEY_REAR_SCREEN_SCHEDULE_START,
+                DEFAULT_REAR_SCREEN_SCHEDULE_START);
+        BACKUP_STRING_DEFAULTS.put(
+                Constants.KEY_REAR_SCREEN_SCHEDULE_END,
+                DEFAULT_REAR_SCREEN_SCHEDULE_END);
+        BACKUP_STRING_DEFAULTS.put(
+                Constants.KEY_REAR_SCREEN_SCHEDULE_MODE,
+                DEFAULT_REAR_SCREEN_SCHEDULE_MODE);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES, DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
-        BACKUP_STRING_DEFAULTS.put(Constants.KEY_PICKUP_ISLAND_SELECTION, DEFAULT_PICKUP_ISLAND_SELECTION);
     }
 
     private PrefsBridge() {
@@ -540,13 +555,145 @@ public final class PrefsBridge {
         }
     }
 
+    public static boolean readRearScreenScheduleEnabledForUi(@NonNull Context context) {
+        return readForUi(
+                context,
+                Constants.KEY_REAR_SCREEN_SCHEDULE_ENABLED,
+                DEFAULT_REAR_SCREEN_SCHEDULE_ENABLED);
+    }
+
+    public static void writeRearScreenScheduleEnabledFromUi(
+            @NonNull Context context,
+            boolean enabled
+    ) {
+        writeFromUi(context, Constants.KEY_REAR_SCREEN_SCHEDULE_ENABLED, enabled);
+    }
+
+    @NonNull
+    public static String readRearScreenScheduleStartForUi(@NonNull Context context) {
+        return RearScreenSchedule.normalize(readStringForUi(
+                context,
+                Constants.KEY_REAR_SCREEN_SCHEDULE_START,
+                DEFAULT_REAR_SCREEN_SCHEDULE_START), DEFAULT_REAR_SCREEN_SCHEDULE_START);
+    }
+
+    public static void writeRearScreenScheduleStartFromUi(
+            @NonNull Context context,
+            @NonNull String value
+    ) {
+        writeStringFromUi(
+                context,
+                Constants.KEY_REAR_SCREEN_SCHEDULE_START,
+                RearScreenSchedule.normalize(value, DEFAULT_REAR_SCREEN_SCHEDULE_START));
+    }
+
+    @NonNull
+    public static String readRearScreenScheduleEndForUi(@NonNull Context context) {
+        return RearScreenSchedule.normalize(readStringForUi(
+                context,
+                Constants.KEY_REAR_SCREEN_SCHEDULE_END,
+                DEFAULT_REAR_SCREEN_SCHEDULE_END), DEFAULT_REAR_SCREEN_SCHEDULE_END);
+    }
+
+    public static void writeRearScreenScheduleEndFromUi(
+            @NonNull Context context,
+            @NonNull String value
+    ) {
+        writeStringFromUi(
+                context,
+                Constants.KEY_REAR_SCREEN_SCHEDULE_END,
+                RearScreenSchedule.normalize(value, DEFAULT_REAR_SCREEN_SCHEDULE_END));
+    }
+
+    /**
+     * 当前是否处于「定时关闭背屏」的时间窗内。Hook 端每次现算，
+     * 不做缓存 —— 时间窗边界必须靠真实时间判断，缓存会让它永远停在上一次的状态。
+     */
+    public static boolean isRearScreenScheduleActiveNow(@NonNull XposedModule module) {
+        if (!readForHook(
+                module,
+                Constants.KEY_REAR_SCREEN_SCHEDULE_ENABLED,
+                DEFAULT_REAR_SCREEN_SCHEDULE_ENABLED)) {
+            return false;
+        }
+        return RearScreenSchedule.isActive(
+                readStringForHook(
+                        module,
+                        Constants.KEY_REAR_SCREEN_SCHEDULE_START,
+                        DEFAULT_REAR_SCREEN_SCHEDULE_START),
+                readStringForHook(
+                        module,
+                        Constants.KEY_REAR_SCREEN_SCHEDULE_END,
+                        DEFAULT_REAR_SCREEN_SCHEDULE_END),
+                RearScreenSchedule.nowMinutes());
+    }
+
+    @NonNull
+    public static String readRearScreenScheduleModeForUi(@NonNull Context context) {
+        return normalizeRearScreenScheduleMode(readStringForUi(
+                context,
+                Constants.KEY_REAR_SCREEN_SCHEDULE_MODE,
+                DEFAULT_REAR_SCREEN_SCHEDULE_MODE));
+    }
+
+    public static void writeRearScreenScheduleModeFromUi(
+            @NonNull Context context,
+            @NonNull String value
+    ) {
+        writeStringFromUi(
+                context,
+                Constants.KEY_REAR_SCREEN_SCHEDULE_MODE,
+                normalizeRearScreenScheduleMode(value));
+    }
+
+    /** 时间窗内是否走「关闭背屏」（纯黑）。其余取值（含未知值）按「息屏」处理。 */
+    public static boolean shouldForceOffRearScreen(@NonNull XposedModule module) {
+        return Constants.REAR_SCREEN_SCHEDULE_MODE_OFF.equals(readStringForHook(
+                module,
+                Constants.KEY_REAR_SCREEN_SCHEDULE_MODE,
+                DEFAULT_REAR_SCREEN_SCHEDULE_MODE));
+    }
+
+    @NonNull
+    private static String normalizeRearScreenScheduleMode(@Nullable String value) {
+        if (Constants.REAR_SCREEN_SCHEDULE_MODE_OFF.equals(value)
+                || Constants.REAR_SCREEN_SCHEDULE_MODE_DOZE.equals(value)) {
+            return value;
+        }
+        return DEFAULT_REAR_SCREEN_SCHEDULE_MODE;
+    }
+
+    /**
+     * 时间窗结束后短时间内是否应当主动点亮背屏。
+     *
+     * 与 [isRearScreenScheduleActiveNow] 一起构成窗口两端：进窗口熄灭、出窗口点亮。
+     * 只在结束边界附近的宽限内为 true —— 手机长时间休眠后才醒来的场景不点亮。
+     */
+    public static boolean shouldAutoWakeRearScreen(@NonNull XposedModule module) {
+        if (!readForHook(
+                module,
+                Constants.KEY_REAR_SCREEN_SCHEDULE_ENABLED,
+                DEFAULT_REAR_SCREEN_SCHEDULE_ENABLED)) {
+            return false;
+        }
+        return RearScreenSchedule.isWithinWakeSlack(
+                readStringForHook(
+                        module,
+                        Constants.KEY_REAR_SCREEN_SCHEDULE_START,
+                        DEFAULT_REAR_SCREEN_SCHEDULE_START),
+                readStringForHook(
+                        module,
+                        Constants.KEY_REAR_SCREEN_SCHEDULE_END,
+                        DEFAULT_REAR_SCREEN_SCHEDULE_END),
+                RearScreenSchedule.nowMinutes());
+    }
+
     /**
      * 导出会改变行为/观感的偏好（布尔值转成 "true"/"false"，其余保持字符串）。
      * 顺序与 [BACKUP_BOOLEAN_DEFAULTS] / [BACKUP_STRING_DEFAULTS] 一致，方便人工比对。
      */
     @NonNull
-    public static Map<String, String> exportPreferencesForBackup(@NonNull Context context) {
-        Map<String, String> values = new LinkedHashMap<>();
+    public static Map<String, String> exportPreferencesForBackup(@NonNull Context context) {        Map<String, String> values = new LinkedHashMap<>();
         for (Map.Entry<String, Boolean> entry : BACKUP_BOOLEAN_DEFAULTS.entrySet()) {
             values.put(entry.getKey(),
                     String.valueOf(readForUi(context, entry.getKey(), entry.getValue())));
@@ -718,14 +865,6 @@ public final class PrefsBridge {
         writeFromUi(context, Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME, enabled);
     }
 
-    public static boolean readEnablePickupForUi(@NonNull Context context) {
-        return readForUi(context, Constants.KEY_ENABLE_PICKUP, DEFAULT_ENABLE_PICKUP);
-    }
-
-    public static void writeEnablePickupFromUi(@NonNull Context context, boolean enabled) {
-        writeFromUi(context, Constants.KEY_ENABLE_PICKUP, enabled);
-    }
-
     public static boolean readDisableRearScreenCoverForUi(@NonNull Context context) {
         return readForUi(context, Constants.KEY_DISABLE_REAR_SCREEN_COVER, DEFAULT_DISABLE_REAR_SCREEN_COVER);
     }
@@ -760,60 +899,6 @@ public final class PrefsBridge {
 
     public static void writeThemeSettingsShortcutFromUi(@NonNull Context context, boolean enabled) {
         writeFromUi(context, Constants.KEY_THEME_SETTINGS_SHORTCUT, enabled);
-    }
-
-    /** 取件码页在模块进程写，Hook 在小爱进程读，必须走远程偏好。 */
-    @NonNull
-    public static String readPickupIslandSelectionForUi(@NonNull Context context) {
-        return readStringForUi(
-                context,
-                Constants.KEY_PICKUP_ISLAND_SELECTION,
-                DEFAULT_PICKUP_ISLAND_SELECTION);
-    }
-
-    @SuppressLint("ApplySharedPref")
-    public static void writePickupIslandSelectionFromUi(@NonNull Context context, @NonNull String value) {
-        tryWritePickupIslandSelectionFromUi(context, value);
-    }
-
-    /** UI feedback needs the actual commit result, not an optimistic checkmark. */
-    @SuppressLint("ApplySharedPref")
-    public static boolean tryWritePickupIslandSelectionFromUi(@NonNull Context context, @NonNull String value) {
-        return savePickupIslandSelectionFromUi(context, value) != PickupSaveResult.FAILED;
-    }
-
-    public enum PickupSaveResult { SYNCED, PENDING, FAILED }
-
-    /** Return the destination used by this write; checking service availability afterwards is racy. */
-    @SuppressLint("ApplySharedPref")
-    public static PickupSaveResult savePickupIslandSelectionFromUi(@NonNull Context context, @NonNull String value) {
-        SharedPreferences localPrefs = local(context);
-        SharedPreferences remote = remote();
-        if (remote != null) {
-            boolean committed = remote.edit()
-                    .putString(Constants.KEY_PICKUP_ISLAND_SELECTION, value)
-                    .commit();
-            if (committed) {
-                localPrefs.edit()
-                        .putString(Constants.KEY_PICKUP_ISLAND_SELECTION, value)
-                        .remove(PENDING_UI_PREFIX + Constants.KEY_PICKUP_ISLAND_SELECTION)
-                        .commit();
-            }
-            return committed ? PickupSaveResult.SYNCED : PickupSaveResult.FAILED;
-        } else {
-            return localPrefs.edit()
-                    .putString(Constants.KEY_PICKUP_ISLAND_SELECTION, value)
-                    .putString(PENDING_UI_PREFIX + Constants.KEY_PICKUP_ISLAND_SELECTION, value)
-                    .commit() ? PickupSaveResult.PENDING : PickupSaveResult.FAILED;
-        }
-    }
-
-    @NonNull
-    public static String readPickupIslandSelectionForHook(@NonNull XposedModule module) {
-        return readStringForHook(
-                module,
-                Constants.KEY_PICKUP_ISLAND_SELECTION,
-                DEFAULT_PICKUP_ISLAND_SELECTION);
     }
 
     /** 纯 UI 外观项，Hook 端不消费，只存本地。 */
@@ -915,10 +1000,6 @@ public final class PrefsBridge {
                 module,
                 Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME,
                 DEFAULT_KEEP_REAR_SCREEN_ON_IN_GAME);
-    }
-
-    public static boolean shouldEnablePickup(@NonNull XposedModule module) {
-        return readForHook(module, Constants.KEY_ENABLE_PICKUP, DEFAULT_ENABLE_PICKUP);
     }
 
     public static boolean shouldShowThemeSettingsShortcut(@NonNull XposedModule module) {
@@ -1103,7 +1184,6 @@ public final class PrefsBridge {
             flushPanelPreference(context, Constants.KEY_ENABLE_BATTERY_RING);
             flushPanelPreference(context, Constants.KEY_REMOVE_APP_CARD_LIMIT);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_LONG_PRESS_EDIT);
-            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_PICKUP);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_APP_CARD);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_APP_CARD_INSTALL_REQUEST);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_18_PRO_FEATURES);
@@ -1113,11 +1193,11 @@ public final class PrefsBridge {
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_FIX_REAR_SCREEN_APPLY);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_FACE_ENROLLMENT_COMPAT);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REAR_SCREEN_SCHEDULE_ENABLED);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_REAR_SCREEN_COVER);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_THEME_SETTINGS_SHORTCUT);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
-            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_PICKUP_ISLAND_SELECTION);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_IDLE);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_CHARGING);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_LOW);
@@ -1139,6 +1219,18 @@ public final class PrefsBridge {
                     localPrefs,
                     remotePrefs,
                     Constants.KEY_REAR_SCREEN_OFF_TIMEOUT);
+            flushUiStringPreference(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_REAR_SCREEN_SCHEDULE_START);
+            flushUiStringPreference(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_REAR_SCREEN_SCHEDULE_END);
+            flushUiStringPreference(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_REAR_SCREEN_SCHEDULE_MODE);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT, DEFAULT_REMOVE_WALLPAPER_LIMIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_APP_CARD_LIMIT, DEFAULT_REMOVE_APP_CARD_LIMIT);
@@ -1149,7 +1241,11 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME,
                     DEFAULT_KEEP_REAR_SCREEN_ON_IN_GAME);
-            syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_PICKUP, DEFAULT_ENABLE_PICKUP);
+            syncBooleanKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_REAR_SCREEN_SCHEDULE_ENABLED,
+                    DEFAULT_REAR_SCREEN_SCHEDULE_ENABLED);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_APP_CARD, DEFAULT_ENABLE_APP_CARD);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_APP_CARD_INSTALL_REQUEST, false);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_18_PRO_FEATURES, DEFAULT_ENABLE_18_PRO_FEATURES);
@@ -1162,11 +1258,6 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,
                     DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
-            syncStringKey(
-                    localPrefs,
-                    remotePrefs,
-                    Constants.KEY_PICKUP_ISLAND_SELECTION,
-                    DEFAULT_PICKUP_ISLAND_SELECTION);
             syncStringKey(
                     localPrefs,
                     remotePrefs,
@@ -1242,6 +1333,21 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_REAR_SCREEN_OFF_TIMEOUT,
                     DEFAULT_REAR_SCREEN_OFF_TIMEOUT);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_REAR_SCREEN_SCHEDULE_START,
+                    DEFAULT_REAR_SCREEN_SCHEDULE_START);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_REAR_SCREEN_SCHEDULE_END,
+                    DEFAULT_REAR_SCREEN_SCHEDULE_END);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_REAR_SCREEN_SCHEDULE_MODE,
+                    DEFAULT_REAR_SCREEN_SCHEDULE_MODE);
             long pending = localPrefs.getAll().keySet().stream()
                     .filter(key -> key.startsWith(PENDING_UI_PREFIX) || key.startsWith(PENDING_PANEL_PREFIX))
                     .count();

@@ -4,9 +4,7 @@ public final class Constants {
     public static final String MODULE_PACKAGE = "hook.HyperBackscreen";
     public static final String SYSTEM_PACKAGE = "system";
     public static final String TARGET_PACKAGE = "com.xiaomi.subscreencenter";
-    public static final String VOICE_ASSIST_PACKAGE = "com.miui.voiceassist";
     public static final String PERSONAL_ASSISTANT_PACKAGE = "com.miui.personalassistant";
-    public static final String ACTION_REFRESH_PICKUP_ISLAND = MODULE_PACKAGE + ".REFRESH_PICKUP_ISLAND";
     public static final String PREF_GROUP = "module_config";
     public static final String KEY_DISABLE_LONG_PRESS_EDIT = "disable_long_press_edit";
     public static final String KEY_REMOVE_WALLPAPER_LIMIT = "remove_wallpaper_limit";
@@ -47,6 +45,16 @@ public final class Constants {
     // 游戏（主屏高负载）时系统会主动关背屏；开启后拦掉那次主动关屏，
     // 并在游戏期间把背屏超时抬到「一直亮屏」。默认关：会让游戏功耗优化失效。
     public static final String KEY_KEEP_REAR_SCREEN_ON_IN_GAME = "keep_rear_screen_on_in_game";
+    // 定时关闭背屏：在每天的时间窗内把背屏压成熄灭状态并拒绝唤醒请求，到点恢复。
+    // 时间值统一存 "HH:mm"，时间窗允许跨零点（如 23:00 → 07:00）。
+    public static final String KEY_REAR_SCREEN_SCHEDULE_ENABLED = "rear_screen_schedule_enabled";
+    public static final String KEY_REAR_SCREEN_SCHEDULE_START = "rear_screen_schedule_start";
+    public static final String KEY_REAR_SCREEN_SCHEDULE_END = "rear_screen_schedule_end";
+    // 时间窗内的形态：off = 背屏直接黑屏（休眠），doze = 停在息屏（AOD 可见但不亮）。
+    public static final String KEY_REAR_SCREEN_SCHEDULE_MODE = "rear_screen_schedule_mode";
+    public static final String REAR_SCREEN_SCHEDULE_MODE_OFF = "off";
+    public static final String REAR_SCREEN_SCHEDULE_MODE_DOZE = "doze";
+    public static final String DEFAULT_REAR_SCREEN_SCHEDULE_MODE = REAR_SCREEN_SCHEDULE_MODE_OFF;
     public static final String KEY_REMOVE_APP_CARD_LIMIT = "remove_app_card_limit";
     public static final String KEY_FIX_REAR_SCREEN_APPLY = "fix_rear_screen_apply";
     // 主题商店人脸录入计数兼容。原来挂在 fix_rear_screen_apply（名字与实现不符），
@@ -61,10 +69,6 @@ public final class Constants {
     public static final String KEY_DISABLE_DOUBLE_TAP_WAKE = "disable_double_tap_wake";
     public static final String KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES = "double_tap_wake_disabled_packages";
     public static final String KEY_THEME_SETTINGS_SHORTCUT = "theme_settings_shortcut";
-    // 小爱记忆岛取件码增强的总开关。
-    public static final String KEY_ENABLE_PICKUP = "enable_pickup";
-    // 取件码页选择：记录"哪些取件码显示在记忆岛卡片上"，按驿站或无站点码组区分。
-    public static final String KEY_PICKUP_ISLAND_SELECTION = "pickup_island_selection";
     public static final String PANEL_PREFERENCE_AUTHORITY = MODULE_PACKAGE + ".PanelPreferences";
     public static final String PANEL_PREFERENCE_METHOD_SET = "set_panel_preference";
     public static final String ACTION_SYNC_BATTERY_RING =
@@ -100,6 +104,13 @@ public final class Constants {
     // 「一直亮屏」写入值取 int 上限（约 24.8 天）：Settings.System 只存 int，
     // 且 lastUserActivityTime + timeout 用 long 累加不会溢出。
     public static final int REAR_SCREEN_OFF_TIMEOUT_ALWAYS_MS = Integer.MAX_VALUE;
+    // 定时关闭窗口内使用的超时值。不取 0：0 在系统里表示「不超时」，
+    // 取 1 秒既能立刻走正常的熄灭流程，又给用户触屏留一次可见的状态切换。
+    public static final int REAR_SCREEN_SCHEDULE_OFF_TIMEOUT_MS = 1000;
+    // PowerManager.WAKE_REASON_APPLICATION：与系统自己「应用请求唤醒」的用法一致。
+    public static final int WAKE_REASON_APPLICATION = 2;
+    // PowerManager.GO_TO_SLEEP_REASON_TIMEOUT：与系统自己「超时熄屏」的用法一致。
+    public static final int GO_TO_SLEEP_REASON_TIMEOUT = 2;
     // 游戏时保持背屏亮：DualScreenCoverManager.updateHighLoadSceneMode(int, boolean) 在
     // 主屏进入高负载（横屏大型游戏）时调用 goToSleepSecondaryDisplay(..., "mainScreen:highLoadGameMode", 0)
     // 直接关掉背屏（日志原文 "Secondary screen turned OFF, Main screen keep ON"）。

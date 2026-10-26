@@ -76,17 +76,6 @@ public final class DebugHostProbe {
                         if (host == null) throw new IllegalStateException("No host activity");
                         SwipePanelHost.show(host, null);
                         Log.i(Constants.LOG_TAG, "PROBE panel shown");
-                    } else if ("pickup-post".equals(command)) pickup(ctx);
-                    else if ("pickup-refresh".equals(command)) {
-                        Method refresh = PickupCodeHook.class.getDeclaredMethod("requestRefresh", Context.class);
-                        refresh.setAccessible(true);
-                        refresh.invoke(null, ctx);
-                    } else if ("pickup-status".equals(command)) pickupStatus(ctx);
-                    else if ("pickup-clean".equals(command)) {
-                        NotificationManager nm = ctx.getSystemService(NotificationManager.class);
-                        nm.cancel(TEST_TAG, TEST_ID);
-                        nm.cancel(TEST_ID);
-                        Log.i(Constants.LOG_TAG, "PROBE pickup fixtures removed");
                     } else throw new IllegalArgumentException("Unknown probe command");
                 } catch (Throwable error) { Log.e(Constants.LOG_TAG, "PROBE FAIL " + command, error); }
             }
@@ -136,58 +125,9 @@ public final class DebugHostProbe {
         });
     }
 
-    private static void pickup(Context ctx) throws Exception {
-        Method register = PickupCodeHook.class.getDeclaredMethod("ensureRefreshReceiver", Context.class);
-        register.setAccessible(true); register.invoke(null, ctx);
-        NotificationManager nm = ctx.getSystemService(NotificationManager.class);
-        String channel = "memory_island_channel";
-        if (nm.getNotificationChannel(channel) == null)
-            throw new IllegalStateException("Host memory channel absent; create a memory card first");
-        int labelId = ctx.getResources().getIdentifier("memory_scene_name_delivery", "string", ctx.getPackageName());
-        String label = ctx.getString(labelId);
-        org.json.JSONObject params = new org.json.JSONObject()
-                .put("business", "memory")
-                .put("param_island", new org.json.JSONObject().put("bigIslandArea", new org.json.JSONObject()
-                        .put("textInfo", new org.json.JSONObject().put("title", "1-2345,2-6789"))
-                        .put("imageTextInfoLeft", new org.json.JSONObject().put("textInfo",
-                                new org.json.JSONObject().put("title", label)))));
-        Bundle extras = new Bundle();
-        extras.putString("miui.focus.param.custom", params.toString());
-        String[][] views = {{"miui.focus.rv", "memory_scene_focused_remote_view"},
-                {"miui.focus.rv.island.expand", "memory_scene_focused_remote_view"},
-                {"miui.focus.rv.tiny", "memory_scene_tiny_remote_view"},
-                {"miui.rear.rv", "memory_scene_rear_remote_view"}};
-        for (String[] view : views) {
-            int id = ctx.getResources().getIdentifier(view[1], "layout", ctx.getPackageName());
-            if (id == 0) throw new IllegalStateException("Missing layout " + view[1]);
-            extras.putParcelable(view[0], new RemoteViews(ctx.getPackageName(), id));
-        }
-        Notification notification = new Notification.Builder(ctx, channel)
-                .setSmallIcon(ctx.getApplicationInfo().icon).setContentTitle("1-2345,2-6789")
-                .setSubText("MiBackscreen debug station").setContentText("Synthetic local test")
-                .setOnlyAlertOnce(true).addExtras(extras).build();
-        int originalSize = size(notification);
-        nm.notify(TEST_ID, notification);
-        nm.notify(TEST_TAG, TEST_ID, notification);
-        if (originalSize != size(notification)) throw new IllegalStateException("Caller notification mutated");
-        Log.i(Constants.LOG_TAG, "PROBE pickup posted both overloads, callerBytes=" + originalSize);
-    }
-
     private static int size(Notification notification) {
         Parcel p = Parcel.obtain();
         try { notification.writeToParcel(p, 0); return p.dataSize(); }
         finally { p.recycle(); }
-    }
-
-    private static void pickupStatus(Context ctx) {
-        int count = 0;
-        for (android.service.notification.StatusBarNotification current :
-                ctx.getSystemService(NotificationManager.class).getActiveNotifications()) {
-            if (current.getId() != TEST_ID) continue;
-            count++;
-            Log.i(Constants.LOG_TAG, "PROBE pickup active tag=" + current.getTag()
-                    + " bytes=" + size(current.getNotification()));
-        }
-        Log.i(Constants.LOG_TAG, "PROBE pickup active count=" + count);
     }
 }

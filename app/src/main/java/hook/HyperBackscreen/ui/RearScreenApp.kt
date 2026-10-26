@@ -121,6 +121,16 @@ internal fun RearScreenApp() {
     var rearScreenOffTimeout by remember {
         mutableStateOf(RearScreenOffTimeout.fromPref(PrefsBridge.readRearScreenOffTimeoutForUi(context)))
     }
+    var rearScreenSchedule by remember {
+        mutableStateOf(
+            RearScreenSchedulePrefs(
+                enabled = PrefsBridge.readRearScreenScheduleEnabledForUi(context),
+                start = PrefsBridge.readRearScreenScheduleStartForUi(context),
+                end = PrefsBridge.readRearScreenScheduleEndForUi(context),
+                mode = PrefsBridge.readRearScreenScheduleModeForUi(context),
+            )
+        )
+    }
     var disableLongPress by remember {
         mutableStateOf(PrefsBridge.readDisableLongPressForUi(context))
     }
@@ -162,9 +172,6 @@ internal fun RearScreenApp() {
     }
     var pendingUpdate by remember { mutableStateOf<UpdateInfo?>(null) }
     var downloadFailed by remember { mutableStateOf(false) }
-    var enablePickup by remember {
-        mutableStateOf(PrefsBridge.readEnablePickupForUi(context))
-    }
     var disableRearScreenCover by remember {
         mutableStateOf(PrefsBridge.readDisableRearScreenCoverForUi(context))
     }
@@ -235,6 +242,12 @@ internal fun RearScreenApp() {
                 )
                 autoWallpaperInterval = AutoWallpaperInterval.fromPref(values.autoWallpaperIntervalMinutes)
                 rearScreenOffTimeout = RearScreenOffTimeout.fromPref(values.rearScreenOffTimeout)
+                rearScreenSchedule = RearScreenSchedulePrefs(
+                    enabled = values.rearScreenScheduleEnabled,
+                    start = values.rearScreenScheduleStart,
+                    end = values.rearScreenScheduleEnd,
+                    mode = values.rearScreenScheduleMode,
+                )
                 disableLongPress = values.disableLongPress
                 removeWallpaperLimit = values.removeWallpaperLimit
                 enableAppCard = values.enableAppCard
@@ -242,7 +255,6 @@ internal fun RearScreenApp() {
                 fixRearScreenApply = values.fixRearScreenApply
                 faceEnrollmentCompat = values.faceEnrollmentCompat
                 keepRearScreenOnInGame = values.keepRearScreenOnInGame
-                enablePickup = values.enablePickup
                 themeSettingsShortcut = values.themeSettingsShortcut
                 disableRearScreenCover = values.disableRearScreenCover
                 disableDoubleTapWake = values.disableDoubleTapWake
@@ -343,6 +355,7 @@ internal fun RearScreenApp() {
             removeAppCardLimit = removeAppCardLimit,
             autoWallpaperInterval = autoWallpaperInterval,
             rearScreenOffTimeout = rearScreenOffTimeout,
+            rearScreenSchedule = rearScreenSchedule,
             keepRearScreenOnInGame = keepRearScreenOnInGame,
             fixRearScreenApply = fixRearScreenApply,
             faceEnrollmentCompat = faceEnrollmentCompat,
@@ -353,7 +366,6 @@ internal fun RearScreenApp() {
             appLanguage = appLanguage,
             checkUpdates = checkUpdates,
             enableAppCard = enableAppCard,
-            enablePickup = enablePickup,
             batteryColorIdle = batteryColorIdle,
             batteryColorCharging = batteryColorCharging,
             batteryColorLow = batteryColorLow,
@@ -400,6 +412,13 @@ internal fun RearScreenApp() {
                 rearScreenOffTimeout = timeout
                 PrefsBridge.writeRearScreenOffTimeoutFromUi(context, timeout.prefValue)
                 RearScreenTimeoutSync.apply(timeout)
+            },
+            onRearScreenScheduleChange = { schedule ->
+                rearScreenSchedule = schedule
+                PrefsBridge.writeRearScreenScheduleEnabledFromUi(context, schedule.enabled)
+                PrefsBridge.writeRearScreenScheduleStartFromUi(context, schedule.start)
+                PrefsBridge.writeRearScreenScheduleEndFromUi(context, schedule.end)
+                PrefsBridge.writeRearScreenScheduleModeFromUi(context, schedule.mode)
             },
             onFixRearScreenApplyChange = { newValue ->
                 fixRearScreenApply = newValue
@@ -454,10 +473,6 @@ internal fun RearScreenApp() {
                     PrefsBridge.writeEnableAppCardFromUi(context, false)
                     refreshScopes(Constants.TARGET_PACKAGE)
                 }
-            },
-            onEnablePickupChange = { newValue ->
-                enablePickup = newValue
-                PrefsBridge.writeEnablePickupFromUi(context, newValue)
             },
             onBatteryColorChange = { slot, value ->
                 val key = when (slot) {
