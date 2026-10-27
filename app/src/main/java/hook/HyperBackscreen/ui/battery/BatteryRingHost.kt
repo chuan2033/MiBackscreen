@@ -92,7 +92,7 @@ object BatteryRingHost {
     ) {
         val geometry = BatteryRingGeometry.forDevice(Build.DEVICE) ?: return
         // The contour is calibrated for the rear panel, not the front camera cutout.
-        if (activity.display?.displayId != 1) return
+        if (activity.display?.displayId != Constants.SYSTEM_SECONDARY_DISPLAY_ID) return
         val parent = activity.window.decorView as? ViewGroup ?: return
         ring?.let { (it.parent as? ViewGroup)?.removeView(it) }
         // 覆盖色在挂载时读一次；改颜色后重新进入背屏桌面即可生效，绘制线程不再读偏好。

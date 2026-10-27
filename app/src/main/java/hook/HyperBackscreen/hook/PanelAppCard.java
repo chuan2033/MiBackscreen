@@ -200,7 +200,7 @@ public final class PanelAppCard {
     private static void grantDirectoryAccess(@Nullable File dir) {
         File current = dir;
         while (current != null
-                && current.getAbsolutePath().startsWith("/data/system/theme_magic/")) {
+                && current.getAbsolutePath().startsWith(Constants.THEME_MAGIC_DIR + "/")) {
             current.setReadable(true, false);
             current.setWritable(true, true);
             current.setExecutable(true, false);

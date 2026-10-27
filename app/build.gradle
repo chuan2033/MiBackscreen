@@ -18,6 +18,26 @@ if (signingValue('RELEASE_STORE_FILE') && !hasReleaseSigning) {
     throw new GradleException('Configured signing key is unavailable or missing RELEASE_STORE_PASSWORD / RELEASE_KEY_PASSWORD')
 }
 
+// Modern Xposed（libxposed）API 版本的单一来源：依赖坐标、libs/ 下两个 jar 的文件名都由
+// 这里派生；META-INF/xposed/module.prop 的 targetApiVersion 与 jar 是否存在在构建时校验，
+// 对不上直接终止。升版本只改这一个值，再换上同名的新 jar。
+def libxposedApiVersion = '102.0.0'
+def libxposedApiMajor = libxposedApiVersion.tokenize('.')[0]
+def xposedModulePropFile = file('src/main/resources/META-INF/xposed/module.prop')
+def xposedModuleProps = new Properties()
+xposedModulePropFile.withReader('UTF-8') { xposedModuleProps.load(it) }
+if (xposedModuleProps.getProperty('targetApiVersion') != libxposedApiMajor) {
+    throw new GradleException("META-INF/xposed/module.prop targetApiVersion=" +
+            "${xposedModuleProps.getProperty('targetApiVersion')} " +
+            "does not match libxposedApiVersion=${libxposedApiVersion}")
+}
+['interface', 'service'].each { name ->
+    def jar = file("libs/${name}-${libxposedApiVersion}.jar")
+    if (!jar.isFile()) {
+        throw new GradleException("Missing libxposed jar: ${jar}")
+    }
+}
+
 kotlin {
     jvmToolchain(21)
 }
@@ -42,8 +62,8 @@ android {
         applicationId "hook.HyperBackscreen"
         minSdk 36
         targetSdk 36
-        versionCode 14
-        versionName "1.2.4"
+        versionCode 15
+        versionName "1.2.5"
         // DexKit 只在 arm64 真机上跑，x86_64 只服务模拟器，整包体积省一半。
         ndk {
             abiFilters "arm64-v8a"
@@ -100,8 +120,8 @@ dependencies {    implementation 'androidx.activity:activity-compose:1.13.0'
     implementation 'top.yukonga.miuix.kmp:miuix-nav-android:0.9.4'
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0'
-    compileOnly 'io.github.libxposed:api:102.0.0'
-    implementation files('libs/interface-102.0.0.jar', 'libs/service-102.0.0.jar')
+    compileOnly "io.github.libxposed:api:${libxposedApiVersion}"
+    implementation files("libs/interface-${libxposedApiVersion}.jar", "libs/service-${libxposedApiVersion}.jar")
     // 按结构定位宿主混淆成员，替代硬编码混淆名。
     implementation 'org.luckypray:dexkit:2.2.0'
     testImplementation 'org.luckypray:dexkit:2.2.0'

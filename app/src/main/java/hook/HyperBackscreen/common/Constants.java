@@ -101,6 +101,12 @@ public final class Constants {
     public static final String SYSTEM_POWER_GROUP_GET_GROUP_ID_METHOD = "getGroupId";
     public static final String SYSTEM_SUBSCREEN_DISPLAY_TIME_SETTING = "subscreen_display_time";
     public static final int SYSTEM_SECONDARY_DISPLAY_GROUP_ID = 1;
+    /**
+     * 背屏的 {@code Display.getDisplayId()} 取值。数值与
+     * {@link #SYSTEM_SECONDARY_DISPLAY_GROUP_ID} 相同（背屏在独立 display group），
+     * 但分属两套 id 体系：这里比较 display id，那里比较 PowerGroup 的 group id。
+     */
+    public static final int SYSTEM_SECONDARY_DISPLAY_ID = 1;
     // 「一直亮屏」写入值取 int 上限（约 24.8 天）：Settings.System 只存 int，
     // 且 lastUserActivityTime + timeout 用 long 累加不会溢出。
     public static final int REAR_SCREEN_OFF_TIMEOUT_ALWAYS_MS = Integer.MAX_VALUE;
@@ -241,18 +247,22 @@ public final class Constants {
     public static final String THEME_RIGHTS_DIR_FIELD_PRIMARY = "cmzf";
     public static final String THEME_RIGHTS_DIR_FIELD_FALLBACK = "qp5l";
     public static final String THEME_RIGHTS_DIR_DEFAULT = "/data/system/theme/rights/";
+    /** theme_magic 数据根。模块落盘口径固定 user 0（KSU 同步目标）；读宿主运行时产物的地方按实际用户取。 */
+    public static final String THEME_MAGIC_DIR = "/data/system/theme_magic";
+    public static final String THEME_MAGIC_USERS_DIR = THEME_MAGIC_DIR + "/users/";
+    public static final String THEME_MAGIC_USER_ROOT = THEME_MAGIC_USERS_DIR + "0";
     public static final String THEME_MAGIC_REAR_SCREEN_DIR =
-            "/data/system/theme_magic/users/0/rearScreen";
+            THEME_MAGIC_USER_ROOT + "/rearScreen";
     public static final String THEME_MAGIC_APP_CARD_DIR =
-            "/data/system/theme_magic/users/0/back_screen_card";
+            THEME_MAGIC_USER_ROOT + "/back_screen_card";
     public static final String THEME_MAGIC_AI_APP_DIR =
-            "/data/system/theme_magic/users/0/rearScreenAiApp_Theme";
+            THEME_MAGIC_USER_ROOT + "/rearScreenAiApp_Theme";
     public static final String THEME_MAGIC_MIBACKSCREEN_RESOURCE_DIR =
-            "/data/system/theme_magic/users/0/mibackscreen_18";
+            THEME_MAGIC_USER_ROOT + "/mibackscreen_18";
     public static final String THEME_AI_APP_RUNTIME_FILE =
             THEME_MAGIC_AI_APP_DIR + "/runtimeAiApp.json";
     public static final String SUBSCREEN_APP_INFO_FILE =
-            "/data/system/theme_magic/users/0/subscreencenter/config/appInfo.json";
+            THEME_MAGIC_USER_ROOT + "/subscreencenter/config/appInfo.json";
     public static final String MODULE_PANEL_CARD_RES_ID = "mibackscreen_quick_panel";
     public static final String MODULE_PANEL_CARD_ROOT =
             THEME_MAGIC_APP_CARD_DIR + "/" + MODULE_PANEL_CARD_RES_ID;
@@ -269,7 +279,7 @@ public final class Constants {
     public static final String MODULE_PANEL_CARD_PREVIEW_DARK =
             MODULE_PANEL_CARD_ROOT + "/preview/preview_rearscreen_dark_0.png";
     public static final String MODULE_PANEL_CARD_INSTALL_MARK =
-            "/data/system/theme_magic/users/0/subscreencenter/config/mibackscreen_quick_panel.installed";
+            THEME_MAGIC_USER_ROOT + "/subscreencenter/config/mibackscreen_quick_panel.installed";
     public static final long AI_MATE_BLANK_SNAPSHOT_MAX_BYTES = 256L * 1024L;
     public static final String AI_MATE_PEEKO_RES_ID =
             "317d9477-3731-4636-b526-15f914647826";
@@ -422,14 +432,15 @@ public final class Constants {
     public static final String PERSONAL_ASSISTANT_PRESET_PARSER_CLASS = "s5.a";
     public static final String PERSONAL_ASSISTANT_PRESET_PARSE_METHOD = "b";
     public static final String PERSONAL_ASSISTANT_PRESET_JSON_PATH =
-            "/data/system/theme_magic/users/0/mibackscreen_18/appcard/default/rearScreen.json";
+            THEME_MAGIC_MIBACKSCREEN_RESOURCE_DIR + "/appcard/default/rearScreen.json";
     public static final String PERSONAL_ASSISTANT_PRESET_JSON_CLASS =
             "com.miui.personalassistant.backscreen.store.model.PresetJson";
     public static final String PERSONAL_ASSISTANT_PRESET_CATEGORY_CLASS =
             "com.miui.personalassistant.backscreen.store.model.PresetCategory";
     public static final String PERSONAL_ASSISTANT_GSON_CLASS = "com.google.gson.Gson";
-    public static final String PERSONAL_ASSISTANT_REAR_DEVICE = "madrid";
-    public static final String PERSONAL_ASSISTANT_REAR_MODEL = "Xiaomi 18 Pro Max";
+    /** 与主题商店伪装同一身份（18 Pro Max 池），值随 THEME_REAR_* 走。 */
+    public static final String PERSONAL_ASSISTANT_REAR_DEVICE = THEME_REAR_DEVICE;
+    public static final String PERSONAL_ASSISTANT_REAR_MODEL = THEME_REAR_MODEL;
 
     // logcat 过滤用：旧名 RearScreenLongPressToggle 仅覆盖长按开关，已不符实际功能范围
     public static final String LOG_TAG = "MiBackscreen";

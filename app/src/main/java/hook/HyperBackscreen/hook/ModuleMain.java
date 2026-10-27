@@ -483,7 +483,7 @@ public class ModuleMain extends XposedModule {
                 chain -> {
                     Object displayIdValue = chain.getArgs().get(0);
                     if (displayIdValue instanceof Integer
-                            && ((Integer) displayIdValue) == 1
+                            && ((Integer) displayIdValue) == Constants.SYSTEM_SECONDARY_DISPLAY_ID
                             && PrefsBridge.shouldDisableRearScreenCover(this)) {
                         log(Log.DEBUG, Constants.LOG_TAG, "Rear screen cover skipped");
                         return null;
@@ -3866,7 +3866,7 @@ public class ModuleMain extends XposedModule {
         String applyId = sanitizeFilePart(target.applyId, "current");
         String name = sanitizeFilePart(source.getName(), "asset");
         return new File(
-                "/data/system/theme/rearScreen",
+                ThemeResourceAccess.REAR_SCREEN_RUNTIME_DIR,
                 "mibackscreen_" + resId + "_" + applyId + "_" + name);
     }
 

@@ -22,8 +22,9 @@ internal object RearScreenWallpaper {
 
     private const val PER_USER_RANGE = 100000
     private const val SNAPSHOT_FIELD = "snapshotPreviewPath"
-    private const val RUNTIME_JSON_TEMPLATE =
-        "/data/system/theme_magic/users/%d/rearScreen/runtime.json"
+    // user 按实际用户动态取（读宿主运行时产物），与模块落盘的 user 0 口径不同。
+    private val RUNTIME_JSON_TEMPLATE =
+        Constants.THEME_MAGIC_USERS_DIR + "%d/rearScreen/runtime.json"
 
     /** 当前壁纸的截图路径与指纹；指纹变化即说明壁纸记录或截图已更新。 */
     internal data class Source(val screenshotPath: String, val stamp: String)

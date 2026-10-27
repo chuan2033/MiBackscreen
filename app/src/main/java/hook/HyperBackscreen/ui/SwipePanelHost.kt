@@ -184,52 +184,6 @@ object SwipePanelHost {
         }
     }
 
-    private fun expandWithHostCardView(built: BuiltPanel, origin: View?): Boolean {
-        if (origin == null) return false
-        val root = built.root
-        val cardExpand = root.parent as? View ?: return false
-        val launcherPanel = findHostLauncherPanel(root) ?: return false
-        if (cardExpand.id != hostCardExpandContainerId(root)) return false
-        return try {
-            val callbackClass = Class.forName(
-                "U1.C0110j",
-                false,
-                launcherPanel.javaClass.classLoader,
-            )
-            val callbackConstructor = callbackClass.declaredConstructors.firstOrNull {
-                it.parameterTypes.size == 2
-                    && it.parameterTypes[1] == Integer.TYPE
-            } ?: run {
-                Log.w(TAG, "Host LauncherCardView callback constructor missing")
-                return false
-            }
-            callbackConstructor.isAccessible = true
-            val callback = callbackConstructor.newInstance(launcherPanel, 1)
-
-            callHostAnimationStatus(launcherPanel, "showAppCard", true)
-            callHostRecyclerScale(launcherPanel, 1f, CARD_DISMISS_MIN_SCALE)
-
-            val expand = cardExpand.javaClass.declaredMethods.firstOrNull {
-                it.name == "c"
-                    && it.parameterTypes.size == 2
-                    && it.parameterTypes[0] == View::class.java
-                    && it.parameterTypes[1].isAssignableFrom(callbackClass)
-            } ?: run {
-                Log.w(TAG, "Host LauncherCardView expand method missing")
-                return false
-            }
-            expand.isAccessible = true
-            expand.invoke(cardExpand, origin, callback)
-            originRect = originRect(root, origin)
-            Log.d(TAG, "Panel expanded with host LauncherCardView")
-            true
-        } catch (t: Throwable) {
-            Log.w(TAG, "Host LauncherCardView expand failed", t)
-            callHostAnimationStatus(launcherPanel, "showAppCard", false)
-            false
-        }
-    }
-
     private fun reattachPanelToVisibleHostLayer(root: FrameLayout, decor: ViewGroup) {
         val hostLayer = findHostLauncherContainer(decor)
         val target = if (hostLayer != null && hostLayer.visibility == View.VISIBLE) hostLayer else decor
@@ -386,45 +340,6 @@ object SwipePanelHost {
         val id = hostCardExpandContainerId(view)
         if (id == 0) return null
         return view.rootView?.findViewById<View>(id) as? ViewGroup
-    }
-
-    private fun findHostLauncherPanel(view: View): View? {
-        val launcherContainer = findHostLauncherContainer(view) ?: return null
-        var current = launcherContainer.parent
-        while (current is View) {
-            // C0118n is JADX's Windows filename alias; the runtime DEX name is U1.n.
-            if (current.javaClass.name == "U1.n") return current
-            current = current.parent
-        }
-        return null
-    }
-
-    private fun callHostAnimationStatus(launcherPanel: View, source: String, animating: Boolean) {
-        try {
-            val method = launcherPanel.javaClass.getDeclaredMethod(
-                "y",
-                String::class.java,
-                Boolean::class.javaPrimitiveType,
-            )
-            method.isAccessible = true
-            method.invoke(launcherPanel, source, animating)
-        } catch (t: Throwable) {
-            Log.w(TAG, "Host animation status update failed", t)
-        }
-    }
-
-    private fun callHostRecyclerScale(launcherPanel: View, from: Float, to: Float) {
-        try {
-            val method = launcherPanel.javaClass.getDeclaredMethod(
-                "A",
-                Float::class.javaPrimitiveType,
-                Float::class.javaPrimitiveType,
-            )
-            method.isAccessible = true
-            method.invoke(launcherPanel, from, to)
-        } catch (t: Throwable) {
-            Log.w(TAG, "Host recycler scale animation failed", t)
-        }
     }
 
     /**
