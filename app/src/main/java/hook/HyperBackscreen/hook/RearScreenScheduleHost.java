@@ -30,8 +30,8 @@ import io.github.libxposed.api.XposedModule;
  */
 final class RearScreenScheduleHost {
     private static final String TAG = Constants.LOG_TAG;
-    /** 15 秒够用：跨边界最晚晚 15 秒熄灭，换来的是几乎不占 CPU。 */
-    private static final long TICK_MS = 15_000L;
+    /** 5 秒：让形态切换（息屏 ↔ 黑屏）和时间窗边界更快跟上；单轮只读两个本地偏好，几乎不占 CPU。 */
+    private static final long TICK_MS = 5_000L;
     private static final Object LOCK = new Object();
 
     /** 背屏超时钩子拿到的 PowerManagerServiceImpl 实例，只用来触发状态重算。 */
@@ -95,24 +95,19 @@ final class RearScreenScheduleHost {
                     lastForceOff = forceOff;
                     if (active) {
                         module.log(Log.INFO, TAG, "Rear screen schedule: already inside off window");
-                        if (forceOff) {
-                            forceRearScreenOff(module);
-                        } else {
-                            forceRearScreenStateUpdate(module);
-                        }
+                        forceRearScreenToState(module, forceOff);
                     }
                 } else {
                     boolean modeChanged = active && lastForceOff != null && lastForceOff != forceOff;
                     if (previous != active || modeChanged) {
                         logTransition(module, active);
                         if (active) {
-                            // off = 背屏休眠（纯黑）；doze = 停在息屏（超时覆盖 + 状态重算）。
-                            if (forceOff) {
-                                forceRearScreenOff(module);
-                            } else {
-                                forceRearScreenStateUpdate(module);
-                            }
-                        } else if (PrefsBridge.shouldAutoWakeRearScreen(module)) {
+                            // off = 背屏休眠（纯黑）；doze = 停在息屏（AOD）。
+                            forceRearScreenToState(module, forceOff);
+                        } else {
+                            // 曾经处于窗口、现在不再处于：无论是窗口自然结束还是用户中途关闭，
+                            // 都主动恢复背屏点亮。开机就不在窗口的情况已被首轮 previous==null
+                            // 守卫拦下，不会走到这里，所以这里一定是「退出窗口」语义。
                             wakeRearScreen(module);
                         }
                     }
@@ -140,41 +135,42 @@ final class RearScreenScheduleHost {
     }
 
     /**
-     * 触发一次背屏电源状态重算。
+     * 把背屏切到指定形态。
      *
-     * `PowerManagerService#userActivitySecondaryDisplay(displayId, eventTime, event, flags, uid)`
-     * 是系统自己的公开入口，内部会拿 mLock 再调 updatePowerStateLocked，所以在我们线程里调用
-     * 不需要手动持锁。重算时超时会被 `adjustScreenOffTimeoutIfNeededLocked` 覆盖成 1 秒，
-     * 背屏随即按正常流程熄灭。
+     * 走 `PowerManagerService#goToSleepOrDozeSubDisplay(group, isNoDoze, ...)`：
+     * `isNoDoze=true` 内部是 `sleepPowerGroupLocked`，对应纯黑（关闭背屏）；
+     * `isNoDoze=false` 是 `dozePowerGroupLocked`，对应息屏（AOD）。
+     * 两个形态都用这一个入口直接置位，不依赖当前屏幕状态，所以中途切换形态
+     * （息屏 ↔ 黑屏）也能立刻生效，不会因为背屏已经睡死而改不动。
+     * 同样是 `Locked` 语义，持 `mLock` 调用，与系统 binder 线程一致。
      */
-    private static void forceRearScreenStateUpdate(@NonNull XposedModule module) {
-        WeakReference<Object> reference = powerManagerServiceImpl;
-        Object service = reference == null ? null : reference.get();
-        if (service == null) {
-            module.log(Log.WARN, TAG,
-                    "Rear screen schedule: power service not captured yet, skip boundary action");
-            return;
-        }
+    private static void forceRearScreenToState(@NonNull XposedModule module, boolean noDoze) {
+        Object[] internals = resolvePowerInternals(module);
+        if (internals == null) return;
+        Object powerManagerService = internals[0];
+        Object lock = internals[1];
+        Object powerGroup = internals[2];
         try {
-            Object powerManagerService = readField(service, "mPowerManagerService");
-            if (powerManagerService == null) {
-                module.log(Log.WARN, TAG, "Rear screen schedule: mPowerManagerService is null");
+            Method method = findMethod(powerManagerService.getClass(), "goToSleepOrDozeSubDisplay",
+                    powerGroup.getClass(), boolean.class, long.class, int.class, int.class);
+            if (method == null) {
+                module.log(Log.WARN, TAG, "Rear screen schedule: state change skipped, method missing");
                 return;
             }
-            Method method = powerManagerService.getClass().getDeclaredMethod(
-                    "userActivitySecondaryDisplay",
-                    int.class, long.class, int.class, int.class, int.class);
             method.setAccessible(true);
-            // event 0 = USER_ACTIVITY_EVENT_OTHER，flags 0，uid 用 system。
-            method.invoke(powerManagerService,
-                    Constants.SYSTEM_SECONDARY_DISPLAY_GROUP_ID,
-                    SystemClock.uptimeMillis(),
-                    0,
-                    0,
-                    Process.SYSTEM_UID);
-            module.log(Log.INFO, TAG, "Rear screen schedule: power state refresh requested");
+            synchronized (lock) {
+                method.invoke(powerManagerService,
+                        powerGroup,
+                        noDoze,
+                        SystemClock.uptimeMillis(),
+                        Constants.GO_TO_SLEEP_REASON_TIMEOUT,
+                        Process.SYSTEM_UID);
+            }
+            module.log(Log.INFO, TAG, noDoze
+                    ? "Rear screen schedule: rear screen sleep requested"
+                    : "Rear screen schedule: rear screen doze requested");
         } catch (Throwable error) {
-            module.log(Log.WARN, TAG, "Rear screen schedule: refresh request failed", error);
+            module.log(Log.WARN, TAG, "Rear screen schedule: state change request failed", error);
         }
     }
 
@@ -191,42 +187,6 @@ final class RearScreenScheduleHost {
             }
         }
         return null;
-    }
-
-    /**
-     * 直接把背屏关掉（纯黑，不是息屏）。
-     *
-     * 走 `PowerManagerService#goToSleepOrDozeSubDisplay(group, isNoDoze=true, ...)`，
-     * 内部就是 `sleepPowerGroupLocked`，对应背屏的 ASLEEP 状态；`dozePowerGroupLocked`
-     * 那条路才会落到息屏。超时覆盖只能推到 doze，所以「关闭背屏」必须在这里主动关。
-     * 同样是 `Locked` 语义，持 `mLock` 调用，与系统 binder 线程一致。
-     */
-    private static void forceRearScreenOff(@NonNull XposedModule module) {
-        Object[] internals = resolvePowerInternals(module);
-        if (internals == null) return;
-        Object powerManagerService = internals[0];
-        Object lock = internals[1];
-        Object powerGroup = internals[2];
-        try {
-            Method sleep = findMethod(powerManagerService.getClass(), "goToSleepOrDozeSubDisplay",
-                    powerGroup.getClass(), boolean.class, long.class, int.class, int.class);
-            if (sleep == null) {
-                module.log(Log.WARN, TAG, "Rear screen schedule: sleep skipped, method missing");
-                return;
-            }
-            sleep.setAccessible(true);
-            synchronized (lock) {
-                sleep.invoke(powerManagerService,
-                        powerGroup,
-                        true,
-                        SystemClock.uptimeMillis(),
-                        Constants.GO_TO_SLEEP_REASON_TIMEOUT,
-                        Process.SYSTEM_UID);
-            }
-            module.log(Log.INFO, TAG, "Rear screen schedule: rear screen sleep requested");
-        } catch (Throwable error) {
-            module.log(Log.WARN, TAG, "Rear screen schedule: sleep request failed", error);
-        }
     }
 
     /**

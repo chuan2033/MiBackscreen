@@ -18,10 +18,9 @@ public final class RearScreenSchedule {
     public static final String DEFAULT_START = "23:00";
     public static final String DEFAULT_END = "07:00";
     /**
-     * 结束边界后允许「主动点亮背屏」的宽限分钟数。
+     * 结束边界后的宽限分钟数，用于判断「当前是否刚离开时间窗不久」。
      *
-     * 到点自动开启只在边界附近做：手机整个时间窗都在休眠、几小时后才醒来时，
-     * 不应该一抬手就自己把背屏点亮 —— 那种时候由用户自己唤醒更合理。
+     * 纯计算辅助：给上层判断「刚过结束点」这类场景用，本身不驱动任何唤醒逻辑。
      */
     public static final int WAKE_SLACK_MINUTES = 3;
 
@@ -93,10 +92,9 @@ public final class RearScreenSchedule {
     }
 
     /**
-     * 结束边界后是否在「到点自动开启」的宽限内。
+     * 当前是否刚离开时间窗不久（结束边界后的 [WAKE_SLACK_MINUTES] 分钟内）。
      *
-     * 只在时间窗结束的 [WAKE_SLACK_MINUTES] 分钟内为 true；窗口内、
-     * 或结束几小时后才被发现时都返回 false（那种情况交给用户自己唤醒）。
+     * 纯计算辅助：窗口内、或结束超过宽限后才被发现时都返回 false。
      */
     public static boolean isWithinWakeSlack(
             @Nullable String start,

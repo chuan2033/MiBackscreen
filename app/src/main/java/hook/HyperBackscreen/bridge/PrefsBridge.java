@@ -664,31 +664,6 @@ public final class PrefsBridge {
     }
 
     /**
-     * 时间窗结束后短时间内是否应当主动点亮背屏。
-     *
-     * 与 [isRearScreenScheduleActiveNow] 一起构成窗口两端：进窗口熄灭、出窗口点亮。
-     * 只在结束边界附近的宽限内为 true —— 手机长时间休眠后才醒来的场景不点亮。
-     */
-    public static boolean shouldAutoWakeRearScreen(@NonNull XposedModule module) {
-        if (!readForHook(
-                module,
-                Constants.KEY_REAR_SCREEN_SCHEDULE_ENABLED,
-                DEFAULT_REAR_SCREEN_SCHEDULE_ENABLED)) {
-            return false;
-        }
-        return RearScreenSchedule.isWithinWakeSlack(
-                readStringForHook(
-                        module,
-                        Constants.KEY_REAR_SCREEN_SCHEDULE_START,
-                        DEFAULT_REAR_SCREEN_SCHEDULE_START),
-                readStringForHook(
-                        module,
-                        Constants.KEY_REAR_SCREEN_SCHEDULE_END,
-                        DEFAULT_REAR_SCREEN_SCHEDULE_END),
-                RearScreenSchedule.nowMinutes());
-    }
-
-    /**
      * 导出会改变行为/观感的偏好（布尔值转成 "true"/"false"，其余保持字符串）。
      * 顺序与 [BACKUP_BOOLEAN_DEFAULTS] / [BACKUP_STRING_DEFAULTS] 一致，方便人工比对。
      */
