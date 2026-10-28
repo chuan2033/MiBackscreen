@@ -137,6 +137,78 @@ public final class TargetMembers {
         return found;
     }
 
+    // ---- 以下为「结构定位优先、混淆名兜底」的解析入口，供业务代码逐处替换内联混淆名 ----
+
+    /**
+     * 按签名定位方法，不唯一或未命中时回退到指定混淆名。
+     *
+     * @param fallbackName 签名定位失败时使用的混淆方法名（当前宿主版本的已知名字）。
+     */
+    @Nullable
+    public static Method resolveMethod(
+            @NonNull Class<?> owner,
+            @Nullable Class<?> returnType,
+            @NonNull Class<?>[] parameterTypes,
+            @NonNull String fallbackName) {
+        Method method = uniqueMethod(owner, returnType, parameterTypes);
+        if (method != null) {
+            method.setAccessible(true);
+            return method;
+        }
+        try {
+            Method m = owner.getDeclaredMethod(fallbackName, parameterTypes);
+            m.setAccessible(true);
+            return m;
+        } catch (NoSuchMethodException e) {
+            return null;
+        }
+    }
+
+    /** 无参、返回类型匹配的方法；不唯一或未命中时回退到指定混淆名。 */
+    @Nullable
+    public static Method resolveNoArgMethod(
+            @NonNull Class<?> owner,
+            @NonNull Class<?> returnType,
+            @NonNull String fallbackName) {
+        return resolveMethod(owner, returnType, new Class<?>[0], fallbackName);
+    }
+
+    /**
+     * 按类型定位实例字段，不唯一或未命中时回退到指定混淆名。
+     *
+     * @param fallbackName 结构定位失败时使用的混淆字段名。
+     */
+    @Nullable
+    public static Field resolveField(
+            @NonNull Class<?> owner,
+            @NonNull Class<?> type,
+            @NonNull String fallbackName) {
+        Field field = uniqueFieldOfType(owner, type);
+        if (field != null) {
+            field.setAccessible(true);
+            return field;
+        }
+        try {
+            Field f = owner.getDeclaredField(fallbackName);
+            f.setAccessible(true);
+            return f;
+        } catch (NoSuchFieldException e) {
+            return null;
+        }
+    }
+
+    /** 从解析结果取成员名；解析失败时返回兜底名。用于只需名字的旧接口。 */
+    @NonNull
+    public static String methodName(@Nullable Method method, @NonNull String fallbackName) {
+        return method != null ? method.getName() : fallbackName;
+    }
+
+    /** 从解析结果取字段名；解析失败时返回兜底名。 */
+    @NonNull
+    public static String fieldName(@Nullable Field field, @NonNull String fallbackName) {
+        return field != null ? field.getName() : fallbackName;
+    }
+
     private static boolean sameTypes(@NonNull Class<?>[] actual, @NonNull Class<?>[] expected) {
         if (actual.length != expected.length) return false;
         for (int index = 0; index < actual.length; index++) {

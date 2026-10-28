@@ -65,9 +65,11 @@ import hook.HyperBackscreen.common.RearScreenWakeMatcher;
 import hook.HyperBackscreen.common.ThemeResourceAccess;
 import hook.HyperBackscreen.ui.SwipePanelHost;
 import hook.HyperBackscreen.ui.battery.BatteryRingHost;
+import hook.HyperBackscreen.hook.target.MethodTarget;
 import hook.HyperBackscreen.hook.target.SubScreenTargets;
 import hook.HyperBackscreen.hook.target.TargetMembers;
 import hook.HyperBackscreen.hook.target.TargetResolver;
+import hook.HyperBackscreen.hook.target.ThemeMethodTargets;
 import io.github.libxposed.api.XposedModule;
 
 public class ModuleMain extends XposedModule {
@@ -210,6 +212,7 @@ public class ModuleMain extends XposedModule {
             synchronized (this) {
                 if (themeStoreHooksInstalled) return;
                 try {
+                    installTargetResolver(packageName);
                     installWallpaperLimitHook(param.getClassLoader());
                     installThemeDeviceIdentityHooks(param.getClassLoader());
                     installThemeNetworkDeviceSpoofHook(param.getClassLoader());
@@ -881,7 +884,9 @@ public class ModuleMain extends XposedModule {
         try {
             ArrayList<Object> items = readSubscreenAppInfoList(classLoader, appInfoFile);
             if (items == null) return;
-            if (setFieldValue(listManager, "c", items)) {
+            String listFieldName = TargetMembers.fieldName(
+                    TargetMembers.resolveField(listManager.getClass(), ArrayList.class, "c"), "c");
+            if (setFieldValue(listManager, listFieldName, items)) {
                 lastSubscreenAppInfoModified = modified;
                 lastSubscreenAppInfoLength = length;
                 lastSubscreenAppInfoCount = items.size();
@@ -907,7 +912,9 @@ public class ModuleMain extends XposedModule {
             @NonNull ArrayList<Object> items,
             @NonNull String source
     ) {
-        Object listenersValue = getFieldValue(listManager, "a");
+        String listenersFieldName = TargetMembers.fieldName(
+                TargetMembers.resolveField(listManager.getClass(), HashSet.class, "a"), "a");
+        Object listenersValue = getFieldValue(listManager, listenersFieldName);
         if (!(listenersValue instanceof Collection<?> listeners) || listeners.isEmpty()) return;
         Class<?> entryClass = TargetResolver.resolveClass(classLoader, SubScreenTargets.LAUNCHER_ENTRY);
         if (entryClass == null) return;
@@ -915,8 +922,9 @@ public class ModuleMain extends XposedModule {
         int notified = 0;
         for (Object listener : new ArrayList<>(listeners)) {
             if (listener == null) continue;
-            Method callback = findDeclaredMethod(
-                    listener.getClass(), "a", ArrayList.class, String.class, entryClass);
+            Method callback = TargetMembers.resolveMethod(
+                    listener.getClass(), void.class,
+                    new Class<?>[]{ArrayList.class, String.class, entryClass}, "a");
             if (callback == null) continue;
             try {
                 callback.invoke(listener, new ArrayList<>(payload), source, null);
@@ -949,7 +957,10 @@ public class ModuleMain extends XposedModule {
                 JSONObject item = array.optJSONObject(i);
                 if (item == null) continue;
                 Object entry = constructor.newInstance();
-                callMethodQuietly(entry, "c", item.optString("appName", null));
+                String appNameSetter = TargetMembers.methodName(
+                        TargetMembers.resolveMethod(
+                                entryClass, void.class, new Class<?>[]{String.class}, "c"), "c");
+                callMethodQuietly(entry, appNameSetter, item.optString("appName", null));
                 setFieldValue(entry, Constants.SUBSCREEN_LAUNCHER_ENTRY_MTZ_FIELD,
                         item.optString("mtzPath", null));
                 setFieldValue(entry, Constants.SUBSCREEN_LAUNCHER_ENTRY_BIND_APP_FIELD,
@@ -1554,32 +1565,27 @@ public class ModuleMain extends XposedModule {
         // 只保留 isSupportRearScreen 标志。device / version / model 不在 DeviceUtils 层全局改写：
         // 那会让所有主题商店请求都声称自己是 18 Pro Max，普通背屏资源详情直接 404。
         // 需要伪装的请求由 installThemeNetworkDeviceSpoofHook 按路径与 request_flag 精确注入。
-        hookBooleanTrueIfPresent(
+        hookBooleanTrueByTarget(
                 classLoader,
-                Constants.THEME_DEVICE_UTILS_CLASS,
-                "a");
-        hookStringReturnIfPresent(
+                ThemeMethodTargets.DEVICE_UTILS_IS_SUPPORT_REAR);
+        hookStringReturnByTarget(
                 classLoader,
-                Constants.THEME_DEVICE_UTILS_CLASS,
-                "y",
+                ThemeMethodTargets.DEVICE_UTILS_DEVICE,
                 Constants.THEME_REAR_DEVICE,
                 this::shouldSpoofThemeAiPageDeviceIdentity);
-        hookStringReturnIfPresent(
+        hookStringReturnByTarget(
                 classLoader,
-                Constants.THEME_DEVICE_UTILS_CLASS,
-                "cdj",
+                ThemeMethodTargets.DEVICE_UTILS_MODEL,
                 Constants.THEME_REAR_MODEL,
                 this::shouldSpoofThemeAiPageDeviceIdentity);
-        hookStringReturnIfPresent(
+        hookStringReturnByTarget(
                 classLoader,
-                Constants.THEME_DEVICE_UTILS_CLASS,
-                "z",
+                ThemeMethodTargets.DEVICE_UTILS_VERSION,
                 Constants.THEME_REAR_VERSION,
                 this::shouldSpoofThemeAiPageDeviceIdentity);
-        hookStringReturnIfPresent(
+        hookStringReturnByTarget(
                 classLoader,
-                Constants.THEME_ONLINE_SERVICE_CLASS,
-                "fnq8",
+                ThemeMethodTargets.ONLINE_SERVICE_VERSION,
                 Constants.THEME_REAR_VERSION,
                 this::shouldSpoofThemeAiPageDeviceIdentity);
     }
@@ -1639,7 +1645,7 @@ public class ModuleMain extends XposedModule {
 
     @NonNull
     private String summarizeThemeNetworkRequest(@Nullable Object request, @Nullable Object params) {
-        String path = asString(callMethodQuietly(request, "cdj"));
+        String path = asString(callMethodResolvedByTarget(request, ThemeMethodTargets.REQUEST_URL));
         String url = stripQueryAndFragment(String.valueOf(callMethodQuietly(request, "url")));
         String requestFlag = asString(callMethodQuietly(
                 request, "s", Constants.THEME_AI_APP_REQUEST_FLAG_HEADER));
@@ -1685,7 +1691,7 @@ public class ModuleMain extends XposedModule {
 
     @Nullable
     private String themeRequestPathOrUrl(@Nullable Object request) {
-        String raw = asString(callMethodQuietly(request, "cdj"));
+        String raw = asString(callMethodResolvedByTarget(request, ThemeMethodTargets.REQUEST_URL));
         if (!isEmpty(raw)) return raw;
         raw = String.valueOf(callMethodQuietly(request, "url"));
         return isEmpty(raw) ? null : raw;
@@ -1693,7 +1699,7 @@ public class ModuleMain extends XposedModule {
 
     @Nullable
     private String themeRequestFlag(@Nullable Object request) {
-        return asString(callMethodQuietly(request, "s", Constants.THEME_AI_APP_REQUEST_FLAG_HEADER));
+        return asString(callMethodResolved(request, String.class, "s", Constants.THEME_AI_APP_REQUEST_FLAG_HEADER));
     }
 
     private void installThemeLegacyDownloadHook(@NonNull ClassLoader classLoader) {
@@ -1703,11 +1709,15 @@ public class ModuleMain extends XposedModule {
             log(Log.WARN, Constants.LOG_TAG, "Theme legacy download hook target missing");
             return;
         }
+        String downloadMethodName = TargetMembers.methodName(
+                TargetMembers.resolveMethod(
+                        networkHelperClass, String.class,
+                        new Class<?>[]{requestUrlClass}, "f7l8"), "f7l8");
         hookMethodIfPresent(
                 networkHelperClass,
-                "f7l8",
+                downloadMethodName,
                 new Class[]{requestUrlClass},
-                Constants.THEME_NETWORK_HELPER_CLASS + "#f7l8",
+                Constants.THEME_NETWORK_HELPER_CLASS + "#" + downloadMethodName,
                 chain -> {
                     if (!PrefsBridge.shouldEnable18ProFeatures(this)) return chain.proceed();
                     Object requestUrl = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
@@ -1884,7 +1894,8 @@ public class ModuleMain extends XposedModule {
                             + " com.rearScreen.helper.RearScreenBiometricHelper");
             return;
         }
-        Method method = findDeclaredMethod(helper, "k", Context.class);
+        Method method = TargetMembers.resolveMethod(
+                helper, int.class, new Class<?>[]{Context.class}, "k");
         if (method == null || method.getReturnType() != int.class
                 || !java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
             log(Log.WARN, Constants.LOG_TAG,
@@ -2158,11 +2169,14 @@ public class ModuleMain extends XposedModule {
         Class<?> settingHelperCompanionClass = findClass(
                 Constants.THEME_SETTING_HELPER_COMPANION_CLASS, classLoader);
         if (settingHelperCompanionClass != null) {
+            Method cmfMethod = TargetResolver.resolveMethod(
+                    classLoader, ThemeMethodTargets.SETTING_HELPER_CMF);
+            String cmfLabel = Constants.THEME_SETTING_HELPER_COMPANION_CLASS
+                    + "#" + (cmfMethod != null ? cmfMethod.getName() : "zy");
             hookMethodIfPresent(
-                    settingHelperCompanionClass,
-                    "zy",
-                    new Class[]{},
-                    Constants.THEME_SETTING_HELPER_COMPANION_CLASS + "#zy",
+                    cmfMethod != null ? cmfMethod
+                            : findDeclaredMethod(settingHelperCompanionClass, "zy"),
+                    cmfLabel,
                     chain -> {
                         Object result = chain.proceed();
                         if (!PrefsBridge.shouldEnable18ProFeatures(this)) return result;
@@ -2178,11 +2192,14 @@ public class ModuleMain extends XposedModule {
 
         Class<?> miuiUtilsClass = findClass(Constants.THEME_MIUI_UTILS_CLASS, classLoader);
         if (miuiUtilsClass != null) {
+            Method isRearMethod = TargetResolver.resolveMethod(
+                    classLoader, ThemeMethodTargets.MIUI_UTILS_IS_REAR);
+            String isRearLabel = Constants.THEME_MIUI_UTILS_CLASS
+                    + "#" + (isRearMethod != null ? isRearMethod.getName() : "zurt");
             hookMethodIfPresent(
-                    miuiUtilsClass,
-                    "zurt",
-                    new Class[]{},
-                    Constants.THEME_MIUI_UTILS_CLASS + "#zurt",
+                    isRearMethod != null ? isRearMethod
+                            : findDeclaredMethod(miuiUtilsClass, "zurt"),
+                    isRearLabel,
                     chain -> PrefsBridge.shouldEnable18ProFeatures(this) ? false : chain.proceed()
             );
         } else {
@@ -2200,11 +2217,13 @@ public class ModuleMain extends XposedModule {
                             + Constants.THEME_REAR_PRESET_REPOSITORY_CLASS);
             return;
         }
+        Method presetMethod = TargetResolver.resolveMethod(
+                classLoader, ThemeMethodTargets.PRESET_REPOSITORY_LIST);
+        String presetMethodName = TargetMembers.methodName(presetMethod, "k");
         hookMethodIfPresent(
-                repositoryClass,
-                "k",
-                new Class[]{continuationClass},
-                Constants.THEME_REAR_PRESET_REPOSITORY_CLASS + "#k",
+                presetMethod != null ? presetMethod
+                        : findDeclaredMethod(repositoryClass, presetMethodName, new Class[]{continuationClass}),
+                Constants.THEME_REAR_PRESET_REPOSITORY_CLASS + "#" + presetMethodName,
                 chain -> {
                     Object result = chain.proceed();
                     if (!PrefsBridge.shouldEnable18ProFeatures(this)) return result;
@@ -2246,7 +2265,11 @@ public class ModuleMain extends XposedModule {
         if (repository == null) return 0;
         ArrayList<Object> supplemental = new ArrayList<>();
         try {
-            Object value = callMethodCompatible(repository, "zurt", supplemental, path);
+            String mergeMethodName = TargetMembers.methodName(
+                    TargetMembers.resolveMethod(
+                            repository.getClass(), List.class,
+                            new Class<?>[]{ArrayList.class, String.class}, "zurt"), "zurt");
+            Object value = callMethodCompatible(repository, mergeMethodName, supplemental, path);
             List<?> parsed = value instanceof List<?> list ? list : supplemental;
             log(Log.DEBUG, Constants.LOG_TAG,
                     "Rear personalization preset source: path=" + path
@@ -2412,11 +2435,15 @@ public class ModuleMain extends XposedModule {
             return;
         }
 
+        String entryConfigMethodName = TargetMembers.methodName(
+                TargetMembers.resolveMethod(
+                        entryConfigCompanionClass, List.class,
+                        new Class<?>[]{Context.class}, "k"), "k");
         hookMethodIfPresent(
                 entryConfigCompanionClass,
-                "k",
+                entryConfigMethodName,
                 new Class[]{Context.class},
-                Constants.THEME_ENTRY_CONFIG_COMPANION_CLASS + "#k",
+                Constants.THEME_ENTRY_CONFIG_COMPANION_CLASS + "#" + entryConfigMethodName,
                 chain -> {
                     Object result = chain.proceed();
                     boolean showModuleShortcut = PrefsBridge.shouldShowThemeSettingsShortcut(this);
@@ -2498,11 +2525,14 @@ public class ModuleMain extends XposedModule {
             @NonNull String label,
             @NonNull String methodName
     ) {
+        String resolved = TargetMembers.methodName(
+                TargetMembers.resolveNoArgMethod(targetClass, boolean.class, methodName),
+                methodName);
         hookMethodIfPresent(
                 targetClass,
-                methodName,
+                resolved,
                 new Class[]{},
-                label + "#" + methodName,
+                label + "#" + resolved,
                 chain -> PrefsBridge.shouldEnable18ProFeatures(this) ? true : chain.proceed()
         );
     }
@@ -2533,13 +2563,68 @@ public class ModuleMain extends XposedModule {
             log(Log.DEBUG, Constants.LOG_TAG, "String hook target missing: " + className);
             return;
         }
+        String resolved = TargetMembers.methodName(
+                TargetMembers.resolveNoArgMethod(targetClass, String.class, methodName),
+                methodName);
         hookMethodIfPresent(
                 targetClass,
-                methodName,
+                resolved,
                 new Class[]{},
-                className + "#" + methodName,
+                className + "#" + resolved,
                 chain -> enabled.getAsBoolean() ? value : chain.proceed()
         );
+    }
+
+    /** 用 DexKit 方法体锚点定位方法，命中后挂钩子把返回值替换为固定字符串。 */
+    private void hookStringReturnByTarget(
+            @NonNull ClassLoader classLoader,
+            @NonNull MethodTarget target,
+            @NonNull String value,
+            @NonNull BooleanSupplier enabled
+    ) {
+        Method method = TargetResolver.resolveMethod(classLoader, target);
+        if (method == null) {
+            log(Log.DEBUG, Constants.LOG_TAG,
+                    "String hook target missing: " + target.getOwnerClass() + "#" + target.getFallbackName());
+            return;
+        }
+        hookMethodIfPresent(
+                method,
+                target.getOwnerClass() + "#" + method.getName(),
+                chain -> enabled.getAsBoolean() ? value : chain.proceed()
+        );
+    }
+
+    /** 用 DexKit 方法体锚点定位无参布尔方法，命中后挂钩子在启用时强制返回 true。 */
+    private void hookBooleanTrueByTarget(
+            @NonNull ClassLoader classLoader,
+            @NonNull MethodTarget target
+    ) {
+        Method method = TargetResolver.resolveMethod(classLoader, target);
+        if (method == null) {
+            log(Log.DEBUG, Constants.LOG_TAG,
+                    "Boolean hook target missing: " + target.getOwnerClass() + "#" + target.getFallbackName());
+            return;
+        }
+        hookMethodIfPresent(
+                method,
+                target.getOwnerClass() + "#" + method.getName(),
+                chain -> PrefsBridge.shouldEnable18ProFeatures(this) ? true : chain.proceed()
+        );
+    }
+
+    /** 用 DexKit 方法体锚点定位无参方法并调用；未命中时返回 null。 */
+    @Nullable
+    private static Object callMethodResolvedByTarget(
+            @Nullable Object target, @NonNull MethodTarget spec) {
+        if (target == null) return null;
+        Method method = TargetResolver.resolveMethod(target.getClass().getClassLoader(), spec);
+        if (method == null) return null;
+        try {
+            return method.invoke(target);
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     private Object injectThemeSettingsShortcutList(
@@ -2559,7 +2644,7 @@ public class ModuleMain extends XposedModule {
 
         List<String> keys = new ArrayList<>();
         for (Object item : rawList) {
-            Object key = callNoArgMethodQuietly(item, "g");
+            Object key = callNoArgMethodResolved(item, String.class, "g");
             if (key instanceof String) keys.add((String) key);
         }
         List<Integer> insertionIndexes = SettingsEntryPlacement.insertionIndexesAfterAnchor(
@@ -2608,7 +2693,7 @@ public class ModuleMain extends XposedModule {
 
     private boolean containsControllerKey(@NonNull List<?> list, @NonNull String expectedKey) {
         for (Object item : list) {
-            Object key = callNoArgMethodQuietly(item, "g");
+            Object key = callNoArgMethodResolved(item, String.class, "g");
             if (expectedKey.equals(key)) return true;
         }
         return false;
@@ -2698,7 +2783,7 @@ public class ModuleMain extends XposedModule {
         boolean hasKnownRearScreenEntry = false;
         for (Object item : list) {
             if (themeSettingsShortcutControllers.contains(item)) return true;
-            Object key = callNoArgMethodQuietly(item, "g");
+            Object key = callNoArgMethodResolved(item, String.class, "g");
             if ("user_guide".equals(key) || "serve_assistant".equals(key)) {
                 hasKnownRearScreenEntry = true;
             }
@@ -4367,6 +4452,45 @@ public class ModuleMain extends XposedModule {
         if (target == null) return null;
         try {
             return callMethod(target, method);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * 按返回类型结构定位无参方法并调用；不唯一或未命中时回退到指定混淆名。
+     */
+    @Nullable
+    private static Object callNoArgMethodResolved(
+            @Nullable Object target, @NonNull Class<?> returnType, @NonNull String fallbackName) {
+        if (target == null) return null;
+        Method method = TargetMembers.resolveNoArgMethod(target.getClass(), returnType, fallbackName);
+        if (method == null) return null;
+        try {
+            return method.invoke(target);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * 按签名结构定位方法并调用；不唯一或未命中时回退到指定混淆名。
+     */
+    @Nullable
+    private static Object callMethodResolved(
+            @Nullable Object target,
+            @Nullable Class<?> returnType,
+            @NonNull String fallbackName,
+            Object... args) {
+        if (target == null) return null;
+        Class<?>[] paramTypes = new Class<?>[args.length];
+        for (int i = 0; i < args.length; i++) {
+            paramTypes[i] = args[i] != null ? args[i].getClass() : Object.class;
+        }
+        Method method = TargetMembers.resolveMethod(target.getClass(), returnType, paramTypes, fallbackName);
+        if (method == null) return null;
+        try {
+            return method.invoke(target, args);
         } catch (Throwable ignored) {
             return null;
         }

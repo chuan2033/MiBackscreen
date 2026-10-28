@@ -2,11 +2,17 @@ package hook.HyperBackscreen.hook.target
 
 import android.content.Context
 import java.io.File
+import java.lang.reflect.Method
 import java.util.function.Consumer
 import org.json.JSONObject
 import org.luckypray.dexkit.DexKitBridge
 import org.luckypray.dexkit.query.FindClass
+import org.luckypray.dexkit.query.FindMethod
+import org.luckypray.dexkit.query.enums.UsingType
 import org.luckypray.dexkit.query.matchers.ClassMatcher
+import org.luckypray.dexkit.query.matchers.MethodMatcher
+import org.luckypray.dexkit.query.matchers.MethodsMatcher
+import org.luckypray.dexkit.query.matchers.UsingFieldMatcher
 
 /**
  * 用 DexKit 按结构解析宿主混淆类，并把结果按宿主版本缓存下来。
@@ -103,6 +109,156 @@ internal object TargetResolver {
 
     @JvmStatic
     fun snapshot(): List<String> = synchronized(diagnostics) { diagnostics.toList() }
+
+    /**
+     * 按结构解析宿主混淆方法，缓存与 [resolveClass] 共用同一个文件。
+     *
+     * 解析顺序：内存 → 版本缓存 → DexKit 查询 → 兜底方法名。
+     * 只有 DexKit 查询成功才写缓存，兜底命中不写。
+     */
+    @JvmStatic
+    fun resolveMethod(classLoader: ClassLoader, target: MethodTarget): Method? {
+        val cacheKey = "method:${target.id}"
+        memory[cacheKey]?.let { name ->
+            findMethodByName(name, target, classLoader)?.let {
+                record(cacheKey, name, "缓存")
+                return it
+            }
+            memory.remove(cacheKey)
+        }
+
+        val cached = cacheHolder[0]?.optString(cacheKey)?.takeIf { it.isNotEmpty() }
+        if (cached != null) {
+            findMethodByName(cached, target, classLoader)?.let {
+                memory[cacheKey] = cached
+                record(cacheKey, cached, "缓存")
+                return it
+            }
+            logger?.accept("Cached method target stale: ${target.id} -> $cached")
+            cacheHolder[0]?.remove(cacheKey)
+        }
+
+        val found = queryDexKitMethod(target)
+        if (found != null) {
+            findMethodByName(found, target, classLoader)?.let {
+                memory[cacheKey] = found
+                writeCache(cacheKey, found)
+                record(cacheKey, found, "DexKit")
+                return it
+            }
+        }
+
+        findMethodByName(target.fallbackName, target, classLoader)?.let {
+            record(cacheKey, target.fallbackName, "兜底名字")
+            logger?.accept("Method target resolved by fallback name: ${target.id} -> ${target.fallbackName}")
+            return it
+        }
+
+        record(cacheKey, "<未命中>", "失败")
+        logger?.accept("Method target missing: ${target.id} owner=${target.ownerClass}")
+        return null
+    }
+
+    private fun findMethodByName(
+        name: String,
+        target: MethodTarget,
+        classLoader: ClassLoader,
+    ): Method? = runCatching {
+        val owner = Class.forName(target.ownerClass, false, classLoader)
+        val paramTypes = target.parameterTypes.map {
+            when (it) {
+                "int" -> Int::class.javaPrimitiveType!!
+                "long" -> Long::class.javaPrimitiveType!!
+                "boolean" -> Boolean::class.javaPrimitiveType!!
+                "float" -> Float::class.javaPrimitiveType!!
+                "double" -> Double::class.javaPrimitiveType!!
+                "short" -> Short::class.javaPrimitiveType!!
+                "byte" -> Byte::class.javaPrimitiveType!!
+                "char" -> Char::class.javaPrimitiveType!!
+                "void" -> Void::class.javaPrimitiveType!!
+                else -> Class.forName(it, false, classLoader)
+            }
+        }.toTypedArray()
+        val method = owner.getDeclaredMethod(name, *paramTypes)
+        method.isAccessible = true
+        method
+    }.getOrNull()
+
+    private fun queryDexKitMethod(target: MethodTarget): String? {
+        val activeBridge = bridge ?: return null
+        if (target.bodyStrings.isEmpty() && target.usingFieldDescriptors.isEmpty()
+            && target.usingFieldTypes.isEmpty() && target.usingNumbers.isEmpty()
+            && target.invokeMethodSpecs.isEmpty()
+        ) return null
+        return runCatching {
+            val matcher = MethodMatcher.create()
+                .declaredClass(target.ownerClass)
+            if (target.returnType != null) {
+                matcher.returnType(target.returnType)
+            }
+            // 参数列表长度隐含参数个数：空列表 = 无参方法，必须写入才能约束参数个数。
+            matcher.paramTypes(*target.parameterTypes.toTypedArray())
+            if (target.bodyStrings.isNotEmpty()) {
+                matcher.usingEqStrings(*target.bodyStrings.toTypedArray())
+            }
+            if (target.usingFieldDescriptors.isNotEmpty()
+                || target.usingFieldTypes.isNotEmpty()
+            ) {
+                val fieldMatchers = buildList {
+                    target.usingFieldDescriptors.forEach { desc ->
+                        add(UsingFieldMatcher(desc, UsingType.Read))
+                    }
+                    target.usingFieldTypes.forEach { anchor ->
+                        add(
+                            UsingFieldMatcher()
+                                .declaredClass(anchor.declaredClass)
+                                .type(anchor.typeName)
+                                .usingType(UsingType.Read)
+                        )
+                    }
+                }
+                matcher.usingFields(fieldMatchers)
+            }
+            if (target.usingNumbers.isNotEmpty()) {
+                matcher.usingNumbers(*target.usingNumbers.toTypedArray())
+            }
+            if (target.invokeMethodSpecs.isNotEmpty()) {
+                val methodsMatcher = MethodsMatcher()
+                target.invokeMethodSpecs.forEach { spec ->
+                    val invokeMatcher = MethodMatcher()
+                    spec.declaringClass?.let { invokeMatcher.declaredClass(it) }
+                    spec.returnType?.let { invokeMatcher.returnType(it) }
+                    spec.parameterTypes?.let { types ->
+                        invokeMatcher.paramTypes(*types.toTypedArray())
+                    }
+                    methodsMatcher.add(invokeMatcher)
+                }
+                matcher.invokeMethods(methodsMatcher)
+            }
+            val finder = FindMethod.create().matcher(matcher)
+            val hits = activeBridge.findMethod(finder)
+            when {
+                hits.size == 1 -> hits[0].name
+                hits.size > 1 && target.pickFirstWhenAmbiguous -> {
+                    val names = hits.map { it.name }
+                    val preferred = hits.firstOrNull { it.name == target.fallbackName }
+                        ?: hits.sortedBy { it.name }.first()
+                    logger?.accept(
+                        "Method target alias pick: ${target.id} -> ${preferred.name} of $names"
+                    )
+                    preferred.name
+                }
+                hits.size > 1 -> {
+                    logger?.accept("Method target ambiguous: ${target.id} -> ${hits.map { it.name }}")
+                    null
+                }
+                else -> null
+            }
+        }.getOrElse { error ->
+            logger?.accept("Method target query failed: ${target.id}: ${error.javaClass.simpleName}: ${error.message}")
+            null
+        }
+    }
 
     @JvmStatic
     fun state(): String = dexKitState
