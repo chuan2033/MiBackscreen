@@ -11,5 +11,6 @@ internal enum class HomeRoute : NavKey {
     License,
     AppPicker,
     Donate,
-    BatteryColor
+    BatteryColor,
+    RearScreenTiming
 }

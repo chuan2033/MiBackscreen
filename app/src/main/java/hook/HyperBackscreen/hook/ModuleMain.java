@@ -41,6 +41,7 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.HashSet;
@@ -112,6 +113,8 @@ public class ModuleMain extends XposedModule {
             Collections.newSetFromMap(new WeakHashMap<>());
     private final Map<View, PendingRearSelection> pendingRearSelections =
             Collections.synchronizedMap(new WeakHashMap<>());
+    /** 随机切换用；只有宿主主线程 tick 会碰它，不需要额外同步。 */
+    private final Random wallpaperRandom = new Random();
     @Nullable
     private volatile Integer lastThemeDatabaseSyncedWidgetId;
     private volatile long lastThemeDatabaseSyncedAtElapsed;
@@ -1280,7 +1283,7 @@ public class ModuleMain extends XposedModule {
                 });
     }
 
-    private boolean rotateToNextRearWallpaper(@NonNull View panel) {
+    private boolean rotateToNextRearWallpaper(@NonNull View panel, @NonNull String order) {
         if (SwipePanelHost.isShowing()) return false;
         Object editing = getFieldValue(panel, Constants.HOOK_FIELD_MAIN_PANEL_EDITING);
         if (Boolean.TRUE.equals(editing)) return false;
@@ -1295,7 +1298,11 @@ public class ModuleMain extends XposedModule {
 
         Integer currentIndex = resolveWallpaperIndex(panel, false);
         if (currentIndex == null) return false;
-        int nextIndex = AutoWallpaperRotationPolicy.nextIndex(currentIndex, widgets.size());
+        int nextIndex = AutoWallpaperRotationPolicy.nextIndex(
+                currentIndex,
+                widgets.size(),
+                order,
+                wallpaperRandom);
         if (nextIndex < 0) return false;
         Integer nextId = resolveWallpaperIdAtIndex(panel, nextIndex);
         if (nextId == null) return false;

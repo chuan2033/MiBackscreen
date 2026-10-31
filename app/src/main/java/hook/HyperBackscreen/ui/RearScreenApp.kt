@@ -118,6 +118,9 @@ internal fun RearScreenApp() {
     var autoWallpaperInterval by remember {
         mutableStateOf(AutoWallpaperInterval.fromPref(PrefsBridge.readAutoWallpaperIntervalForUi(context)))
     }
+    var autoWallpaperOrder by remember {
+        mutableStateOf(AutoWallpaperOrder.fromPref(PrefsBridge.readAutoWallpaperOrderForUi(context)))
+    }
     var rearScreenOffTimeout by remember {
         mutableStateOf(RearScreenOffTimeout.fromPref(PrefsBridge.readRearScreenOffTimeoutForUi(context)))
     }
@@ -241,6 +244,7 @@ internal fun RearScreenApp() {
                     )::get
                 )
                 autoWallpaperInterval = AutoWallpaperInterval.fromPref(values.autoWallpaperIntervalMinutes)
+                autoWallpaperOrder = AutoWallpaperOrder.fromPref(values.autoWallpaperOrder)
                 rearScreenOffTimeout = RearScreenOffTimeout.fromPref(values.rearScreenOffTimeout)
                 rearScreenSchedule = RearScreenSchedulePrefs(
                     enabled = values.rearScreenScheduleEnabled,
@@ -354,6 +358,7 @@ internal fun RearScreenApp() {
             removeWallpaperLimit = removeWallpaperLimit,
             removeAppCardLimit = removeAppCardLimit,
             autoWallpaperInterval = autoWallpaperInterval,
+            autoWallpaperOrder = autoWallpaperOrder,
             rearScreenOffTimeout = rearScreenOffTimeout,
             rearScreenSchedule = rearScreenSchedule,
             keepRearScreenOnInGame = keepRearScreenOnInGame,
@@ -407,6 +412,11 @@ internal fun RearScreenApp() {
                         .setPackage(Constants.TARGET_PACKAGE)
                         .putExtra(Constants.EXTRA_INTERVAL_MINUTES, interval.minutes)
                 )
+            },
+            onAutoWallpaperOrderChange = { order ->
+                autoWallpaperOrder = order
+                // 宿主的调度器每次 tick 都会现读这个键，不依赖广播，改完下一轮就按新顺序来。
+                PrefsBridge.writeAutoWallpaperOrderFromUi(context, order.prefValue)
             },
             onRearScreenOffTimeoutChange = { timeout ->
                 rearScreenOffTimeout = timeout

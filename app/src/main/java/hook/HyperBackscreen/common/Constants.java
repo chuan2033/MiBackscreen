@@ -38,6 +38,8 @@ public final class Constants {
     public static final String KEY_BATTERY_RING_STYLE = "battery_ring_style";
     public static final String KEY_AUTO_WALLPAPER_INTERVAL_MINUTES =
             "auto_wallpaper_interval_minutes";
+    // 定时切换的挑图方式：sequential = 按列表顺序循环，random = 每次随机且不与当前重复。
+    public static final String KEY_AUTO_WALLPAPER_ORDER = "auto_wallpaper_order";
     // 背屏息屏超时覆盖。"0" = 跟随系统（不写 subscreen_display_time），其余为毫秒值。
     // 背屏（display group 1）的息屏倒计时只由系统设置 subscreen_display_time 决定
     // （默认 10 秒，游戏模式会把它改写成 30 秒并在游戏进程退出后重置回 10 秒）。

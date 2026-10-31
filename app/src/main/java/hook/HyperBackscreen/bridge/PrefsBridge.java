@@ -61,6 +61,9 @@ public final class PrefsBridge {
     /** 线条样式，默认连体轮廓（contour）；另一个取值是上下双环（twin）。 */
     public static final String DEFAULT_BATTERY_RING_STYLE = "contour";
     public static final String DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES = "0";
+    /** 定时切换的挑图方式，默认顺序循环。 */
+    public static final String DEFAULT_AUTO_WALLPAPER_ORDER =
+            AutoWallpaperRotationPolicy.ORDER_SEQUENTIAL;
     /** 背屏息屏超时覆盖；"0" = 跟随系统，其余为毫秒值。 */
     public static final String DEFAULT_REAR_SCREEN_OFF_TIMEOUT = "0";
     /** 定时关闭背屏：默认关，避免老用户升级后夜里背屏突然不亮。 */
@@ -135,6 +138,7 @@ public final class PrefsBridge {
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_RING_TRACK, DEFAULT_BATTERY_RING_TRACK);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_RING_STYLE, DEFAULT_BATTERY_RING_STYLE);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES, DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_AUTO_WALLPAPER_ORDER, DEFAULT_AUTO_WALLPAPER_ORDER);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_REAR_SCREEN_OFF_TIMEOUT, DEFAULT_REAR_SCREEN_OFF_TIMEOUT);
         BACKUP_STRING_DEFAULTS.put(
                 Constants.KEY_REAR_SCREEN_SCHEDULE_START,
@@ -508,6 +512,33 @@ public final class PrefsBridge {
                 module,
                 Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES,
                 DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES));
+    }
+
+    @NonNull
+    public static String readAutoWallpaperOrderForUi(@NonNull Context context) {
+        return AutoWallpaperRotationPolicy.normalizeOrder(readStringForUi(
+                context,
+                Constants.KEY_AUTO_WALLPAPER_ORDER,
+                DEFAULT_AUTO_WALLPAPER_ORDER));
+    }
+
+    public static void writeAutoWallpaperOrderFromUi(
+            @NonNull Context context,
+            @NonNull String value
+    ) {
+        writeStringFromUi(
+                context,
+                Constants.KEY_AUTO_WALLPAPER_ORDER,
+                AutoWallpaperRotationPolicy.normalizeOrder(value));
+    }
+
+    /** 挑图方式；宿主每次 tick 现读，切完不用等下一次广播。 */
+    @NonNull
+    public static String readAutoWallpaperOrder(@NonNull XposedModule module) {
+        return AutoWallpaperRotationPolicy.normalizeOrder(readStringForHook(
+                module,
+                Constants.KEY_AUTO_WALLPAPER_ORDER,
+                DEFAULT_AUTO_WALLPAPER_ORDER));
     }
 
     @NonNull
@@ -1193,6 +1224,10 @@ public final class PrefsBridge {
             flushUiStringPreference(
                     localPrefs,
                     remotePrefs,
+                    Constants.KEY_AUTO_WALLPAPER_ORDER);
+            flushUiStringPreference(
+                    localPrefs,
+                    remotePrefs,
                     Constants.KEY_REAR_SCREEN_OFF_TIMEOUT);
             flushUiStringPreference(
                     localPrefs,
@@ -1303,6 +1338,11 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES,
                     DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_AUTO_WALLPAPER_ORDER,
+                    DEFAULT_AUTO_WALLPAPER_ORDER);
             syncStringKey(
                     localPrefs,
                     remotePrefs,

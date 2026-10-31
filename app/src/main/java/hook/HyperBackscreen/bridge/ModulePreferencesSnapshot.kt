@@ -32,6 +32,7 @@ internal data class ModulePreferencesSnapshot(
     val batteryRingTrack: String = PrefsBridge.DEFAULT_BATTERY_RING_TRACK,
     val batteryRingStyle: String = PrefsBridge.DEFAULT_BATTERY_RING_STYLE,
     val autoWallpaperIntervalMinutes: String = PrefsBridge.DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES,
+    val autoWallpaperOrder: String = PrefsBridge.DEFAULT_AUTO_WALLPAPER_ORDER,
     val rearScreenOffTimeout: String = PrefsBridge.DEFAULT_REAR_SCREEN_OFF_TIMEOUT,
     val keepRearScreenOnInGame: Boolean = PrefsBridge.DEFAULT_KEEP_REAR_SCREEN_ON_IN_GAME,
     val rearScreenScheduleEnabled: Boolean = PrefsBridge.DEFAULT_REAR_SCREEN_SCHEDULE_ENABLED,
@@ -128,6 +129,8 @@ internal data class ModulePreferencesSnapshot(
                     ?: PrefsBridge.DEFAULT_BATTERY_RING_STYLE,
                 autoWallpaperIntervalMinutes = value(Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES) as? String
                     ?: PrefsBridge.DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES,
+                autoWallpaperOrder = value(Constants.KEY_AUTO_WALLPAPER_ORDER) as? String
+                    ?: PrefsBridge.DEFAULT_AUTO_WALLPAPER_ORDER,
                 rearScreenOffTimeout = value(Constants.KEY_REAR_SCREEN_OFF_TIMEOUT) as? String
                     ?: PrefsBridge.DEFAULT_REAR_SCREEN_OFF_TIMEOUT,
                 keepRearScreenOnInGame = boolean(

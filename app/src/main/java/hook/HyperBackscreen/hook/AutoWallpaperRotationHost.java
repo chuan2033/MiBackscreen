@@ -32,7 +32,13 @@ final class AutoWallpaperRotationHost {
             Collections.synchronizedMap(new WeakHashMap<>());
 
     interface RotationCallback {
-        boolean rotate(@NonNull View panel);
+        /**
+         * @param order 挑图方式（[AutoWallpaperRotationPolicy.ORDER_SEQUENTIAL] /
+         *              [AutoWallpaperRotationPolicy.ORDER_RANDOM]）。由宿主每次现读，
+         *              用户在设置页改完不用等下一次广播就生效。
+         * @return 是否已经成功发起切换；false 会让调度器 15 秒后重试。
+         */
+        boolean rotate(@NonNull View panel, @NonNull String order);
     }
 
     private AutoWallpaperRotationHost() {
@@ -231,7 +237,7 @@ final class AutoWallpaperRotationHost {
                 schedule();
                 return;
             }
-            if (callback.rotate(target)) {
+            if (callback.rotate(target, PrefsBridge.readAutoWallpaperOrder(module))) {
                 lastSwitchElapsed = SystemClock.elapsedRealtime();
                 schedule();
             } else {

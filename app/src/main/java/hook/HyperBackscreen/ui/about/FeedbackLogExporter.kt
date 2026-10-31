@@ -259,6 +259,7 @@ internal object FeedbackLogExporter {
         appendLine("disable_long_press_edit=${PrefsBridge.readDisableLongPressForUi(context)}")
         appendLine("remove_wallpaper_limit=${PrefsBridge.readRemoveWallpaperLimitForUi(context)}")
         appendLine("auto_wallpaper_interval_minutes=${PrefsBridge.readAutoWallpaperIntervalForUi(context)}")
+        appendLine("auto_wallpaper_order=${PrefsBridge.readAutoWallpaperOrderForUi(context)}")
         appendLine("rear_screen_off_timeout=${PrefsBridge.readRearScreenOffTimeoutForUi(context)}")
         appendLine("keep_rear_screen_on_in_game=${PrefsBridge.readKeepRearScreenOnInGameForUi(context)}")
         appendLine("enable_app_card=${PrefsBridge.readEnableAppCardForUi(context)}")

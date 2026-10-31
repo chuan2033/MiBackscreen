@@ -4,15 +4,18 @@
     <string name="function_group_system">System Framework</string>
     <string name="function_group_subscreen">Rear Screen</string>
     <string name="function_group_theme">Themes</string>
-    <string name="function_battery_color_title">Rear-screen battery</string>
+    <string name="function_battery_color_title">Battery customization</string>
     <string name="auto_wallpaper_interval_title">Rotate rear-screen wallpaper</string>
     <string name="auto_wallpaper_interval_off">Off</string>
     <string name="auto_wallpaper_interval_one_minute">Every 1 minute</string>
     <string name="auto_wallpaper_interval_five_minutes">Every 5 minutes</string>
     <string name="auto_wallpaper_interval_fifteen_minutes">Every 15 minutes</string>
+    <string name="auto_wallpaper_order_title">Rotation order</string>
+    <string name="auto_wallpaper_order_sequential">In order</string>
+    <string name="auto_wallpaper_order_random">Random</string>
     <string name="rear_screen_off_timeout_title">Rear screen sleep timer</string>
     <string name="keep_rear_screen_on_in_game_title">Keep rear screen always on while gaming</string>
-    <string name="keep_rear_screen_on_in_game_summary">The system turns the rear screen off in landscape games; keeps it always on after a reboot. Increases power use and heat</string>
+    <string name="keep_rear_screen_on_in_game_summary">Enabling adds power use; only works when the rear-screen timer is set to Follow system</string>
     <string name="rear_screen_off_timeout_system">System default</string>
     <string name="rear_screen_off_timeout_always">Always on</string>
     <string name="rear_screen_off_timeout_one_minute">Sleep after 1 minute</string>
@@ -25,11 +28,12 @@
     <string name="rear_screen_schedule_end_title">Turn on at</string>
     <string name="rear_screen_schedule_summary_same_day">Every day %1$s to %2$s the rear screen stays off</string>
     <string name="rear_screen_schedule_summary_next_day">Every day %1$s to %2$s next day the rear screen stays off</string>
-    <string name="rear_screen_schedule_summary_disabled">(same start and end, inactive)</string>
+    <string name="rear_screen_schedule_summary_disabled">Same start and end time, the window has no effect</string>
     <string name="rear_screen_schedule_mode_title">During window</string>
     <string name="rear_screen_schedule_mode_off">Turn off (black)</string>
     <string name="rear_screen_schedule_mode_doze">Doze</string>
-    <string name="rear_screen_schedule_dialog_summary">The rear screen stays off in this window and will not light up for notifications</string>
+    <string name="rear_screen_schedule_dialog_summary">The rear screen stays off in this window and will not light up for notifications or games</string>
+    <string name="rear_screen_timing_title">Sleep and schedule</string>
     <string name="battery_color_state_idle">Not charging</string>
     <string name="battery_color_state_charging">Charging</string>
     <string name="battery_color_state_low">Low battery</string>
@@ -58,7 +62,7 @@
     <string name="battery_color_unsupported_model">This model\'s rear screen differs from the calibrated geometry; the battery display is not supported yet</string>
     <string name="battery_color_invalid_value">Invalid color. Use #RRGGBB or #AARRGGBB</string>
     <string name="home_root_permission_required">Please grant this app Root access. Some features require Root access.</string>
-    <string name="home_enable_18_pro_features_title">Enable 18 Pro series rear-screen features</string>
+    <string name="home_enable_18_pro_features_title">Enable new rear-screen features for the 18 Pro series</string>
     <string name="config_show_function_count_title">Show enabled function count</string>
     <string name="config_show_function_count_summary">Show the number of enabled functions on the Functions tab</string>
     <string name="config_backup_title">Configuration backup</string>
@@ -156,6 +160,7 @@
         <item quantity="one">%1$d app added</item>
         <item quantity="other">%1$d apps added</item>
     </plurals>
+    <string name="config_disabled_apps_count_none">No apps added, nothing is blocked</string>
     <string name="app_picker_title">Double-tap wake blocklist</string>
     <string name="app_picker_search_hint">Search apps</string>
     <string name="app_picker_loading">Loading apps...</string>

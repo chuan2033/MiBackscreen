@@ -72,6 +72,7 @@ import top.yukonga.miuix.kmp.basic.NavigationBarDefaults
 import hook.HyperBackscreen.ui.config.AppPickerPage
 import hook.HyperBackscreen.ui.config.ConfigPage
 import hook.HyperBackscreen.ui.function.FunctionPage
+import hook.HyperBackscreen.ui.function.RearScreenTimingPage
 import hook.HyperBackscreen.ui.home.HomePage
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -231,6 +232,7 @@ internal fun HomeScreen(
     removeWallpaperLimit: Boolean,
     removeAppCardLimit: Boolean,
     autoWallpaperInterval: AutoWallpaperInterval,
+    autoWallpaperOrder: AutoWallpaperOrder,
     rearScreenOffTimeout: RearScreenOffTimeout,
     rearScreenSchedule: RearScreenSchedulePrefs,
     keepRearScreenOnInGame: Boolean,
@@ -252,6 +254,7 @@ internal fun HomeScreen(
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
     onRemoveAppCardLimitChange: (Boolean) -> Unit,
     onAutoWallpaperIntervalChange: (AutoWallpaperInterval) -> Unit,
+    onAutoWallpaperOrderChange: (AutoWallpaperOrder) -> Unit,
     onRearScreenOffTimeoutChange: (RearScreenOffTimeout) -> Unit,
     onRearScreenScheduleChange: (RearScreenSchedulePrefs) -> Unit,
     onKeepRearScreenOnInGameChange: (Boolean) -> Unit,
@@ -394,6 +397,19 @@ internal fun HomeScreen(
                         onLayoutCommit = onBatteryLayoutChange,
                         onBack = navigateBack
                     )
+                    HomeRoute.RearScreenTiming -> RearScreenTimingPage(
+                        rearScreenOffTimeout = rearScreenOffTimeout,
+                        rearScreenSchedule = rearScreenSchedule,
+                        keepRearScreenOnInGame = keepRearScreenOnInGame,
+                        autoWallpaperInterval = autoWallpaperInterval,
+                        autoWallpaperOrder = autoWallpaperOrder,
+                        onRearScreenOffTimeoutChange = onRearScreenOffTimeoutChange,
+                        onRearScreenScheduleChange = onRearScreenScheduleChange,
+                        onKeepRearScreenOnInGameChange = onKeepRearScreenOnInGameChange,
+                        onAutoWallpaperIntervalChange = onAutoWallpaperIntervalChange,
+                        onAutoWallpaperOrderChange = onAutoWallpaperOrderChange,
+                        onBack = navigateBack
+                    )
                     HomeRoute.Main -> MainContent(
                         enable18ProFeatures = enable18ProFeatures,
                         onEnable18ProFeaturesChange = onEnable18ProFeaturesChange,
@@ -406,10 +422,6 @@ internal fun HomeScreen(
                         disableLongPress = disableLongPress,
                         removeWallpaperLimit = removeWallpaperLimit,
                         removeAppCardLimit = removeAppCardLimit,
-                        autoWallpaperInterval = autoWallpaperInterval,
-                        rearScreenOffTimeout = rearScreenOffTimeout,
-                        rearScreenSchedule = rearScreenSchedule,
-                        keepRearScreenOnInGame = keepRearScreenOnInGame,
                         fixRearScreenApply = fixRearScreenApply,
                         faceEnrollmentCompat = faceEnrollmentCompat,
                         floatingNavBar = floatingNavBar,
@@ -425,10 +437,6 @@ internal fun HomeScreen(
                         onDisableLongPressChange = onDisableLongPressChange,
                         onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
                         onRemoveAppCardLimitChange = onRemoveAppCardLimitChange,
-                        onAutoWallpaperIntervalChange = onAutoWallpaperIntervalChange,
-                        onRearScreenOffTimeoutChange = onRearScreenOffTimeoutChange,
-                        onRearScreenScheduleChange = onRearScreenScheduleChange,
-                        onKeepRearScreenOnInGameChange = onKeepRearScreenOnInGameChange,
                         onFixRearScreenApplyChange = onFixRearScreenApplyChange,
                         onFaceEnrollmentCompatChange = onFaceEnrollmentCompatChange,
                         onFloatingNavBarChange = onFloatingNavBarChange,
@@ -447,7 +455,8 @@ internal fun HomeScreen(
                         onThemeModeChange = onThemeModeChange,
                         themeSettingsShortcut = themeSettingsShortcut,
                         onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
-                        onBatteryColorClick = { openDetail(HomeRoute.BatteryColor) }
+                        onBatteryColorClick = { openDetail(HomeRoute.BatteryColor) },
+                        onRearScreenTimingClick = { openDetail(HomeRoute.RearScreenTiming) }
                     )
                 }
             }
@@ -577,10 +586,6 @@ private fun MainTabPage(
     disableLongPress: Boolean,
     removeWallpaperLimit: Boolean,
     removeAppCardLimit: Boolean,
-    autoWallpaperInterval: AutoWallpaperInterval,
-    rearScreenOffTimeout: RearScreenOffTimeout,
-    rearScreenSchedule: RearScreenSchedulePrefs,
-    keepRearScreenOnInGame: Boolean,
     fixRearScreenApply: Boolean,
     faceEnrollmentCompat: Boolean,
     disableRearScreenCover: Boolean,
@@ -590,15 +595,12 @@ private fun MainTabPage(
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
     onRemoveAppCardLimitChange: (Boolean) -> Unit,
-    onAutoWallpaperIntervalChange: (AutoWallpaperInterval) -> Unit,
-    onRearScreenOffTimeoutChange: (RearScreenOffTimeout) -> Unit,
-    onRearScreenScheduleChange: (RearScreenSchedulePrefs) -> Unit,
-    onKeepRearScreenOnInGameChange: (Boolean) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFaceEnrollmentCompatChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onAddDisabledAppsClick: () -> Unit,
     onBatteryColorClick: () -> Unit,
+    onRearScreenTimingClick: () -> Unit,
     onLicenseClick: () -> Unit,
     onRestartClick: () -> Unit,
     onSettingsClick: () -> Unit
@@ -682,10 +684,6 @@ private fun MainTabPage(
                             disableLongPress = disableLongPress,
                             removeWallpaperLimit = removeWallpaperLimit,
                             removeAppCardLimit = removeAppCardLimit,
-                            autoWallpaperInterval = autoWallpaperInterval,
-                            rearScreenOffTimeout = rearScreenOffTimeout,
-                            rearScreenSchedule = rearScreenSchedule,
-                            keepRearScreenOnInGame = keepRearScreenOnInGame,
                             fixRearScreenApply = fixRearScreenApply,
                             faceEnrollmentCompat = faceEnrollmentCompat,
                             disableRearScreenCover = disableRearScreenCover,
@@ -693,15 +691,12 @@ private fun MainTabPage(
                             onDisableLongPressChange = onDisableLongPressChange,
                             onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
                             onRemoveAppCardLimitChange = onRemoveAppCardLimitChange,
-                            onAutoWallpaperIntervalChange = onAutoWallpaperIntervalChange,
-                            onRearScreenOffTimeoutChange = onRearScreenOffTimeoutChange,
-                            onRearScreenScheduleChange = onRearScreenScheduleChange,
-                            onKeepRearScreenOnInGameChange = onKeepRearScreenOnInGameChange,
                             onFixRearScreenApplyChange = onFixRearScreenApplyChange,
                             onFaceEnrollmentCompatChange = onFaceEnrollmentCompatChange,
                             onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                             onAddDisabledAppsClick = onAddDisabledAppsClick,
-                            onBatteryColorClick = onBatteryColorClick
+                            onBatteryColorClick = onBatteryColorClick,
+                            onRearScreenTimingClick = onRearScreenTimingClick
                         )
                     }
                     HomeNavigationPolicy.Tab.ABOUT -> item {
@@ -733,10 +728,6 @@ private fun MainContent(
     disableLongPress: Boolean,
     removeWallpaperLimit: Boolean,
     removeAppCardLimit: Boolean,
-    autoWallpaperInterval: AutoWallpaperInterval,
-    rearScreenOffTimeout: RearScreenOffTimeout,
-    rearScreenSchedule: RearScreenSchedulePrefs,
-    keepRearScreenOnInGame: Boolean,
     fixRearScreenApply: Boolean,
     faceEnrollmentCompat: Boolean,
     floatingNavBar: Boolean,
@@ -752,10 +743,6 @@ private fun MainContent(
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
     onRemoveAppCardLimitChange: (Boolean) -> Unit,
-    onAutoWallpaperIntervalChange: (AutoWallpaperInterval) -> Unit,
-    onRearScreenOffTimeoutChange: (RearScreenOffTimeout) -> Unit,
-    onRearScreenScheduleChange: (RearScreenSchedulePrefs) -> Unit,
-    onKeepRearScreenOnInGameChange: (Boolean) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFaceEnrollmentCompatChange: (Boolean) -> Unit,
     onFloatingNavBarChange: (Boolean) -> Unit,
@@ -774,7 +761,8 @@ private fun MainContent(
     onThemeModeChange: (ThemeMode) -> Unit,
     themeSettingsShortcut: Boolean,
     onThemeSettingsShortcutChange: (Boolean) -> Unit,
-    onBatteryColorClick: () -> Unit
+    onBatteryColorClick: () -> Unit,
+    onRearScreenTimingClick: () -> Unit
 ) {
     val surfaceColor = MiuixTheme.colorScheme.surface
     val bottomBarBackdrop = rememberLayerBackdrop {
@@ -852,10 +840,6 @@ private fun MainContent(
                 disableLongPress = disableLongPress,
                 removeWallpaperLimit = removeWallpaperLimit,
                 removeAppCardLimit = removeAppCardLimit,
-                autoWallpaperInterval = autoWallpaperInterval,
-                rearScreenOffTimeout = rearScreenOffTimeout,
-                rearScreenSchedule = rearScreenSchedule,
-                keepRearScreenOnInGame = keepRearScreenOnInGame,
                 fixRearScreenApply = fixRearScreenApply,
                 faceEnrollmentCompat = faceEnrollmentCompat,
                 disableRearScreenCover = disableRearScreenCover,
@@ -865,15 +849,12 @@ private fun MainContent(
                 onDisableLongPressChange = onDisableLongPressChange,
                 onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
                 onRemoveAppCardLimitChange = onRemoveAppCardLimitChange,
-                onAutoWallpaperIntervalChange = onAutoWallpaperIntervalChange,
-                onRearScreenOffTimeoutChange = onRearScreenOffTimeoutChange,
-                onRearScreenScheduleChange = onRearScreenScheduleChange,
-                onKeepRearScreenOnInGameChange = onKeepRearScreenOnInGameChange,
                 onFixRearScreenApplyChange = onFixRearScreenApplyChange,
                 onFaceEnrollmentCompatChange = onFaceEnrollmentCompatChange,
                 onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                 onAddDisabledAppsClick = onAddDisabledAppsClick,
                 onBatteryColorClick = onBatteryColorClick,
+                onRearScreenTimingClick = onRearScreenTimingClick,
                 onLicenseClick = onLicenseClick,
                 onRestartClick = { showRestartDialog = true },
                 onSettingsClick = onSettingsClick
