@@ -102,6 +102,16 @@ import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.NavDisplayEffects
 import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.LayoutDirection
+import kotlin.math.pow
+import kotlin.math.roundToInt
+import top.yukonga.miuix.kmp.nav.core.rememberNavSystemCornerRadius
+import top.yukonga.miuix.kmp.nav.runtime.NavProgrammaticEasing
+import top.yukonga.miuix.kmp.nav.transition.NavMotion
+import top.yukonga.miuix.kmp.nav.transition.NavSettleSpec
+import top.yukonga.miuix.kmp.nav.transition.NavTransition
+import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
 import top.yukonga.miuix.kmp.preference.CheckboxLocation
 import top.yukonga.miuix.kmp.preference.CheckboxPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -138,6 +148,78 @@ private val restartScopeItems = listOf(
     RestartScopeItem(R.string.restart_theme_manager, Constants.THEME_STORE_PACKAGE),
     RestartScopeItem(R.string.restart_personal_assistant, Constants.PERSONAL_ASSISTANT_PACKAGE)
 )
+
+/**
+ * 二级页转场：新页从右侧滑入，**一级页整体缩小成一张带圆角的卡片**再被盖住。
+ *
+ * 官方 NavTransitions.MiuixDefault 只做「平移 1/4 宽 + 轻微透明」，底层页始终是铺满屏幕的矩形，
+ * 所以点进二级页时没有纵深，像两张纸左右错开。这里沿用它的进入曲线（`NavProgrammaticEasing`，
+ * 起手快、尾巴长），只把 covered 那一半换成缩放：`scale 1 → 0.91`、透明度 `1 → 0.85`、
+ * 圆角 `0 → 28dp`（都在 `d` 上线性取值，随进度实时变化）。
+ *
+ * 圆角用 `graphicsLayer { shape = … ; clip = true }` 画，而不是 `Modifier.clip(shape)` —— 后者
+ * shape 是静态的，半径没法跟着 `d` 长出来；graphicsLayer 的 shape 每帧读取，可以随动画渐进。
+ * 进入层本身不在这里裁角：那一层由 [NavDisplayEffects.cornerClipRadius]（设备真实屏幕圆角 44dp）负责。
+ *
+ * 侧滑返回（predictive back）另有两处调整，都在手势期间生效：
+ * - 位移按 `s^1.15` 压缩，手指划同样距离时页面走得少一点，露出的旧页更少；
+ *   只在 `scope.gesture != null` 时用（库里在松手后的 settle 阶段仍保留 gesture 上下文，
+ *   所以整段不会在「松手」那一刻跳一下），程序化 push/pop 仍走官方线性几何。
+ * - 松手后的入位/回弹换成更软的弹簧（默认 stiffness 146 ≈ 500ms，这里 90/115），
+ *   让收尾那一下不那么「嗖」。
+ */
+private object CardStackNavTransition : NavTransition {
+
+    override val motion: NavMotion = NavMotion(
+        commit = NavSettleSpec.Spring(stiffness = NavGestureCommitStiffness),
+        cancel = NavSettleSpec.Spring(stiffness = NavGestureCancelStiffness),
+        programmatic = NavSettleSpec.Tween(
+            durationMillis = NavProgrammaticDurationMillis,
+            easing = NavProgrammaticEasing
+        )
+    )
+
+    override fun Modifier.transformEntry(scope: NavTransitionScope): Modifier = graphicsLayer {
+        val width = scope.layoutSize.width.toFloat()
+        val d = scope.relativeDepth
+        val rtl = scope.layoutDirection == LayoutDirection.Rtl
+        if (d <= 0f) {
+            // 进入层：整页从尾侧滑入。取整到物理像素，避免带圆角的边在分数偏移下出现一条抖动亮线。
+            var s = (-d).coerceIn(0f, 1f)
+            if (scope.gesture != null) s = s.pow(NavGestureTranslationPower)
+            translationX = ((if (rtl) -1f else 1f) * s * width).roundToInt().toFloat()
+        } else {
+            // 被覆盖层：缩小、微微向左让位、变淡，并长出圆角，像一张卡片沉到下面。
+            val p = d.coerceIn(0f, 1f)
+            val scale = 1f - (1f - NavCardStackScale) * p
+            scaleX = scale
+            scaleY = scale
+            translationX = (if (rtl) 1f else -1f) * width * NavCardStackShift * p
+            alpha = 1f - (1f - NavCardStackAlpha) * p
+            clip = p > 0.002f
+            shape = RoundedCornerShape(NavCardStackCornerRadius * p)
+        }
+    }
+}
+
+/** 官方 500ms 的 1.5 倍：同样是「起手快、尾巴长」，只是整段更从容。 */
+private const val NavProgrammaticDurationMillis = 750
+
+/** 侧滑返回时页面位移的压缩指数：>1 表示同样手指距离下页面走得更少（露出更少）。 */
+private const val NavGestureTranslationPower = 1.15f
+/** 松手「回位」（真返回）用的弹簧刚度：默认 146 ≈ 500ms，90 ≈ 630ms。 */
+private const val NavGestureCommitStiffness = 90f
+/** 松手「取消返回」用的弹簧刚度：比回位更软一点，弹回原位更缓。 */
+private const val NavGestureCancelStiffness = 115f
+
+/** 一级页被盖住时的最终缩放（1 - 该值 = 缩到多少）。 */
+private const val NavCardStackScale = 0.91f
+/** 缩小时向左让出的宽度比例（相对屏宽），给滑入的新页腾出一点透视余量。 */
+private const val NavCardStackShift = 0.02f
+/** 一级页被盖住时的最终不透明度。 */
+private const val NavCardStackAlpha = 0.85f
+/** 一级页缩成卡片时的圆角，随进度从 0 长到这个值。 */
+private val NavCardStackCornerRadius = 28.dp
 
 @Composable
 internal fun HomeScreen(
@@ -237,15 +319,27 @@ internal fun HomeScreen(
     }
 
     val feedback = LocalUiFeedback.current
+    // 官方 example/AppContent.kt 的配法：把设备真实屏幕圆角（这台机器 44dp）喂给
+    // cornerClipRadius，二级页滑入时四角跟着屏幕圆角裁成一张卡片；压暗保持官方默认 0.5。
+    val navCornerRadius = rememberNavSystemCornerRadius()
+    val navBackdropColor = MiuixTheme.colorScheme.surface
+    val navEffects = remember(navCornerRadius, navBackdropColor) {
+        NavDisplayEffects(
+            // 不吞输入：转场拉长到 750ms、松手弹簧也放缓之后，blockInputDuringTransition 会让
+            // 「刚返回就点」的第一下落在还没 settle 的层上被丢弃（用户实测要点两次）。
+            // 连点由 openDetail 的 `lastOrNull() == Main` 守卫拦重复入栈。
+            blockInputDuringTransition = false,
+            cornerClipRadius = navCornerRadius,
+            backdropColor = navBackdropColor
+        )
+    }
     Box(Modifier.fillMaxSize()) {
     NavDisplay(
         backStack = backStack,
         modifier = Modifier.fillMaxSize(),
         onBack = navigateBack,
-        effects = NavDisplayEffects(
-            blockInputDuringTransition = true,
-            backdropColor = MiuixTheme.colorScheme.surface
-        )
+        transition = CardStackNavTransition,
+        effects = navEffects
     ) {
         entry<HomeRoute> { page ->
             // A covered entry stays alive for back navigation, but must not expose hidden controls.
