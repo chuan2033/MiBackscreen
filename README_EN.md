@@ -1,8 +1,23 @@
-# MiBackscreen
+<p align="center">
+  <img src="icon.png" alt="MiBackscreen" width="140">
+</p>
+<h1  align="center">MiBackscreen</h1>
 
-[中文](README.md) · [Project](https://github.com/chuan2033/MiBackscreen) · [Downloads](https://github.com/chuan2033/MiBackscreen/releases)
+<p  align="center">
+  <a href="./README.md">中文</a> · <a href="https://github.com/chuan2033/MiBackscreen">Project</a>
+</p>
 
-A Xiaomi rear-screen module using Modern Xposed. The `feat/18pro-max-rear-screen` branch adapts newer Rear Screen Center, Theme Manager and Personal Assistant app-card hosts. Neither the branch name nor a device identity sent in requests establishes hardware compatibility.
+<p  align="center">
+ A Xiaomi rear-screen module using Modern Xposed. The `feat/18pro-max-rear-screen` branch adapts newer Rear Screen Center, Theme Manager and Personal Assistant app-card hosts. Neither the branch name nor a device identity sent in requests establishes hardware compatibility.
+</p>
+
+<p  align="center">
+  <a href="https://github.com/chuan2033/MiBackscreen/releases"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/chuan2033/MiBackscreen?display_name=release"></a>
+ <a href="https://github.com/chuan2033/MiBackscreen/stargazers"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/chuan2033/MiBackscreen?style=flat"></a>
+ <a href="https://github.com/chuan2033/MiBackscreen/issues"><img alt="GitHub Issues" src="https://img.shields.io/github/issues/chuan2033/MiBackscreen"></a>
+  <a href="https://developer.android.com/"><img src="https://img.shields.io/badge/Android-16%2B-3DDC84?logo=android&logoColor=white" alt="Android"></a>
+ <a href="https://github.com/LSPosed/LSPosed"><img src="https://img.shields.io/badge/Framework-LSPosed%20%2F%20Xposed-5C6BC0" alt="Framework"></a>
+</p>
 
 ## Features and defaults
 
