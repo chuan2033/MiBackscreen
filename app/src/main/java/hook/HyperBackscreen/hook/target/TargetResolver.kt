@@ -1,6 +1,7 @@
 package hook.HyperBackscreen.hook.target
 
 import android.content.Context
+import android.os.SystemClock
 import java.io.File
 import java.lang.reflect.Method
 import java.util.function.Consumer
@@ -25,6 +26,9 @@ internal object TargetResolver {
     private val diagnostics = mutableListOf<String>()
     private val cacheHolder = arrayOfNulls<JSONObject>(1)
 
+    /** 本进程内已确认查不到的目标（类 id 或 `method:<id>`），不再重复扫描 dex。 */
+    private val missingIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
     private var bridge: DexKitBridge? = null
     private var cacheFile: File? = null
     private var hostApkPath: String? = null
@@ -38,6 +42,58 @@ internal object TargetResolver {
 
     private const val CACHE_FLUSH_RETRY_MS = 45_000L
 
+    /**
+     * 单次 DexKit 查询超过这个时长就记一条日志。
+     *
+     * 查询发生在宿主进程启动的主线程上（`onPackageLoaded` → `installSubscreen*Hooks`），
+     * 缓存未命中时是全 dex 扫描。几百毫秒属正常，超过这个阈值说明宿主 APK 变大或
+     * 磁盘变慢，需要重新评估是否把解析挪到后台。
+     */
+    private const val SLOW_QUERY_MS = 300L
+
+    /** 缓存格式版本。判据或结果语义调整时改一次，旧的负缓存与旧名字缓存自然作废。 */
+    private const val CACHE_SCHEMA = "v2"
+
+    /**
+     * 负结果标记。
+     *
+     * 宿主同一个版本内，一个目标确认查不到之后不再重复查询：写进缓存文件，下次进程启动直接读它；
+     * 同进程内的重复调用由 [missingIds] 拦住。做法与 QAuxiliary 的 `NO_SUCH_METHOD` 一致。
+     */
+    private const val MISSING = "<missing>"
+
+    /**
+     * 一次定位的结果。
+     *
+     * 遍历结束没有命中（[Failure.NO_MATCH]）与「命中多个、无法判定」（[Failure.AMBIGUOUS]）
+     * 都算查找失败：调用方拿到失败后直接终止，不再用旧名字继续猜。
+     * [Failure.NOT_READY] 与 [Failure.NO_FEATURE] 表示这次根本没法执行查找（DexKit 没加载、
+     * 规格里没有特征），属于能力缺失，允许降级到兜底名字。
+     */
+    private class Lookup(
+        val name: String?,
+        val failure: Failure?,
+        val detail: String = "",
+    ) {
+        enum class Failure { NOT_READY, NO_FEATURE, NO_MATCH, AMBIGUOUS, QUERY_ERROR }
+
+        val isHit: Boolean get() = name != null
+
+        val allowsFallback: Boolean
+            get() = failure == Failure.NOT_READY || failure == Failure.NO_FEATURE
+
+        /** 日志与诊断快照里的失败原因；命中时为空串。 */
+        val reason: String
+            get() = when (failure) {
+                null -> ""
+                Failure.NOT_READY -> "dexkit-not-ready"
+                Failure.NO_FEATURE -> "no-feature"
+                Failure.NO_MATCH -> "no-match"
+                Failure.AMBIGUOUS -> "ambiguous"
+                Failure.QUERY_ERROR -> "query-error"
+            }
+    }
+
     @JvmStatic
     fun install(
         context: Context?,
@@ -47,7 +103,7 @@ internal object TargetResolver {
     ) {
         logger = log
         hostApkPath = apkPath
-        cacheFile = context?.let { File(it.filesDir, "host-targets-$versionCode.json") }
+        cacheFile = context?.let { File(it.filesDir, "host-targets-$versionCode-$CACHE_SCHEMA.json") }
         cacheHolder[0] = readCache()
         if (apkPath == null) {
             dexKitState = "宿主 APK 路径缺失"
@@ -65,15 +121,23 @@ internal object TargetResolver {
 
     @JvmStatic
     fun resolveClass(classLoader: ClassLoader, target: ClassTarget): Class<*>? {
+        if (missingIds.contains(target.id)) {
+            return failClass(target, "cached-missing", null)
+        }
+
         memory[target.id]?.let { name ->
             loadClass(name, classLoader)?.let {
-                record(target.id, name, "缓存")
+                record(target.id, name, "内存")
                 return it
             }
             memory.remove(target.id)
         }
 
         val cached = cacheHolder[0]?.optString(target.id)?.takeIf { it.isNotEmpty() }
+        if (cached == MISSING) {
+            missingIds.add(target.id)
+            return failClass(target, "cached-missing", null)
+        }
         if (cached != null) {
             loadClass(cached, classLoader)?.let {
                 memory[target.id] = cached
@@ -84,26 +148,61 @@ internal object TargetResolver {
             cacheHolder[0]?.remove(target.id)
         }
 
-        val found = queryDexKit(target)
-        if (found != null) {
-            loadClass(found, classLoader)?.let {
-                memory[target.id] = found
-                writeCache(target.id, found)
-                record(target.id, found, "DexKit(${target.strings.size} 特征)")
-                return it
+        val lookup = queryDexKit(target)
+        val hit = lookup.name
+        if (hit != null) {
+            val loaded = loadClass(hit, classLoader)
+            if (loaded != null) {
+                memory[target.id] = hit
+                writeCache(target.id, hit)
+                record(target.id, hit, "DexKit(${target.strings.size} 特征)")
+                return loaded
             }
+            return failClass(target, "load-failed", hit)
         }
 
-        target.fallbackNames.firstOrNull()?.let { name ->
-            loadClass(name, classLoader)?.let {
-                record(target.id, name, "兜底名字")
-                logger?.accept("Target resolved by fallback name: ${target.id} -> $name")
-                return it
+        if (lookup.allowsFallback) {
+            target.fallbackNames.firstOrNull()?.let { name ->
+                loadClass(name, classLoader)?.let {
+                    record(target.id, name, "兜底名字")
+                    logger?.accept(
+                        "Target resolved by fallback name: ${target.id} -> $name (${lookup.reason})"
+                    )
+                    return it
+                }
             }
+            return failClass(target, "${lookup.reason}, fallback-missing", null)
         }
 
-        record(target.id, "<未命中>", "失败")
-        logger?.accept("Target missing: ${target.id} packages=${target.packages} strings=${target.strings}")
+        rememberMissing(target.id, lookup.failure)
+        return failClass(target, lookup.reason, lookup.detail)
+    }
+
+    /**
+     * 记下「这个目标在宿主当前版本里查不到」。
+     *
+     * 只缓存 [Lookup.Failure.NO_MATCH] 与 [Lookup.Failure.AMBIGUOUS]：前者说明遍历结束没有候选，
+     * 后者说明判据命中了多个、需要在规格里补特征，这两种结论在宿主版本不变时不会变。
+     * `QUERY_ERROR` 可能是临时故障（dex 尚未就绪、内存紧张），下次进程启动仍应重试，不写入。
+     */
+    private fun rememberMissing(key: String, failure: Lookup.Failure?) {
+        if (failure != Lookup.Failure.NO_MATCH && failure != Lookup.Failure.AMBIGUOUS) return
+        missingIds.add(key)
+        writeCache(key, MISSING)
+    }
+
+    /** 记录一次「未找到」并返回 null，调用方据此跳过安装，不再尝试其它猜法。 */
+    private fun failClass(target: ClassTarget, reason: String, resolved: String?): Class<*>? {
+        val detail = buildString {
+            append("id=").append(target.id)
+            append(" kind=class")
+            append(" reason=").append(reason)
+            if (!resolved.isNullOrEmpty()) append(" resolved=").append(resolved)
+            if (target.strings.isNotEmpty()) append(" features=").append(target.strings)
+            if (target.packages.isNotEmpty()) append(" packages=").append(target.packages)
+        }
+        record(target.id, "<未找到: $reason>", "失败")
+        logger?.accept("Target not found: $detail")
         return null
     }
 
@@ -113,21 +212,29 @@ internal object TargetResolver {
     /**
      * 按结构解析宿主混淆方法，缓存与 [resolveClass] 共用同一个文件。
      *
-     * 解析顺序：内存 → 版本缓存 → DexKit 查询 → 兜底方法名。
-     * 只有 DexKit 查询成功才写缓存，兜底命中不写。
+     * 解析顺序：内存 → 版本缓存 → DexKit 查询 →（仅 DexKit 无法执行查找时）兜底方法名。
+     * 遍历结束没有命中视为失败，调用方跳过安装，不再用兜底名字继续猜，判定见 [Lookup]。
      */
     @JvmStatic
     fun resolveMethod(classLoader: ClassLoader, target: MethodTarget): Method? {
         val cacheKey = "method:${target.id}"
+        if (missingIds.contains(cacheKey)) {
+            return failMethod(target, "cached-missing", null)
+        }
+
         memory[cacheKey]?.let { name ->
             findMethodByName(name, target, classLoader)?.let {
-                record(cacheKey, name, "缓存")
+                record(cacheKey, name, "内存")
                 return it
             }
             memory.remove(cacheKey)
         }
 
         val cached = cacheHolder[0]?.optString(cacheKey)?.takeIf { it.isNotEmpty() }
+        if (cached == MISSING) {
+            missingIds.add(cacheKey)
+            return failMethod(target, "cached-missing", null)
+        }
         if (cached != null) {
             findMethodByName(cached, target, classLoader)?.let {
                 memory[cacheKey] = cached
@@ -138,24 +245,46 @@ internal object TargetResolver {
             cacheHolder[0]?.remove(cacheKey)
         }
 
-        val found = queryDexKitMethod(target)
-        if (found != null) {
-            findMethodByName(found, target, classLoader)?.let {
-                memory[cacheKey] = found
-                writeCache(cacheKey, found)
-                record(cacheKey, found, "DexKit")
+        val lookup = queryDexKitMethod(target)
+        val hit = lookup.name
+        if (hit != null) {
+            val resolved = findMethodByName(hit, target, classLoader)
+            if (resolved != null) {
+                memory[cacheKey] = hit
+                writeCache(cacheKey, hit)
+                record(cacheKey, hit, "DexKit")
+                return resolved
+            }
+            return failMethod(target, "load-failed", hit)
+        }
+
+        if (lookup.allowsFallback) {
+            findMethodByName(target.fallbackName, target, classLoader)?.let {
+                record(cacheKey, target.fallbackName, "兜底名字")
+                logger?.accept(
+                    "Method target resolved by fallback name: ${target.id} -> ${target.fallbackName}"
+                            + " (${lookup.reason})"
+                )
                 return it
             }
+            return failMethod(target, "${lookup.reason}, fallback-missing", target.fallbackName)
         }
 
-        findMethodByName(target.fallbackName, target, classLoader)?.let {
-            record(cacheKey, target.fallbackName, "兜底名字")
-            logger?.accept("Method target resolved by fallback name: ${target.id} -> ${target.fallbackName}")
-            return it
-        }
+        rememberMissing(cacheKey, lookup.failure)
+        return failMethod(target, lookup.reason, lookup.detail)
+    }
 
-        record(cacheKey, "<未命中>", "失败")
-        logger?.accept("Method target missing: ${target.id} owner=${target.ownerClass}")
+    /** 记录一次「未找到」并返回 null，调用方据此跳过安装，不再尝试其它猜法。 */
+    private fun failMethod(target: MethodTarget, reason: String, resolved: String?): Method? {
+        val detail = buildString {
+            append("id=").append(target.id)
+            append(" kind=method")
+            append(" owner=").append(target.ownerClass)
+            append(" reason=").append(reason)
+            if (!resolved.isNullOrEmpty()) append(" resolved=").append(resolved)
+        }
+        record("method:${target.id}", "<未找到: $reason>", "失败")
+        logger?.accept("Target not found: $detail")
         return null
     }
 
@@ -184,13 +313,14 @@ internal object TargetResolver {
         method
     }.getOrNull()
 
-    private fun queryDexKitMethod(target: MethodTarget): String? {
-        val activeBridge = bridge ?: return null
+    private fun queryDexKitMethod(target: MethodTarget): Lookup {
+        val activeBridge = bridge ?: return Lookup(null, Lookup.Failure.NOT_READY)
         if (target.bodyStrings.isEmpty() && target.usingFieldDescriptors.isEmpty()
             && target.usingFieldTypes.isEmpty() && target.usingNumbers.isEmpty()
             && target.invokeMethodSpecs.isEmpty()
-        ) return null
-        return runCatching {
+        ) return Lookup(null, Lookup.Failure.NO_FEATURE)
+        val startedAt = SystemClock.elapsedRealtime()
+        val result = runCatching {
             val matcher = MethodMatcher.create()
                 .declaredClass(target.ownerClass)
             if (target.returnType != null) {
@@ -236,52 +366,80 @@ internal object TargetResolver {
                 matcher.invokeMethods(methodsMatcher)
             }
             val finder = FindMethod.create().matcher(matcher)
-            val hits = activeBridge.findMethod(finder)
-            when {
-                hits.size == 1 -> hits[0].name
-                hits.size > 1 && target.pickFirstWhenAmbiguous -> {
-                    val names = hits.map { it.name }
-                    val preferred = hits.firstOrNull { it.name == target.fallbackName }
-                        ?: hits.sortedBy { it.name }.first()
-                    logger?.accept(
-                        "Method target alias pick: ${target.id} -> ${preferred.name} of $names"
-                    )
-                    preferred.name
-                }
-                hits.size > 1 -> {
-                    logger?.accept("Method target ambiguous: ${target.id} -> ${hits.map { it.name }}")
-                    null
-                }
-                else -> null
-            }
-        }.getOrElse { error ->
-            logger?.accept("Method target query failed: ${target.id}: ${error.javaClass.simpleName}: ${error.message}")
-            null
+            activeBridge.findMethod(finder)
         }
+        reportQueryCost("method:${target.id}", startedAt)
+        return result.fold(
+            onSuccess = { hits ->
+                when {
+                    hits.size == 1 -> Lookup(hits[0].name, null)
+                    hits.size > 1 && target.pickFirstWhenAmbiguous -> {
+                        val names = hits.map { it.name }
+                        val preferred = hits.firstOrNull { it.name == target.fallbackName }
+                            ?: hits.sortedBy { it.name }.first()
+                        logger?.accept(
+                            "Method target alias pick: ${target.id} -> ${preferred.name} of $names"
+                        )
+                        Lookup(preferred.name, null)
+                    }
+                    hits.isEmpty() -> Lookup(null, Lookup.Failure.NO_MATCH)
+                    else -> {
+                        val names = hits.map { it.name }
+                        logger?.accept("Method target ambiguous: ${target.id} -> $names")
+                        Lookup(null, Lookup.Failure.AMBIGUOUS, names.joinToString(","))
+                    }
+                }
+            },
+            onFailure = { error ->
+                logger?.accept(
+                    "Method target query failed: ${target.id}: "
+                            + "${error.javaClass.simpleName}: ${error.message}"
+                )
+                Lookup(null, Lookup.Failure.QUERY_ERROR, error.javaClass.simpleName)
+            },
+        )
     }
 
     @JvmStatic
     fun state(): String = dexKitState
 
-    private fun queryDexKit(target: ClassTarget): String? {
-        val activeBridge = bridge ?: return null
-        if (target.strings.isEmpty()) return null
-        return runCatching {
+    private fun queryDexKit(target: ClassTarget): Lookup {
+        val activeBridge = bridge ?: return Lookup(null, Lookup.Failure.NOT_READY)
+        if (target.strings.isEmpty()) return Lookup(null, Lookup.Failure.NO_FEATURE)
+        val startedAt = SystemClock.elapsedRealtime()
+        val result = runCatching {
             val finder = FindClass.create()
             if (target.packages.isNotEmpty()) {
                 finder.searchPackages(*target.packages.toTypedArray())
             }
             finder.matcher(ClassMatcher.create().usingStrings(*target.strings.toTypedArray()))
-            val hits = activeBridge.findClass(finder)
-            if (hits.size == 1) hits[0].name else {
-                if (hits.size > 1) {
-                    logger?.accept("Target ambiguous: ${target.id} -> ${hits.map { it.name }}")
+            activeBridge.findClass(finder)
+        }
+        reportQueryCost("class:${target.id}", startedAt)
+        return result.fold(
+            onSuccess = { hits ->
+                when {
+                    hits.size == 1 -> Lookup(hits[0].name, null)
+                    hits.isEmpty() -> Lookup(null, Lookup.Failure.NO_MATCH)
+                    else -> {
+                        val names = hits.map { it.name }
+                        logger?.accept("Target ambiguous: ${target.id} -> $names")
+                        Lookup(null, Lookup.Failure.AMBIGUOUS, names.joinToString(","))
+                    }
                 }
-                null
-            }
-        }.getOrElse { error ->
-            logger?.accept("Target query failed: ${target.id}: ${error.javaClass.simpleName}")
-            null
+            },
+            onFailure = { error ->
+                logger?.accept("Target query failed: ${target.id}: ${error.javaClass.simpleName}")
+                Lookup(null, Lookup.Failure.QUERY_ERROR, error.javaClass.simpleName)
+            },
+        )
+    }
+
+    /** 查询耗时超过阈值时记一条，供诊断日志导出后判断宿主启动变慢的来源。 */
+    private fun reportQueryCost(id: String, startedAt: Long) {
+        val cost = SystemClock.elapsedRealtime() - startedAt
+        if (cost >= SLOW_QUERY_MS) {
+            logger?.accept("Slow target query: $id ${cost}ms")
         }
     }
 

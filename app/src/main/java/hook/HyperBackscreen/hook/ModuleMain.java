@@ -458,10 +458,13 @@ public class ModuleMain extends XposedModule {
         if (systemHooksInstalled) return;
         synchronized (this) {
             if (systemHooksInstalled) return;
+            long startedAt = SystemClock.elapsedRealtime();
             try {
                 if (installSystemHooks(classLoader)) {
                     systemHooksInstalled = true;
-                    log(Log.INFO, Constants.LOG_TAG, "System hooks installed");
+                    log(Log.INFO, Constants.LOG_TAG,
+                            "System hooks installed in "
+                                    + (SystemClock.elapsedRealtime() - startedAt) + " ms");
                 }
             } catch (Throwable throwable) {
                 log(Log.ERROR, Constants.LOG_TAG, "Failed to install system hooks", throwable);
@@ -736,8 +739,13 @@ public class ModuleMain extends XposedModule {
         } catch (Throwable error) {
             log(Log.WARN, Constants.LOG_TAG, "Target resolver init failed: " + error);
         }
-        TargetResolver.install(context, apkPath, versionCode,
-                message -> log(Log.DEBUG, Constants.LOG_TAG, message));
+        TargetResolver.install(context, apkPath, versionCode, message -> {
+            // 定位失败与查询变慢是排障入口，按 WARN 记录，避免被 DEBUG 过滤掉。
+            boolean problem = message.startsWith("Target not found")
+                    || message.startsWith("Slow target query")
+                    || message.contains("failed");
+            log(problem ? Log.WARN : Log.DEBUG, Constants.LOG_TAG, message);
+        });
         log(Log.INFO, Constants.LOG_TAG,
                 "Target resolver: " + TargetResolver.state() + ", host version " + versionCode
                         + ", apk " + apkPath);
@@ -4205,6 +4213,18 @@ public class ModuleMain extends XposedModule {
         return packageName instanceof String ? (String) packageName : null;
     }
 
+    /**
+     * 取当前前台包名候选。
+     *
+     * <p>**只读字段，不能调 `ActivityTaskManagerService#getTasks`。** 这个方法在
+     * `isScreenSkippedWakeup` 里被调用，而该调用点由 `wakePowerGroupLocked` 触发，
+     * 此时线程已经持有 `PowerManagerService` 的 `mLock`。`getTasks` 需要
+     * `WindowManagerGlobalLock`，持有该锁的 binder 线程又可能在 `startPausing` 里
+     * 申请唤醒锁、等 `mLock` —— 两个锁互相等待，system_server 会整体卡死。
+     * 2026-11-03 11:37 的死机正是这条路径（watchdog 抓到的栈：`InputReader` 持
+     * `mLock` 等 `WindowManagerGlobalLock`，`binder:4309_1A` 持 `WindowManagerGlobalLock`
+     * 等 `mLock`）。读字段不取锁，最坏只是拿不到包名，本次不做拦截。
+     */
     @NonNull
     private static String[] resolveForegroundPackages(@Nullable Object powerManagerServiceImpl) {
         LinkedHashSet<String> packages = new LinkedHashSet<>();
@@ -4214,34 +4234,13 @@ public class ModuleMain extends XposedModule {
         Object activityTaskManager = getFieldValue(
                 powerManagerServiceImpl,
                 Constants.SYSTEM_ACTIVITY_TASK_MANAGER_FIELD);
-        // Only the current main-display task: older tasks are not foreground candidates.
-        Object tasks = callMethodQuietly(activityTaskManager, "getTasks", 1, false, false, 0);
-        if (tasks instanceof List<?> list) {
-            for (Object task : list) {
-                addComponentPackageName(packages, getFieldValue(
-                        task,
-                        Constants.SYSTEM_RUNNING_TASK_TOP_ACTIVITY_FIELD));
-                addComponentPackageName(packages, getFieldValue(
-                        task,
-                        Constants.SYSTEM_RUNNING_TASK_BASE_ACTIVITY_FIELD));
-                addComponentPackageName(packages, getFieldValue(
-                        task,
-                        Constants.SYSTEM_RUNNING_TASK_ORIG_ACTIVITY_FIELD));
-                addComponentPackageName(packages, getFieldValue(
-                        task,
-                        Constants.SYSTEM_RUNNING_TASK_REAL_ACTIVITY_FIELD));
-            }
-        }
+        Object topActivity = getFieldValue(
+                activityTaskManager,
+                Constants.SYSTEM_TOP_RESUMED_ACTIVITY_FIELD);
+        addPackageName(packages, getFieldValue(
+                topActivity,
+                Constants.SYSTEM_ACTIVITY_RECORD_PACKAGE_FIELD));
         return packages.toArray(new String[0]);
-    }
-
-    private static void addComponentPackageName(
-            @NonNull LinkedHashSet<String> packages,
-            @Nullable Object component
-    ) {
-        if (component instanceof ComponentName) {
-            addPackageName(packages, ((ComponentName) component).getPackageName());
-        }
     }
 
     private static void addPackageName(

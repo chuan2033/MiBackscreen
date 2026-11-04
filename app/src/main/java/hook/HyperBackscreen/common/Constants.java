@@ -128,10 +128,10 @@ public final class Constants {
     public static final String SYSTEM_POWER_MANAGER_SERVICE_IMPL_FIELD = "mPowerManagerServiceImpl";
     public static final String SYSTEM_ACTIVITY_TASK_MANAGER_FIELD = "mActivityTaskManager";
     public static final String SYSTEM_FOREGROUND_APP_PACKAGE_FIELD = "mForegroundAppPackageName";
-    public static final String SYSTEM_RUNNING_TASK_TOP_ACTIVITY_FIELD = "topActivity";
-    public static final String SYSTEM_RUNNING_TASK_BASE_ACTIVITY_FIELD = "baseActivity";
-    public static final String SYSTEM_RUNNING_TASK_ORIG_ACTIVITY_FIELD = "origActivity";
-    public static final String SYSTEM_RUNNING_TASK_REAL_ACTIVITY_FIELD = "realActivity";
+    /** ActivityTaskManagerService 的栈顶 ActivityRecord，只读字段、不取锁。 */
+    public static final String SYSTEM_TOP_RESUMED_ACTIVITY_FIELD = "mTopResumedActivity";
+    /** ActivityRecord 的包名字段。 */
+    public static final String SYSTEM_ACTIVITY_RECORD_PACKAGE_FIELD = "packageName";
     public static final String WAKE_REASON_DOUBLE_TAP = "android.policy:KEY";
     public static final String THEME_REAR_VIEWMODEL_CLASS = "com.rearScreen.viewModel.RearScreenDetailViewModel";
     // Theme Manager 11.5.3.1 (18 Pro Max)：遍历列表统计非 NFC 项后 return count < 15。

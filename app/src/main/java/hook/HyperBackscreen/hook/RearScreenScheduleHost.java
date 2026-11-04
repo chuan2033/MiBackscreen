@@ -32,6 +32,13 @@ final class RearScreenScheduleHost {
     private static final String TAG = Constants.LOG_TAG;
     /** 5 秒：让形态切换（息屏 ↔ 黑屏）和时间窗边界更快跟上；单轮只读两个本地偏好，几乎不占 CPU。 */
     private static final long TICK_MS = 5_000L;
+    /**
+     * 单轮耗时告警阈值。
+     *
+     * 常规一轮只读两个本地偏好，耗时在毫秒级；跨窗口边界时会持 `mLock` 调系统方法，
+     * 那一段如果变慢，说明系统方法内部的锁竞争或阻塞在增加，记一条便于回看。
+     */
+    private static final long SLOW_TICK_MS = 200L;
     private static final Object LOCK = new Object();
 
     /** 背屏超时钩子拿到的 PowerManagerServiceImpl 实例，只用来触发状态重算。 */
@@ -83,6 +90,7 @@ final class RearScreenScheduleHost {
 
     private static void loop(@NonNull XposedModule module) {
         while (!stopRequested) {
+            long tickStartedAt = SystemClock.elapsedRealtime();
             try {
                 boolean active = PrefsBridge.isRearScreenScheduleActiveNow(module);
                 boolean forceOff = PrefsBridge.shouldForceOffRearScreen(module);
@@ -116,6 +124,10 @@ final class RearScreenScheduleHost {
             } catch (Throwable error) {
                 // 一轮失败不能让线程退出，否则整晚都不会再判断。
                 module.log(Log.WARN, TAG, "Rear screen schedule tick failed", error);
+            }
+            long tickCost = SystemClock.elapsedRealtime() - tickStartedAt;
+            if (tickCost >= SLOW_TICK_MS) {
+                module.log(Log.WARN, TAG, "Rear screen schedule tick took " + tickCost + " ms");
             }
             try {
                 Thread.sleep(TICK_MS);
