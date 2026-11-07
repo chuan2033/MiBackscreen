@@ -119,6 +119,52 @@ public final class Constants {
     public static final String EXTRA_PREFERENCE_ACCEPTED = "preference_accepted";
     public static final String EXTRA_DIAGNOSTIC_MESSAGE = "diagnostic_message";
 
+    // ---- 应用投放到背屏 / 拉回主屏 ----
+    // 执行者是 system_server（RearCastHost）：开机 systemReady 之后注册一个导出的接收器，
+    // 只接受背屏中心与模块 App 自己发来的有序广播（发送方用 BroadcastOptions#setShareIdentityEnabled
+    // 公开身份，接收方用 getSentFromPackage / getSentFromUid 校验），结果放在 resultCode / resultData。
+    /** 投放请求广播；必须 setPackage({@link #SYSTEM_FRAMEWORK_PACKAGE})，只投递给 system_server。 */
+    public static final String ACTION_REAR_CAST = MODULE_PACKAGE + ".action.REAR_CAST";
+    /** 请求的动作，取值见下面的 REAR_CAST_OP_*。 */
+    public static final String EXTRA_REAR_CAST_OP = "rear_cast_op";
+    /** 主屏 → 背屏：把主屏最上层可见的普通应用任务移到背屏。 */
+    public static final String REAR_CAST_OP_TO_REAR = "to_rear";
+    /** 背屏 → 主屏：把背屏上最上层的被投放应用移回主屏。 */
+    public static final String REAR_CAST_OP_TO_MAIN = "to_main";
+    /** 切换：背屏上有被投放的应用就拉回，否则投放。 */
+    public static final String REAR_CAST_OP_TOGGLE = "toggle";
+    /** 只查询背屏上是否有被投放的应用，不移动任何任务。 */
+    public static final String REAR_CAST_OP_QUERY = "query";
+    /** system_server 动态注册的接收器归属的包名（广播 setPackage 用）。 */
+    public static final String SYSTEM_FRAMEWORK_PACKAGE = "android";
+    public static final String SYSTEM_UI_PACKAGE = "com.android.systemui";
+    /** 主屏桌面。 */
+    public static final String MAIN_LAUNCHER_PACKAGE = "com.miui.home";
+    public static final int SYSTEM_MAIN_DISPLAY_ID = 0;
+    /** 注册投放接收器的时机：ActivityManagerService#systemReady 返回之后。 */
+    public static final String SYSTEM_ACTIVITY_MANAGER_SERVICE_CLASS =
+            "com.android.server.am.ActivityManagerService";
+    public static final String SYSTEM_READY_METHOD = "systemReady";
+    // 结果码（有序广播 resultCode）。发送方以 NOT_HANDLED 作为初始值：
+    // 原样回来说明 system_server 里没有接收器（模块未生效 / 还没重启）。
+    public static final int REAR_CAST_RESULT_NOT_HANDLED = 0;
+    public static final int REAR_CAST_RESULT_MOVED_TO_REAR = 1;
+    public static final int REAR_CAST_RESULT_MOVED_TO_MAIN = 2;
+    public static final int REAR_CAST_RESULT_NO_APP_ON_MAIN = 3;
+    public static final int REAR_CAST_RESULT_NO_APP_ON_REAR = 4;
+    public static final int REAR_CAST_RESULT_API_UNAVAILABLE = 5;
+    public static final int REAR_CAST_RESULT_MOVE_FAILED = 6;
+    public static final int REAR_CAST_RESULT_DENIED = 7;
+    public static final int REAR_CAST_RESULT_BAD_REQUEST = 8;
+    /** 设备处于需要凭据解锁的锁屏状态：不把主屏应用移到背屏（否则背屏会绕过锁屏显示应用内容）。 */
+    public static final int REAR_CAST_RESULT_LOCKED = 9;
+    /** 查询结果：背屏上有被投放的应用（resultData 为其包名）。 */
+    public static final int REAR_CAST_RESULT_REAR_HAS_APP = 10;
+    /** 查询结果：背屏上没有被投放的应用。 */
+    public static final int REAR_CAST_RESULT_REAR_EMPTY = 11;
+    /** 发送方本地超时（不经过 system_server）。 */
+    public static final int REAR_CAST_RESULT_TIMEOUT = -100;
+
     // Theme store hook targets
     // 注意：以下 R8 混淆名（o5、cmzf、qp5l 等）与目标应用版本绑定，主题商店一更新即可能失效。
     public static final String THEME_STORE_PACKAGE = "com.android.thememanager";

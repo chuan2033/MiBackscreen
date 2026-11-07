@@ -230,7 +230,24 @@ final class RearScreenScheduleHost {
      * 用户自己双击唤醒仍然可用，不影响时间窗本身。
      */
     private static boolean wakeRearScreen(@NonNull XposedModule module) {
-        Object[] internals = resolvePowerInternals(module);
+        return requestRearWake(module, "MiBackscreenRearSchedule", "Rear screen schedule");
+    }
+
+    /**
+     * 点亮背屏的公用入口（定时关屏退出窗口、应用投放到背屏之后都走这里）。
+     *
+     * <p>调用方线程不能持有 WindowManagerGlobalLock 等其它系统锁：这里会拿 PMS 的 mLock。
+     * 只在后台线程调用；所有异常吞掉，返回 false 表示这次没点亮。
+     *
+     * @param details  唤醒原因字符串（出现在系统电源日志里）
+     * @param logLabel 日志前缀，区分是哪个功能发起的
+     */
+    static boolean requestRearWake(
+            @NonNull XposedModule module,
+            @NonNull String details,
+            @NonNull String logLabel
+    ) {
+        Object[] internals = resolvePowerInternals(module, logLabel);
         if (internals == null) return false;
         Object powerManagerService = internals[0];
         Object lock = internals[1];
@@ -239,7 +256,7 @@ final class RearScreenScheduleHost {
             Method wake = findMethod(powerManagerService.getClass(), "wakeUpSecondaryDisplay",
                     powerGroup.getClass(), long.class, int.class, String.class, int.class);
             if (wake == null) {
-                module.log(Log.WARN, TAG, "Rear screen schedule: wake skipped, method missing");
+                module.log(Log.WARN, TAG, logLabel + ": wake skipped, method missing");
                 return false;
             }
             wake.setAccessible(true);
@@ -248,13 +265,13 @@ final class RearScreenScheduleHost {
                         powerGroup,
                         SystemClock.uptimeMillis(),
                         Constants.WAKE_REASON_APPLICATION,
-                        "MiBackscreenRearSchedule",
+                        details,
                         Process.SYSTEM_UID);
             }
-            module.log(Log.INFO, TAG, "Rear screen schedule: rear screen wake requested");
+            module.log(Log.INFO, TAG, logLabel + ": rear screen wake requested");
             return true;
         } catch (Throwable error) {
-            module.log(Log.WARN, TAG, "Rear screen schedule: wake request failed", error);
+            module.log(Log.WARN, TAG, logLabel + ": wake request failed", error);
             return false;
         }
     }
@@ -264,33 +281,38 @@ final class RearScreenScheduleHost {
      */
     @Nullable
     private static Object[] resolvePowerInternals(@NonNull XposedModule module) {
+        return resolvePowerInternals(module, "Rear screen schedule");
+    }
+
+    @Nullable
+    private static Object[] resolvePowerInternals(@NonNull XposedModule module, @NonNull String logLabel) {
         WeakReference<Object> reference = powerManagerServiceImpl;
         Object service = reference == null ? null : reference.get();
         if (service == null) {
-            module.log(Log.WARN, TAG, "Rear screen schedule: power service not captured yet");
+            module.log(Log.WARN, TAG, logLabel + ": power service not captured yet");
             return null;
         }
         try {
             Object powerManagerService = readField(service, "mPowerManagerService");
             if (powerManagerService == null) {
-                module.log(Log.WARN, TAG, "Rear screen schedule: mPowerManagerService is null");
+                module.log(Log.WARN, TAG, logLabel + ": mPowerManagerService is null");
                 return null;
             }
             Object lock = readField(powerManagerService, "mLock");
             Object groups = readField(powerManagerService, "mPowerGroups");
             if (lock == null || groups == null) {
-                module.log(Log.WARN, TAG, "Rear screen schedule: power internals unavailable");
+                module.log(Log.WARN, TAG, logLabel + ": power internals unavailable");
                 return null;
             }
             Method get = groups.getClass().getMethod("get", int.class);
             Object powerGroup = get.invoke(groups, Constants.SYSTEM_SECONDARY_DISPLAY_GROUP_ID);
             if (powerGroup == null) {
-                module.log(Log.WARN, TAG, "Rear screen schedule: rear power group missing");
+                module.log(Log.WARN, TAG, logLabel + ": rear power group missing");
                 return null;
             }
             return new Object[]{powerManagerService, lock, powerGroup};
         } catch (Throwable error) {
-            module.log(Log.WARN, TAG, "Rear screen schedule: power internals lookup failed", error);
+            module.log(Log.WARN, TAG, logLabel + ": power internals lookup failed", error);
             return null;
         }
     }

@@ -347,4 +347,32 @@
     <string name="rear_lyric_status_legacy">Connected · 3.x</string>
     <string name="rear_lyric_status_unavailable">Service inactive</string>
     <string name="rear_lyric_status_not_installed">Not installed</string>
+    <!-- 应用投放到背屏 / 拉回主屏 -->
+    <string name="panel_tile_rear_cast">Cast</string>
+    <string name="panel_tile_rear_cast_to_rear">To rear</string>
+    <string name="panel_tile_rear_cast_to_main">Back to main</string>
+    <string name="rear_cast_no_app_on_main">No app on the main screen to cast</string>
+    <string name="rear_cast_no_app_on_rear">No cast app on the rear screen</string>
+    <string name="rear_cast_api_unavailable">System API unavailable</string>
+    <string name="rear_cast_not_active">Not active yet. Enable the System Framework scope and reboot the phone</string>
+    <string name="rear_cast_timeout">The system did not respond, try again later</string>
+    <string name="rear_cast_locked">Unlock the phone first</string>
+    <string name="rear_cast_denied">Request rejected by the system</string>
+    <string name="rear_cast_move_failed">Could not move the app</string>
+    <string name="rear_cast_tile_label">Cast to rear</string>
+    <string name="rear_cast_tile_busy">Working…</string>
+    <string name="rear_cast_toast_to_rear">Moved to the rear screen: %1$s</string>
+    <string name="rear_cast_toast_to_main">Moved back to the main screen: %1$s</string>
+    <string name="rear_cast_title">Cast apps to the rear screen</string>
+    <string name="rear_cast_entry_summary">Move the current app to the rear screen and back, from a Control Center tile or the rear panel</string>
+    <string name="rear_cast_section_usage">How to use</string>
+    <string name="rear_cast_tile_usage_title">Control Center tile</string>
+    <string name="rear_cast_tile_usage_summary">Edit Control Center and add the \"Cast to rear\" tile. Tap it to move the app you are using on the main screen to the rear screen; when an app is already on the rear screen, tap it again to bring that app back to the main screen.</string>
+    <string name="rear_cast_panel_usage_title">Rear quick panel</string>
+    <string name="rear_cast_panel_usage_summary">The MiBackscreen panel on the rear screen has a \"Cast\" card. \"To rear\" moves the current main-screen app over (the panel then closes); \"Back to main\" moves the app on the rear screen back.</string>
+    <string name="rear_cast_section_notes">Notes</string>
+    <string name="rear_cast_note_reboot">Runs in the system framework: enable the System Framework scope in LSPosed and reboot the phone before first use. The panel card also needs the rear screen center scope. No extra switch is needed.</string>
+    <string name="rear_cast_note_running_only">Only apps that are already running can be moved. Apps cannot be launched directly on the rear screen. While the phone is locked, apps are not moved to the rear screen.</string>
+    <string name="rear_cast_note_compat">Some apps may look wrong on the rear screen (layout, touch, or a black screen). Moving them back to the main screen restores them.</string>
+    <string name="rear_cast_note_timeout">The rear screen turns off after 10 seconds of inactivity by default. Make it longer here.</string>
 </resources>

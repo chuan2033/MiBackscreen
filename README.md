@@ -88,7 +88,7 @@ app/                         LSPosed 模块（App + Hook，同一个 APK）
     common/                  常量与纯逻辑，App 和 Hook 共用
     model/                   偏好取值类型（息屏时间、换壁纸间隔 / 顺序、定时关屏）
     hook/                    Hook 入口 ModuleMain（只做分发）
-      system/                system_server：息屏时间、双击唤醒、定时关屏、游戏保持亮
+      system/                system_server：息屏时间、双击唤醒、定时关屏、游戏保持亮、应用投放到背屏
       subscreen/             背屏中心：长按、应用卡上限、快捷面板入口、自动换壁纸、视频壁纸续播 / 声音、歌词 Hook 点
       appindex/              appInfo.json 应用卡索引读写与跨进程锁、模块应用卡资源
       theme/                 主题商店：下载与设备适配、设置页入口、应用流程资源修复、背屏视频导入限制 / 音轨
@@ -98,6 +98,7 @@ app/                         LSPosed 模块（App + Hook，同一个 APK）
     panel/                   注入背屏中心的快捷面板（原生 View）
     batteryring/             背屏电量环：几何 / 布局 / 配色与注入的 View
     lyric/                   背屏实时歌词：SuperLyric 订阅（3.x / 4.x）与音乐卡片歌手行写入
+    tile/                    控制中心磁贴（投到背屏）
     ui/                      模块 App 的 Compose 界面（按页面分包）
   src/debug/                 仅 Debug 包含的宿主探针
   src/test/                  单元测试，包结构与 main 对应

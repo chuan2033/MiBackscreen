@@ -341,4 +341,32 @@
     <string name="rear_lyric_status_legacy">已连接 · 3.x</string>
     <string name="rear_lyric_status_unavailable">服务未生效</string>
     <string name="rear_lyric_status_not_installed">未安装</string>
+    <!-- 应用投放到背屏 / 拉回主屏 -->
+    <string name="panel_tile_rear_cast">投放</string>
+    <string name="panel_tile_rear_cast_to_rear">切到背屏</string>
+    <string name="panel_tile_rear_cast_to_main">拉回主屏</string>
+    <string name="rear_cast_no_app_on_main">主屏上没有可投放的应用</string>
+    <string name="rear_cast_no_app_on_rear">背屏上没有投放的应用</string>
+    <string name="rear_cast_api_unavailable">系统接口不可用</string>
+    <string name="rear_cast_not_active">功能未生效，请勾选「系统框架」作用域并重启手机</string>
+    <string name="rear_cast_timeout">系统无响应，请稍后再试</string>
+    <string name="rear_cast_locked">请先解锁手机</string>
+    <string name="rear_cast_denied">请求被系统拒绝</string>
+    <string name="rear_cast_move_failed">移动应用失败</string>
+    <string name="rear_cast_tile_label">投到背屏</string>
+    <string name="rear_cast_tile_busy">处理中…</string>
+    <string name="rear_cast_toast_to_rear">已投到背屏：%1$s</string>
+    <string name="rear_cast_toast_to_main">已拉回主屏：%1$s</string>
+    <string name="rear_cast_title">应用投放到背屏</string>
+    <string name="rear_cast_entry_summary">用控制中心磁贴或背屏面板，把当前应用移到背屏、再拉回主屏</string>
+    <string name="rear_cast_section_usage">使用方法</string>
+    <string name="rear_cast_tile_usage_title">控制中心磁贴</string>
+    <string name="rear_cast_tile_usage_summary">编辑控制中心，添加「投到背屏」磁贴。点一下把主屏正在用的应用移到背屏；背屏上已有投放的应用时，再点一下把它拉回主屏。</string>
+    <string name="rear_cast_panel_usage_title">背屏快捷面板</string>
+    <string name="rear_cast_panel_usage_summary">背屏 MiBackscreen 面板里有「投放」卡片：显示「切到背屏」时，点一下把主屏当前应用移过来（面板随即关闭）；显示「拉回主屏」时，点一下把背屏上的应用移回主屏。</string>
+    <string name="rear_cast_section_notes">注意事项</string>
+    <string name="rear_cast_note_reboot">由系统框架执行：首次使用前需在 LSPosed 勾选「系统框架」作用域并重启手机；背屏面板里的卡片还需要勾选背屏中心。无需额外开关。</string>
+    <string name="rear_cast_note_running_only">只能移动已经在运行的应用，不能直接在背屏上启动应用；手机锁定时不会把应用投到背屏。</string>
+    <string name="rear_cast_note_compat">部分应用在背屏上可能显示异常（比例、触控或黑屏），拉回主屏即可恢复。</string>
+    <string name="rear_cast_note_timeout">背屏默认 10 秒无操作就息屏，可在这里调长。</string>
 </resources>

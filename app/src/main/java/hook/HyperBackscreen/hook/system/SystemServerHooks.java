@@ -21,7 +21,8 @@ import hook.HyperBackscreen.hook.ModuleMain;
 
 /**
  * system_server 进程里的 Hook：背屏封面显示开关、背屏双击 / 定时关闭期间的唤醒拦截、
- * 背屏息屏超时覆盖、主屏高负载（游戏）时保持背屏常亮。
+ * 背屏息屏超时覆盖、主屏高负载（游戏）时保持背屏常亮；应用投放到背屏的执行端在
+ * {@link RearCastHost}（systemReady 之后注册接收器）。
  *
  * <p>{@link ModuleMain} 在 onModuleLoaded / onSystemServerStarting / onPackageReady("android")
  * 三处都会调 {@link #installSystemHooksOnce}，这里保证只成功安装一次。
@@ -78,6 +79,9 @@ public final class SystemServerHooks {
         synchronized (module) {
             if (systemHooksInstalled) return;
             long startedAt = SystemClock.elapsedRealtime();
+            // 应用投放到背屏：与下面的 Hook 互不依赖，自带 try/catch 与安装去重，
+            // 失败只让投放不可用，不影响其它 Hook 的安装结果。
+            RearCastHost.install(module, classLoader);
             try {
                 if (installSystemHooks(classLoader)) {
                     systemHooksInstalled = true;

@@ -49,6 +49,21 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- 控制中心「投到背屏」磁贴：点一下在主屏与背屏之间移动当前应用（执行者在 system_server）。 -->
+        <service
+            android:name=".tile.RearCastTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_rear_cast"
+            android:label="@string/rear_cast_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
         <provider
             android:name=".bridge.PreferenceBridgeProvider"
             android:authorities="${applicationId}.PanelPreferences"
