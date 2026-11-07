@@ -511,6 +511,7 @@ private enum class BatteryLayoutField(
     val toggle: Boolean = false,
 ) {
     RING_TRACK(R.string.battery_ring_track_title, BatteryLayoutUnit.PIXEL, toggle = true),
+    CHARGE_SWEEP(R.string.battery_charge_sweep_title, BatteryLayoutUnit.PIXEL, toggle = true),
     RING_SCALE(R.string.battery_ring_scale_title, BatteryLayoutUnit.PERCENT),
     RING_STROKE(R.string.battery_ring_stroke_title, BatteryLayoutUnit.PIXEL),
     PERCENT_X(R.string.battery_percent_offset_x_title, BatteryLayoutUnit.OFFSET),
@@ -521,6 +522,7 @@ private enum class BatteryLayoutField(
 
     fun read(layout: BatteryRingLayout): Int = when (this) {
         RING_TRACK -> if (layout.ringTrackVisible) 1 else 0
+        CHARGE_SWEEP -> if (layout.chargeSweepEnabled) 1 else 0
         RING_SCALE -> layout.ringScalePercent
         RING_STROKE -> layout.ringStrokeWidth
         PERCENT_X -> layout.percentOffsetXPercent
@@ -532,6 +534,7 @@ private enum class BatteryLayoutField(
 
     fun write(layout: BatteryRingLayout, value: Int): BatteryRingLayout = when (this) {
         RING_TRACK -> layout.copy(ringTrackVisible = value != 0)
+        CHARGE_SWEEP -> layout.copy(chargeSweepEnabled = value != 0)
         RING_SCALE -> layout.copy(ringScalePercent = value)
         RING_STROKE -> layout.copy(ringStrokeWidth = value)
         PERCENT_X -> layout.copy(percentOffsetXPercent = value)
@@ -557,7 +560,7 @@ private enum class BatteryLayoutField(
             BatteryRingLayout.PERCENT_TEXT_WEIGHT_MIN..BatteryRingLayout.PERCENT_TEXT_WEIGHT_MAX
         LOW_THRESHOLD -> BatteryRingLayout.LOW_THRESHOLD_MIN..BatteryRingLayout.LOW_THRESHOLD_MAX
         // 开关不用区间，给个占位值让调用方不必特判。
-        RING_TRACK -> 0..1
+        RING_TRACK, CHARGE_SWEEP -> 0..1
     }
 
     /**
@@ -576,9 +579,10 @@ private enum class BatteryLayoutField(
     }
 }
 
-/** 「电量环」折叠里的可调项：底轨开关、线条大小、线条粗细。 */
+/** 「电量环」折叠里的可调项：底轨开关、充电流光开关、线条大小、线条粗细。 */
 private val BatteryRingFields = listOf(
     BatteryLayoutField.RING_TRACK,
+    BatteryLayoutField.CHARGE_SWEEP,
     BatteryLayoutField.RING_SCALE,
     BatteryLayoutField.RING_STROKE
 )
@@ -755,7 +759,7 @@ private fun BatteryRearScreenPreview(
     val progress = remember { Path() }
     val sweep = remember { Path() }
     // 只在预览「充电中」时跑流光动画，平时不占绘制。
-    val sweepPhase = if (charging) {
+    val sweepPhase = if (charging && layout.chargeSweepEnabled) {
         rememberInfiniteTransition(label = "chargeSweep").animateFloat(
             initialValue = 0f,
             targetValue = 1f,
