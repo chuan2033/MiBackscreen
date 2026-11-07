@@ -18,7 +18,7 @@ import hook.HyperBackscreen.app.ModuleApp;
 import hook.HyperBackscreen.common.Constants;
 import hook.HyperBackscreen.common.RearScreenSchedule;
 import hook.HyperBackscreen.common.RearScreenWakeMatcher;
-import hook.HyperBackscreen.hook.AutoWallpaperRotationPolicy;
+import hook.HyperBackscreen.hook.subscreen.AutoWallpaperRotationPolicy;
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.service.XposedService;
 

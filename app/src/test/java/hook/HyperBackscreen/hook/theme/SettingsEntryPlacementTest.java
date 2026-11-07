@@ -1,4 +1,4 @@
-package hook.HyperBackscreen.hook;
+package hook.HyperBackscreen.hook.theme;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;

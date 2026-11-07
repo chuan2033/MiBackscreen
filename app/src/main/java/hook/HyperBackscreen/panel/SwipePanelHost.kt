@@ -4,8 +4,8 @@ import hook.HyperBackscreen.model.AutoWallpaperInterval
 import hook.HyperBackscreen.model.RearScreenOffTimeout
 import android.view.VelocityTracker
 import hook.HyperBackscreen.batteryring.BatteryRingStyle
-import hook.HyperBackscreen.hook.PanelAppCard
-import hook.HyperBackscreen.hook.AutoWallpaperRotationHost
+import hook.HyperBackscreen.hook.appindex.PanelAppCard
+import hook.HyperBackscreen.hook.subscreen.AutoWallpaperRotationHost
 import android.widget.ImageView
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.HapticFeedbackConstants

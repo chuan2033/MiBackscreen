@@ -1,4 +1,4 @@
-package hook.HyperBackscreen.hook;
+package hook.HyperBackscreen.hook.theme;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;

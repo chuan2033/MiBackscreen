@@ -2,7 +2,7 @@ package hook.HyperBackscreen.model
 
 import androidx.annotation.StringRes
 import hook.HyperBackscreen.R
-import hook.HyperBackscreen.hook.AutoWallpaperRotationPolicy
+import hook.HyperBackscreen.hook.subscreen.AutoWallpaperRotationPolicy
 
 /**
  * 定时切换背屏壁纸时的挑图方式。

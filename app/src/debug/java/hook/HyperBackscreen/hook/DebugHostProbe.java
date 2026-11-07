@@ -22,6 +22,7 @@ import java.util.function.Consumer;
 import hook.HyperBackscreen.common.Constants;
 import hook.HyperBackscreen.common.BackgroundTasks;
 import hook.HyperBackscreen.bridge.PrefsBridge;
+import hook.HyperBackscreen.hook.appindex.PanelAppCard;
 import hook.HyperBackscreen.panel.SwipePanelHost;
 import io.github.libxposed.api.XposedModule;
 
