@@ -160,6 +160,12 @@ public final class PrefsBridge {
     /** 按应用禁用背屏双击熄屏的名单默认空：系统原逻辑不变。 */
     public static final String DEFAULT_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES = "";
     public static final boolean DEFAULT_THEME_SETTINGS_SHORTCUT = true;
+    /** 背屏视频壁纸三项增强默认全关：会改变官方壁纸「每次亮屏重播」的设计、放开导入限制、让背屏出声。 */
+    public static final boolean DEFAULT_REAR_VIDEO_RESUME = false;
+    public static final boolean DEFAULT_REAR_VIDEO_UNLOCK_LIMITS = false;
+    public static final boolean DEFAULT_REAR_VIDEO_KEEP_AUDIO = false;
+    /** 背屏实时歌词默认关：依赖第三方模块 SuperLyric。 */
+    public static final boolean DEFAULT_ENABLE_REAR_LYRIC = false;
 
     /**
      * 配置备份覆盖的偏好键：只收「会改变行为或观感」的键。
@@ -187,6 +193,10 @@ public final class PrefsBridge {
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_DISABLE_REAR_SCREEN_COVER, DEFAULT_DISABLE_REAR_SCREEN_COVER);
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, DEFAULT_DISABLE_DOUBLE_TAP_WAKE);
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_THEME_SETTINGS_SHORTCUT, DEFAULT_THEME_SETTINGS_SHORTCUT);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_REAR_VIDEO_RESUME, DEFAULT_REAR_VIDEO_RESUME);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_REAR_VIDEO_UNLOCK_LIMITS, DEFAULT_REAR_VIDEO_UNLOCK_LIMITS);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_REAR_VIDEO_KEEP_AUDIO, DEFAULT_REAR_VIDEO_KEEP_AUDIO);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_ENABLE_REAR_LYRIC, DEFAULT_ENABLE_REAR_LYRIC);
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_CHECK_UPDATES, DEFAULT_CHECK_UPDATES);
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_FLOATING_NAV_BAR, DEFAULT_FLOATING_NAV_BAR);
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_LIQUID_GLASS, DEFAULT_LIQUID_GLASS);
@@ -1129,6 +1139,42 @@ public final class PrefsBridge {
         writeFromUi(context, Constants.KEY_THEME_SETTINGS_SHORTCUT, enabled);
     }
 
+    public static boolean readRearVideoResumeForUi(@NonNull Context context) {
+        return readForUi(context, Constants.KEY_REAR_VIDEO_RESUME, DEFAULT_REAR_VIDEO_RESUME);
+    }
+
+    public static void writeRearVideoResumeFromUi(@NonNull Context context, boolean enabled) {
+        writeFromUi(context, Constants.KEY_REAR_VIDEO_RESUME, enabled);
+    }
+
+    public static boolean readRearVideoUnlockLimitsForUi(@NonNull Context context) {
+        return readForUi(context, Constants.KEY_REAR_VIDEO_UNLOCK_LIMITS, DEFAULT_REAR_VIDEO_UNLOCK_LIMITS);
+    }
+
+    public static void writeRearVideoUnlockLimitsFromUi(@NonNull Context context, boolean enabled) {
+        writeFromUi(context, Constants.KEY_REAR_VIDEO_UNLOCK_LIMITS, enabled);
+    }
+
+    public static boolean readRearVideoKeepAudioForUi(@NonNull Context context) {
+        return readForUi(context, Constants.KEY_REAR_VIDEO_KEEP_AUDIO, DEFAULT_REAR_VIDEO_KEEP_AUDIO);
+    }
+
+    public static void writeRearVideoKeepAudioFromUi(@NonNull Context context, boolean enabled) {
+        writeFromUi(context, Constants.KEY_REAR_VIDEO_KEEP_AUDIO, enabled);
+    }
+
+    public static boolean readEnableRearLyricForUi(@NonNull Context context) {
+        return readForUi(context, Constants.KEY_ENABLE_REAR_LYRIC, DEFAULT_ENABLE_REAR_LYRIC);
+    }
+
+    /**
+     * 歌词开关同步提交（Binder，调用方放 IO 线程）：提交成功后才发同步广播，
+     * 宿主收到广播时远程偏好已经是新值。失败时新值留作待同步值，重连后补交。
+     */
+    public static boolean writeEnableRearLyricFromUi(@NonNull Context context, boolean enabled) {
+        return writeFromUiCommitted(context, Constants.KEY_ENABLE_REAR_LYRIC, enabled);
+    }
+
     /** 纯 UI 外观项，Hook 端不消费，只存本地。 */
     public static boolean readFloatingNavBar(@NonNull Context context) {
         return local(context).getBoolean(Constants.KEY_FLOATING_NAV_BAR, DEFAULT_FLOATING_NAV_BAR);
@@ -1223,6 +1269,26 @@ public final class PrefsBridge {
                 module,
                 Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME,
                 DEFAULT_KEEP_REAR_SCREEN_ON_IN_GAME);
+    }
+
+    public static boolean shouldResumeRearVideo(@NonNull XposedModule module) {
+        return readForHook(module, Constants.KEY_REAR_VIDEO_RESUME, DEFAULT_REAR_VIDEO_RESUME);
+    }
+
+    public static boolean shouldUnlockRearVideoLimits(@NonNull XposedModule module) {
+        return readForHook(module, Constants.KEY_REAR_VIDEO_UNLOCK_LIMITS, DEFAULT_REAR_VIDEO_UNLOCK_LIMITS);
+    }
+
+    public static boolean shouldKeepRearVideoAudio(@NonNull XposedModule module) {
+        return readForHook(module, Constants.KEY_REAR_VIDEO_KEEP_AUDIO, DEFAULT_REAR_VIDEO_KEEP_AUDIO);
+    }
+
+    /** 背屏中心读歌词开关：同步广播刚送到的值优先（远程偏好变更回传有延迟）。 */
+    public static boolean shouldShowRearLyric(@NonNull XposedModule module) {
+        Object override = liveOverride(sRemoteBooleanOverrides, Constants.KEY_ENABLE_REAR_LYRIC);
+        return override instanceof Boolean
+                ? (Boolean) override
+                : readForHook(module, Constants.KEY_ENABLE_REAR_LYRIC, DEFAULT_ENABLE_REAR_LYRIC);
     }
 
     public static boolean shouldShowThemeSettingsShortcut(@NonNull XposedModule module) {
@@ -1527,6 +1593,10 @@ public final class PrefsBridge {
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_REAR_SCREEN_COVER);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_THEME_SETTINGS_SHORTCUT);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REAR_VIDEO_RESUME);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REAR_VIDEO_UNLOCK_LIMITS);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REAR_VIDEO_KEEP_AUDIO);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_REAR_LYRIC);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES);
@@ -1591,6 +1661,14 @@ public final class PrefsBridge {
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_REAR_SCREEN_COVER, DEFAULT_DISABLE_REAR_SCREEN_COVER);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, DEFAULT_DISABLE_DOUBLE_TAP_WAKE);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_THEME_SETTINGS_SHORTCUT, DEFAULT_THEME_SETTINGS_SHORTCUT);
+            syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REAR_VIDEO_RESUME, DEFAULT_REAR_VIDEO_RESUME);
+            syncBooleanKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_REAR_VIDEO_UNLOCK_LIMITS,
+                    DEFAULT_REAR_VIDEO_UNLOCK_LIMITS);
+            syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REAR_VIDEO_KEEP_AUDIO, DEFAULT_REAR_VIDEO_KEEP_AUDIO);
+            syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_REAR_LYRIC, DEFAULT_ENABLE_REAR_LYRIC);
             syncStringKey(
                     localPrefs,
                     remotePrefs,

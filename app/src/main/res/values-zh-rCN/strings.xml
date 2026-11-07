@@ -328,4 +328,17 @@
     <string name="rear_double_tap_wake_section">背屏熄着时：禁止双击亮屏</string>
     <string name="rear_double_tap_sleep_section">背屏亮着时：禁止双击熄屏</string>
     <string name="rear_double_tap_choose_apps">选择应用</string>
+    <string name="rear_video_resume_title">视频壁纸续播</string>
+    <string name="rear_video_resume_summary">亮屏、退出息屏或从其他背屏应用返回时，从上次的位置接着播放；换壁纸后从头开始。部分壁纸原本设计为每次亮屏重新播放</string>
+    <string name="rear_video_unlock_limits_title">解除视频壁纸限制</string>
+    <string name="rear_video_unlock_limits_summary">自定义背屏视频不再裁到 6 秒、压到 30 帧和 1080p，直接使用原片，也不再进入裁剪页；HDR、杜比视界和非 MP4 / MOV 格式仍不支持，建议使用 1080p 以下的视频</string>
+    <string name="rear_video_keep_audio_title">视频壁纸保留声音</string>
+    <string name="rear_video_keep_audio_summary">新设置的背屏视频保留音轨，播放时跟随媒体音量，不会打断正在播放的音乐。之前设置的视频需要重新选一次才有声音</string>
+    <string name="rear_lyric_title">背屏实时歌词</string>
+    <string name="rear_lyric_summary">播放音乐时，背屏音乐卡片的歌手一行改为显示当前歌词。需要安装 SuperLyric，在 LSPosed 里为它勾选「系统框架」和对应的音乐 App，并重启手机</string>
+    <string name="rear_lyric_status_checking">检测中…</string>
+    <string name="rear_lyric_status_v4">已连接 · 4.x</string>
+    <string name="rear_lyric_status_legacy">已连接 · 3.x</string>
+    <string name="rear_lyric_status_unavailable">服务未生效</string>
+    <string name="rear_lyric_status_not_installed">未安装</string>
 </resources>

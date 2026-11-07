@@ -5,6 +5,8 @@ import hook.HyperBackscreen.model.AutoWallpaperOrder
 import hook.HyperBackscreen.model.RearScreenOffTimeout
 import hook.HyperBackscreen.model.RearScreenSchedulePrefs
 import hook.HyperBackscreen.ui.function.FunctionGroupCounts
+import hook.HyperBackscreen.ui.function.RearMediaSwitch
+import hook.HyperBackscreen.ui.function.RearMediaSwitches
 import hook.HyperBackscreen.ui.function.countEnabledFunctions
 import hook.HyperBackscreen.ui.function.countFunctionGroups
 import hook.HyperBackscreen.ui.navigation.HomeNavigationPolicy
@@ -305,7 +307,9 @@ internal fun HomeScreen(
     batteryLayout: BatteryRingLayout,
     onBatteryColorChange: (BatteryColorSlot, String) -> Unit,
     onBatteryPercentPositionChange: (BatteryPercentPosition) -> Unit,
-    onBatteryLayoutChange: (BatteryRingLayout) -> Unit
+    onBatteryLayoutChange: (BatteryRingLayout) -> Unit,
+    rearMedia: RearMediaSwitches,
+    onRearMediaChange: (RearMediaSwitch, Boolean) -> Unit,
 ) {
     val doubleTapSleepFilterActive = remember(doubleTapSleepDisabledPackages) {
         PackageListCodec.parse(doubleTapSleepDisabledPackages).isNotEmpty()
@@ -330,6 +334,7 @@ internal fun HomeScreen(
         disableDoubleTapWake = disableDoubleTapWake,
         doubleTapSleepFilterActive = doubleTapSleepFilterActive,
         musicWidgetWhitelistActive = musicWidgetWhitelistActive,
+        rearMedia = rearMedia,
     )
     val functionGroupCounts = countFunctionGroups(
         disableRearScreenCover = disableRearScreenCover,
@@ -347,6 +352,7 @@ internal fun HomeScreen(
         removeWallpaperLimit = removeWallpaperLimit,
         doubleTapSleepFilterActive = doubleTapSleepFilterActive,
         musicWidgetWhitelistActive = musicWidgetWhitelistActive,
+        rearMedia = rearMedia,
     )
     var selected by rememberSaveable { mutableStateOf(HomeNavigationPolicy.Tab.HOME) }
     val backStack = rememberNavBackStack<HomeRoute>(HomeRoute.Main)
@@ -549,7 +555,9 @@ internal fun HomeScreen(
                         themeSettingsShortcut = themeSettingsShortcut,
                         onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
                         onBatteryColorClick = { openDetail(page, HomeRoute.BatteryColor) },
-                        onRearScreenTimingClick = { openDetail(page, HomeRoute.RearScreenTiming) }
+                        onRearScreenTimingClick = { openDetail(page, HomeRoute.RearScreenTiming) },
+                        rearMedia = rearMedia,
+                        onRearMediaChange = onRearMediaChange,
                     )
                 }
             }
@@ -661,7 +669,9 @@ private fun MainTabPage(
     onLicenseClick: () -> Unit,
     onAppUpdateClick: () -> Unit,
     onRestartClick: () -> Unit,
-    onSettingsClick: () -> Unit
+    onSettingsClick: () -> Unit,
+    rearMedia: RearMediaSwitches,
+    onRearMediaChange: (RearMediaSwitch, Boolean) -> Unit,
 ) {
     val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
     val surfaceColor = MiuixTheme.colorScheme.surface
@@ -758,7 +768,9 @@ private fun MainTabPage(
                             onMusicWidgetWhitelistClick = onMusicWidgetWhitelistClick,
                             onRearScreenRecordClick = onRearScreenRecordClick,
                             onBatteryColorClick = onBatteryColorClick,
-                            onRearScreenTimingClick = onRearScreenTimingClick
+                            onRearScreenTimingClick = onRearScreenTimingClick,
+                            rearMedia = rearMedia,
+                            onRearMediaChange = onRearMediaChange,
                         )
                     }
                     HomeNavigationPolicy.Tab.ABOUT -> item {
@@ -831,7 +843,9 @@ private fun MainContent(
     themeSettingsShortcut: Boolean,
     onThemeSettingsShortcutChange: (Boolean) -> Unit,
     onBatteryColorClick: () -> Unit,
-    onRearScreenTimingClick: () -> Unit
+    onRearScreenTimingClick: () -> Unit,
+    rearMedia: RearMediaSwitches,
+    onRearMediaChange: (RearMediaSwitch, Boolean) -> Unit,
 ) {
     val surfaceColor = MiuixTheme.colorScheme.surface
     val bottomBarBackdrop = rememberLayerBackdrop {
@@ -933,7 +947,9 @@ private fun MainContent(
                 onLicenseClick = onLicenseClick,
                 onAppUpdateClick = onAppUpdateClick,
                 onRestartClick = { showRestartDialog = true },
-                onSettingsClick = onSettingsClick
+                onSettingsClick = onSettingsClick,
+                rearMedia = rearMedia,
+                onRearMediaChange = onRearMediaChange,
             )
         }
 

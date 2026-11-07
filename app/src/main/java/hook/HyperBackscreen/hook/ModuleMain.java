@@ -23,8 +23,11 @@ import hook.HyperBackscreen.hook.target.TargetMembers;
 import hook.HyperBackscreen.hook.target.TargetResolver;
 import hook.HyperBackscreen.hook.appindex.SubscreenAppIndex;
 import hook.HyperBackscreen.hook.assistant.PersonalAssistantHooks;
+import hook.HyperBackscreen.hook.subscreen.RearLyricHooks;
+import hook.HyperBackscreen.hook.subscreen.RearVideoHooks;
 import hook.HyperBackscreen.hook.subscreen.SubScreenCenterHooks;
 import hook.HyperBackscreen.hook.system.SystemServerHooks;
+import hook.HyperBackscreen.hook.theme.RearVideoImportHooks;
 import hook.HyperBackscreen.hook.theme.ThemeManagerHooks;
 import hook.HyperBackscreen.hook.theme.ThemeResourceRepair;
 
@@ -62,6 +65,9 @@ public class ModuleMain extends XposedModule {
     private final ThemeManagerHooks themeManagerHooks =
             new ThemeManagerHooks(this, subscreenAppIndex, themeResourceRepair);
     private final PersonalAssistantHooks personalAssistantHooks = new PersonalAssistantHooks(this);
+    private final RearVideoHooks rearVideoHooks = new RearVideoHooks(this);
+    private final RearLyricHooks rearLyricHooks = new RearLyricHooks(this);
+    private final RearVideoImportHooks rearVideoImportHooks = new RearVideoImportHooks(this);
 
     @Override
     public void onModuleLoaded(@NonNull ModuleLoadedParam param) {
@@ -137,6 +143,9 @@ public class ModuleMain extends XposedModule {
                     subScreenCenterHooks.installRearScreenSelectionSyncHook(param.getClassLoader());
                     subScreenCenterHooks.installAutoWallpaperRotationHooks(param.getClassLoader());
                     subScreenCenterHooks.installMusicWidgetWhitelistHooks(param.getClassLoader());
+                    // 以下两项各自吞掉异常，失败只影响自己。
+                    rearVideoHooks.install(param.getClassLoader());
+                    rearLyricHooks.install(param.getClassLoader());
                     hooksInstalled = true;
                     log(Log.INFO, Constants.LOG_TAG, "Hooks installed for " + Constants.TARGET_PACKAGE);
                 } catch (Throwable throwable) {
@@ -164,6 +173,7 @@ public class ModuleMain extends XposedModule {
                     themeManagerHooks.installThemeAiAppIndexSyncHooks(param.getClassLoader());
                     themeManagerHooks.installThemeSettingsAiVisibilityHooks(param.getClassLoader());
                     themeManagerHooks.installThemeSettingsShortcutHook(param.getClassLoader());
+                    rearVideoImportHooks.install(param.getClassLoader());
                     themeStoreHooksInstalled = true;
                     log(Log.INFO, Constants.LOG_TAG, "Theme store hooks installed");
                 } catch (Throwable throwable) {
@@ -269,7 +279,7 @@ public class ModuleMain extends XposedModule {
         }
     }
 
-    private synchronized boolean hookConstructorIfPresent(
+    public synchronized boolean hookConstructorIfPresent(
             @Nullable Constructor<?> constructor,
             @NonNull String label,
             @NonNull HookCallback callback

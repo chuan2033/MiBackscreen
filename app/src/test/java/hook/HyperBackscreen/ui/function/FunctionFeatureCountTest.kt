@@ -47,4 +47,34 @@ class FunctionFeatureCountTest {
             ),
         )
     }
+
+    @Test fun rearMediaSwitchesCountInTotalsAndTheirGroups() {
+        val media = RearMediaSwitches(
+            videoResume = true,
+            videoUnlockLimits = true,
+            videoKeepAudio = true,
+            rearLyric = true,
+        )
+        assertEquals(
+            4,
+            countEnabledFunctions(false, false, false, false, false, false, false, false, rearMedia = media),
+        )
+        val groups = countFunctionGroups(
+            disableRearScreenCover = false,
+            disableDoubleTapWake = false,
+            enableBatteryRing = false,
+            batteryRingSupported = true,
+            disableLongPress = false,
+            removeAppCardLimit = false,
+            autoWallpaperEnabled = false,
+            rearScreenOffTimeoutActive = false,
+            keepRearScreenOnInGame = false,
+            fixRearScreenApply = false,
+            faceEnrollmentCompat = false,
+            removeWallpaperLimit = false,
+            rearMedia = media,
+        )
+        // 视频三项显示在「主题壁纸」组，歌词在「背屏」组。
+        assertEquals(FunctionGroupCounts(system = 0, subscreen = 1, theme = 3), groups)
+    }
 }

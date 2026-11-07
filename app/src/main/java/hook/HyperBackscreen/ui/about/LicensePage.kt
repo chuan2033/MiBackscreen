@@ -100,6 +100,13 @@ private val licenses = listOf(
         url = "https://central.sonatype.com/artifact/io.github.libxposed/service/102.0.0"
     ),
     LicenseItem(
+        // 背屏实时歌词订阅 SuperLyric 3.x / 4.x 服务。仓库 LICENSE 为 LGPL-2.1，
+        // AIDL / 源码文件头写的是 LGPL-3.0-or-later，两者一并列出。
+        name = "SuperLyricApi",
+        license = "LGPL-2.1 / LGPL-3.0-or-later",
+        url = "https://github.com/HChenX/SuperLyricApi"
+    ),
+    LicenseItem(
         name = "AndroidLiquidGlass (Backdrop / Liquid Glass)",
         license = "Apache-2.0",
         url = "https://github.com/Kyant0/AndroidLiquidGlass"
