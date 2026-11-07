@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.ui.components.CardBlock
+import hook.HyperBackscreen.ui.components.LocalUiFeedback
+import hook.HyperBackscreen.ui.updater.UpdateCheckResult
 import hook.HyperBackscreen.ui.updater.UpdateChecker
 import hook.HyperBackscreen.ui.updater.UpdateDialog
 import java.text.SimpleDateFormat
@@ -66,6 +68,8 @@ internal fun AppUpdatePage(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val feedback = LocalUiFeedback.current
+    val checkFailedMessage = stringResource(R.string.about_update_check_failed)
     val prefs = remember(context) {
         context.getSharedPreferences(Constants.PREF_GROUP, Context.MODE_PRIVATE)
     }
@@ -76,6 +80,8 @@ internal fun AppUpdatePage(
     // 已知的新版本只用于状态卡展示；弹窗只在用户手动检查或点「查看更新」时出现，
     // 否则启动时已经关掉的更新弹窗，进这个页面又会自动再弹一次。
     var knownUpdate by remember { mutableStateOf(UpdateChecker.last()) }
+    // 最近一次检查失败（断网 / 接口限流）：单独提示，不能混成「已是最新」。
+    var checkFailed by remember { mutableStateOf(UpdateChecker.lastCheckFailed) }
     var showUpdateDialog by remember { mutableStateOf(false) }
     var downloadFailed by remember { mutableStateOf(false) }
 
@@ -84,10 +90,24 @@ internal fun AppUpdatePage(
         if (checking) return
         checking = true
         scope.launch {
-            val update = UpdateChecker.check(force = true)
+            val result = UpdateChecker.check(force = true)
             checking = false
-            knownUpdate = update
-            showUpdateDialog = update != null
+            when (result) {
+                is UpdateCheckResult.Available -> {
+                    checkFailed = false
+                    knownUpdate = result.info
+                    showUpdateDialog = true
+                }
+                UpdateCheckResult.UpToDate -> {
+                    checkFailed = false
+                    knownUpdate = null
+                }
+                UpdateCheckResult.Failed -> {
+                    // 保留之前查到的新版本（UpdateChecker 也不会清缓存），只提示失败。
+                    checkFailed = true
+                    feedback?.show(checkFailedMessage)
+                }
+            }
             lastCheckedAt = maxOf(lastCheckedAt, UpdateChecker.lastCheckAtWallClock)
             prefs.edit().putLong(LAST_CHECKED_KEY, lastCheckedAt).apply()
         }
@@ -101,6 +121,7 @@ internal fun AppUpdatePage(
             UpdateStatusCard(
                 checking = checking,
                 hasUpdate = knownUpdate != null,
+                checkFailed = checkFailed,
                 lastCheckedAt = lastCheckedAt,
                 onCheck = ::checkNow,
                 onViewUpdate = {
@@ -163,6 +184,7 @@ internal fun AppUpdatePage(
 private fun UpdateStatusCard(
     checking: Boolean,
     hasUpdate: Boolean,
+    checkFailed: Boolean,
     lastCheckedAt: Long,
     onCheck: () -> Unit,
     onViewUpdate: () -> Unit
@@ -189,6 +211,7 @@ private fun UpdateStatusCard(
                         when {
                             checking -> R.string.about_update_status_checking
                             hasUpdate -> R.string.about_update_status_available
+                            checkFailed -> R.string.about_update_status_failed
                             else -> R.string.about_update_status_latest
                         }
                     ),

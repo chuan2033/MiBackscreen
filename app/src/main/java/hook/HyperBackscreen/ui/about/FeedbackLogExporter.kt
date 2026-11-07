@@ -67,6 +67,10 @@ internal object FeedbackLogExporter {
     private const val PARTIAL_SUFFIX = ".partial"
     private const val ARCHIVE_RETENTION_DAYS = 1L
 
+    /** 数据库副本的暂存目录前缀；只在一次导出过程中存在，残留的随时可删。 */
+    private const val STAGING_DIR_PREFIX = ARCHIVE_PREFIX + "database-"
+    private const val LEGACY_STAGING_DIR_PREFIX = "database-"
+
     private data class DatabaseSnapshot(
         val files: List<File>,
         val report: String,
@@ -86,7 +90,9 @@ internal object FeedbackLogExporter {
             val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()) + "-${System.nanoTime()}"
             val output = File(directory, "MiBackscreen-feedback-$timestamp.zip")
             val partialOutput = File(directory, "MiBackscreen-feedback-$timestamp.partial").also { partial = it }
-            val databaseDirectory = File(directory, "database-$timestamp")
+            // 暂存目录也带模块前缀：导出中途进程被杀、finally 没执行时，
+            // 下次 purgeStaleArchives 能认出并清掉这份主题商店数据库副本。
+            val databaseDirectory = File(directory, "$STAGING_DIR_PREFIX$timestamp")
             staging = databaseDirectory
             onProgress(0, TOTAL_STEPS)
             val lsposedLog = collectLsposedLog().also { onProgress(1, TOTAL_STEPS) }
@@ -181,6 +187,14 @@ internal object FeedbackLogExporter {
             TimeUnit.DAYS.toMillis(ARCHIVE_RETENTION_DAYS)
         var removed = 0
         files.forEach { file ->
+            // 暂存目录（含数据库副本，涉及隐私）：正常导出结束就会删，留下来的都是被中断的残留，
+            // 不看保留期直接整目录删除。旧版本的 `database-*` 命名也一并清理。
+            if (file.isDirectory) {
+                if ((file.name.startsWith(STAGING_DIR_PREFIX) || file.name.startsWith(LEGACY_STAGING_DIR_PREFIX)) &&
+                    file.deleteRecursively()
+                ) removed++
+                return@forEach
+            }
             if (!file.isFile || !file.name.startsWith(ARCHIVE_PREFIX)) return@forEach
             val partial = file.name.endsWith(PARTIAL_SUFFIX)
             if (!partial && file.lastModified() >= expireBefore) return@forEach

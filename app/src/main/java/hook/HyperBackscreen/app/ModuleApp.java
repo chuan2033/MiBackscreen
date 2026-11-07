@@ -44,7 +44,8 @@ public class ModuleApp extends Application {
         Runnable listener = () -> { if (readyService != null) bound.countDown(); };
         addServiceListener(listener);
         try {
-            if (readyService == null) bound.await(1, TimeUnit.SECONDS);
+            // 冷启动时服务绑定 + 偏好对齐可能超过 1 秒，等太短会让面板第一次写入被误判失败。
+            if (readyService == null) bound.await(3, TimeUnit.SECONDS);
             return readyService;
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();

@@ -26,7 +26,7 @@ import hook.HyperBackscreen.common.Constants;
 import io.github.libxposed.api.XposedModule;
 
 /** Keeps interval rotation aligned with the rear-screen window's actual visibility. */
-final class AutoWallpaperRotationHost {
+public final class AutoWallpaperRotationHost {
     private static final long RETRY_DELAY_MS = 15_000L;
     private static final Map<View, Session> SESSIONS =
             Collections.synchronizedMap(new WeakHashMap<>());
@@ -83,6 +83,18 @@ final class AutoWallpaperRotationHost {
         if (session != null) session.release();
     }
 
+    /**
+     * 背屏快捷面板改了换壁纸间隔后直接通知本进程里的定时器（面板就在同一进程，
+     * 不需要也不能走广播：同步广播要求发送方持有模块的签名权限）。
+     */
+    public static void updateIntervalForAll(int minutes) {
+        Session[] sessions;
+        synchronized (SESSIONS) {
+            sessions = SESSIONS.values().toArray(new Session[0]);
+        }
+        for (Session session : sessions) session.updateInterval(minutes);
+    }
+
     @Nullable
     private static Session session(@NonNull View panel) {
         synchronized (SESSIONS) {
@@ -106,8 +118,10 @@ final class AutoWallpaperRotationHost {
         private final RotationCallback callback;
         private final Handler handler = new Handler(Looper.getMainLooper());
         private final Runnable tick = this::onTick;
-        private final Activity activity;
-        private final VisibilityProbe visibilityProbe;
+        // Activity 与探针都只弱引用：Session 是 WeakHashMap 的值，强引用 Activity 会经 decor
+        // 反向引用到作为键的 panel，条目就永远回收不掉（destroy Hook 没触发时整页泄漏）。
+        private final WeakReference<Activity> activity;
+        private final WeakReference<VisibilityProbe> visibilityProbe;
         private final BroadcastReceiver receiver;
         private long lastSwitchElapsed = SystemClock.elapsedRealtime();
         private boolean resumed;
@@ -124,11 +138,12 @@ final class AutoWallpaperRotationHost {
             this.panel = new WeakReference<>(panel);
             this.module = module;
             this.callback = callback;
-            this.activity = resolveActivity(panel.getContext());
-            this.visibilityProbe = activity != null
-                    ? new VisibilityProbe(activity, this::onWindowVisibilityChanged)
-                    : null;
-            this.receiver = activity != null ? new BroadcastReceiver() {
+            Activity host = resolveActivity(panel.getContext());
+            this.activity = new WeakReference<>(host);
+            this.visibilityProbe = new WeakReference<>(host != null
+                    ? new VisibilityProbe(host, this::onWindowVisibilityChanged)
+                    : null);
+            this.receiver = host != null ? new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context context, Intent intent) {
                     if (!Constants.ACTION_SYNC_AUTO_WALLPAPER.equals(intent.getAction())) return;
@@ -139,18 +154,23 @@ final class AutoWallpaperRotationHost {
         }
 
         private void attachHostObservers() {
-            if (activity == null || visibilityProbe == null || receiver == null) return;
+            Activity host = activity.get();
+            VisibilityProbe probe = visibilityProbe.get();
+            if (host == null || probe == null || receiver == null) return;
             try {
-                View decor = activity.getWindow().getDecorView();
+                View decor = host.getWindow().getDecorView();
                 if (decor instanceof ViewGroup group) {
-                    visibilityProbe.setAlpha(0f);
-                    visibilityProbe.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-                    group.addView(visibilityProbe, new ViewGroup.LayoutParams(1, 1));
-                    windowVisible = visibilityProbe.getWindowVisibility() == View.VISIBLE;
+                    probe.setAlpha(0f);
+                    probe.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+                    group.addView(probe, new ViewGroup.LayoutParams(1, 1));
+                    windowVisible = probe.getWindowVisibility() == View.VISIBLE;
                 }
-                activity.registerReceiver(
+                // 只收持有模块签名权限的发送方（模块 App 自己），第三方应用发同名广播无效。
+                host.registerReceiver(
                         receiver,
                         new IntentFilter(Constants.ACTION_SYNC_AUTO_WALLPAPER),
+                        Constants.PERMISSION_SYNC_HOST,
+                        null,
                         Context.RECEIVER_EXPORTED);
             } catch (Throwable error) {
                 module.log(Log.WARN, Constants.LOG_TAG,
@@ -171,8 +191,9 @@ final class AutoWallpaperRotationHost {
                 release();
                 return;
             }
-            if (visibilityProbe != null) {
-                windowVisible = visibilityProbe.getWindowVisibility() == View.VISIBLE;
+            VisibilityProbe probe = visibilityProbe.get();
+            if (probe != null) {
+                windowVisible = probe.getWindowVisibility() == View.VISIBLE;
             } else {
                 windowVisible = target.getWindowVisibility() == View.VISIBLE;
             }
@@ -249,14 +270,16 @@ final class AutoWallpaperRotationHost {
             if (released) return;
             released = true;
             handler.removeCallbacks(tick);
-            if (activity != null && receiver != null) {
+            Activity host = activity.get();
+            if (host != null && receiver != null) {
                 try {
-                    activity.unregisterReceiver(receiver);
+                    host.unregisterReceiver(receiver);
                 } catch (Throwable ignored) {
                 }
             }
-            if (visibilityProbe != null && visibilityProbe.getParent() instanceof ViewGroup parent) {
-                parent.removeView(visibilityProbe);
+            VisibilityProbe probe = visibilityProbe.get();
+            if (probe != null && probe.getParent() instanceof ViewGroup parent) {
+                parent.removeView(probe);
             }
         }
     }

@@ -140,7 +140,7 @@ public final class TargetMembers {
     // ---- 以下为「结构定位优先、混淆名兜底」的解析入口，供业务代码逐处替换内联混淆名 ----
 
     /**
-     * 按签名定位方法，不唯一或未命中时回退到指定混淆名。
+     * 按签名定位方法，不唯一或未命中时回退到指定混淆名；兜底名同样要满足返回类型。
      *
      * @param fallbackName 签名定位失败时使用的混淆方法名（当前宿主版本的已知名字）。
      */
@@ -157,6 +157,9 @@ public final class TargetMembers {
         }
         try {
             Method m = owner.getDeclaredMethod(fallbackName, parameterTypes);
+            // 兜底名在命中多个候选时负责消歧，但也必须满足同样的返回类型，
+            // 否则宿主重新混淆后会挂到同签名、不同返回值的方法上。
+            if (returnType != null && m.getReturnType() != returnType) return null;
             m.setAccessible(true);
             return m;
         } catch (NoSuchMethodException e) {
@@ -190,6 +193,7 @@ public final class TargetMembers {
         }
         try {
             Field f = owner.getDeclaredField(fallbackName);
+            if (Modifier.isStatic(f.getModifiers()) || !type.isAssignableFrom(f.getType())) return null;
             f.setAccessible(true);
             return f;
         } catch (NoSuchFieldException e) {

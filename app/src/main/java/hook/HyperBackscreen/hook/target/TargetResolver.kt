@@ -1,5 +1,6 @@
 package hook.HyperBackscreen.hook.target
 
+import hook.HyperBackscreen.BuildConfig
 import android.content.Context
 import android.os.SystemClock
 import java.io.File
@@ -103,8 +104,19 @@ internal object TargetResolver {
     ) {
         logger = log
         hostApkPath = apkPath
-        cacheFile = context?.let { File(it.filesDir, "host-targets-$versionCode-$CACHE_SCHEMA.json") }
+        // 缓存键同时带上模块版本：模块升级修正了某个目标的判据时，旧的命中 / <missing> 不能继续沿用。
+        cacheFile = context?.let {
+            File(it.filesDir, "host-targets-$versionCode-$CACHE_SCHEMA-m${BuildConfig.VERSION_CODE}.json")
+        }
         cacheHolder[0] = readCache()
+        // 宿主或模块升级后旧缓存不再命中，顺手清掉，不在宿主数据目录里越积越多。
+        cacheFile?.let { current ->
+            runCatching {
+                current.parentFile?.listFiles { file ->
+                    file.name.startsWith("host-targets-") && file.name.endsWith(".json") && file != current
+                }?.forEach { it.delete() }
+            }
+        }
         if (apkPath == null) {
             dexKitState = "宿主 APK 路径缺失"
             return

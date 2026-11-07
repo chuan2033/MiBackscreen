@@ -60,4 +60,15 @@ public class ThemeNetworkClassifierTest {
         assertTrue(ThemeNetworkClassifier.shouldLogDiagnostic(
                 "/native/page/v3/rear/phonecase"));
     }
+
+    @Test
+    public void aiMustBeAStandaloneWord() {
+        assertTrue(ThemeNetworkClassifier.hasAiToken("/native/page/v3/AIWallpaper/rear"));
+        assertTrue(ThemeNetworkClassifier.hasAiToken("/api/ai/list"));
+        assertTrue(ThemeNetworkClassifier.hasAiToken("/api/ai_photo"));
+        assertFalse(ThemeNetworkClassifier.hasAiToken("/wallpaper/detail"));
+        assertFalse(ThemeNetworkClassifier.hasAiToken("/main/email"));
+        assertFalse(ThemeNetworkClassifier.shouldSpoofDeviceIdentity("/native/wallpaper/detail", null));
+        assertFalse(ThemeNetworkClassifier.shouldSpoofDeviceIdentity("/main/photo/diy", null));
+    }
 }

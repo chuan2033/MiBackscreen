@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -64,7 +65,8 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 private data class InstalledAppItem(
     val label: String,
     val packageName: String,
-    val icon: Drawable?,
+    /** 只带 ApplicationInfo、不预先加载图标：图标在列表行可见时才按需加载（见 [AppIcon]）。 */
+    val appInfo: ApplicationInfo?,
     /** 预装 / 系统更新过的系统应用；游戏基本都是用户应用，按这个拆开列表能短很多。 */
     val isSystem: Boolean = false
 )
@@ -297,8 +299,18 @@ private fun AppIcon(app: InstalledAppItem) {
             .background(MiuixTheme.colorScheme.surface),
         contentAlignment = Alignment.Center
     ) {
-        val drawable = app.icon
-        if (drawable != null) {
+        // 按可见行懒加载：只有组合到屏幕上的行才去 PackageManager 取图标，并放进有上限的缓存，
+        // 不再在进入页面时为全部已安装应用（含系统应用）一次性 loadIcon 并整页常驻内存。
+        val context = LocalContext.current
+        val drawable by produceState(AppIconCache.get(app.packageName), app.packageName, app.appInfo) {
+            if (value != null) return@produceState
+            val info = app.appInfo ?: return@produceState
+            value = withContext(Dispatchers.IO) {
+                AppIconCache.load(context.applicationContext.packageManager, info)
+            }
+        }
+        val icon = drawable
+        if (icon != null) {
             AndroidView(
                 factory = { context ->
                     ImageView(context).apply {
@@ -306,8 +318,7 @@ private fun AppIcon(app: InstalledAppItem) {
                     }
                 },
                 update = { view ->
-                    val icon = drawable.constantState?.newDrawable()?.mutate() ?: drawable
-                    view.setImageDrawable(icon)
+                    view.setImageDrawable(icon.constantState?.newDrawable()?.mutate() ?: icon)
                 },
                 modifier = Modifier.fillMaxSize()
             )
@@ -335,9 +346,8 @@ private fun loadInstalledApps(context: Context): List<InstalledAppItem> {
             } catch (_: RuntimeException) {
                 packageName
             }
-            val icon = runCatching { applicationInfo.loadIcon(packageManager) }.getOrNull()
             val systemFlags = ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP
-            InstalledAppItem(label, packageName, icon, isSystem = applicationInfo.flags and systemFlags != 0)
+            InstalledAppItem(label, packageName, applicationInfo, isSystem = applicationInfo.flags and systemFlags != 0)
         }
         .distinctBy { it.packageName }
         .toList()
@@ -345,5 +355,23 @@ private fun loadInstalledApps(context: Context): List<InstalledAppItem> {
     return apps.sortedWith { left, right ->
         val labelCompare = collator.compare(left.label, right.label)
         if (labelCompare != 0) labelCompare else left.packageName.compareTo(right.packageName)
+    }
+}
+
+/**
+ * 应用图标的进程内缓存：按包名、有条目上限（LRU），翻页回来不必重新加载，
+ * 也不会把几百个应用的图标全部常驻内存。
+ */
+private object AppIconCache {
+    private const val MAX_ENTRIES = 120
+    private val cache = android.util.LruCache<String, Drawable>(MAX_ENTRIES)
+
+    fun get(packageName: String): Drawable? = cache.get(packageName)
+
+    fun load(packageManager: PackageManager, info: ApplicationInfo): Drawable? {
+        cache.get(info.packageName)?.let { return it }
+        val icon = runCatching { info.loadIcon(packageManager) }.getOrNull() ?: return null
+        cache.put(info.packageName, icon)
+        return icon
     }
 }

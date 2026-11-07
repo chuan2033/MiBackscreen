@@ -129,8 +129,9 @@ internal fun LogExportPopup(
                 }
             }
             if (state is LogExportState.Running || state is LogExportState.Ready) {
-                val completed = (state as? LogExportState.Running)?.completed ?: 10
-                val total = (state as? LogExportState.Running)?.total ?: 10
+                // 完成态按总步数显示满格，不能写死成 10（总步数是 TOTAL_STEPS，会从 11/12 跳成 10/10）。
+                val completed = (state as? LogExportState.Running)?.completed ?: FeedbackLogExporter.TOTAL_STEPS
+                val total = (state as? LogExportState.Running)?.total ?: FeedbackLogExporter.TOTAL_STEPS
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),

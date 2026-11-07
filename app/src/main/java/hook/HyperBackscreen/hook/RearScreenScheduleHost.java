@@ -39,6 +39,9 @@ final class RearScreenScheduleHost {
      * 那一段如果变慢，说明系统方法内部的锁竞争或阻塞在增加，记一条便于回看。
      */
     private static final long SLOW_TICK_MS = 200L;
+    /** 同一次切换最多重试这么多轮（每轮 TICK_MS）；方法缺失这类永久失败不能每 5 秒刷一条日志。 */
+    private static final int MAX_ACTION_ATTEMPTS = 12;
+    private static int failedActionAttempts;
     private static final Object LOCK = new Object();
 
     /** 背屏超时钩子拿到的 PowerManagerServiceImpl 实例，只用来触发状态重算。 */
@@ -95,31 +98,37 @@ final class RearScreenScheduleHost {
                 boolean active = PrefsBridge.isRearScreenScheduleActiveNow(module);
                 boolean forceOff = PrefsBridge.shouldForceOffRearScreen(module);
                 Boolean previous = lastWindowActive;
+                // 状态只在动作真正执行成功后才记账：开机首轮 PMS 多半还没被捕获，
+                // 失败就保持旧状态，下一轮自然重试。
                 if (previous == null) {
                     // 启动后第一轮只登记状态：开机在窗口内才立刻动作；
                     // 不在窗口内就什么都不做 —— 否则开机瞬间会误打一条
                     // 「leaving off window」，还可能平白点亮背屏。
-                    lastWindowActive = active;
-                    lastForceOff = forceOff;
-                    if (active) {
+                    if (!active) {
+                        lastWindowActive = false;
+                        lastForceOff = forceOff;
+                    } else if (forceRearScreenToState(module, forceOff) || giveUpAction()) {
                         module.log(Log.INFO, TAG, "Rear screen schedule: already inside off window");
-                        forceRearScreenToState(module, forceOff);
+                        lastWindowActive = true;
+                        lastForceOff = forceOff;
                     }
                 } else {
                     boolean modeChanged = active && lastForceOff != null && lastForceOff != forceOff;
                     if (previous != active || modeChanged) {
-                        logTransition(module, active);
-                        if (active) {
-                            // off = 背屏休眠（纯黑）；doze = 停在息屏（AOD）。
-                            forceRearScreenToState(module, forceOff);
-                        } else {
-                            // 曾经处于窗口、现在不再处于：无论是窗口自然结束还是用户中途关闭，
-                            // 都主动恢复背屏点亮。开机就不在窗口的情况已被首轮 previous==null
-                            // 守卫拦下，不会走到这里，所以这里一定是「退出窗口」语义。
-                            wakeRearScreen(module);
+                        // off = 背屏休眠（纯黑）；doze = 停在息屏（AOD）。
+                        // 曾经处于窗口、现在不再处于：无论是窗口自然结束还是用户中途关闭，
+                        // 都主动恢复背屏点亮。开机就不在窗口的情况已被首轮 previous==null
+                        // 守卫拦下，不会走到这里，所以这里一定是「退出窗口」语义。
+                        boolean done = active
+                                ? forceRearScreenToState(module, forceOff)
+                                : wakeRearScreen(module);
+                        if (done || giveUpAction()) {
+                            logTransition(module, active);
+                            lastForceOff = forceOff;
                         }
+                    } else {
+                        lastForceOff = forceOff;
                     }
-                    lastForceOff = forceOff;
                 }
             } catch (Throwable error) {
                 // 一轮失败不能让线程退出，否则整晚都不会再判断。
@@ -138,9 +147,18 @@ final class RearScreenScheduleHost {
         }
     }
 
+    /** 记一次失败；连续失败到上限时放弃本次切换（返回 true 让调用方照常记账）。 */
+    private static boolean giveUpAction() {
+        failedActionAttempts++;
+        if (failedActionAttempts < MAX_ACTION_ATTEMPTS) return false;
+        failedActionAttempts = 0;
+        return true;
+    }
+
     /** 只在状态翻转时打一条，避免每次评估都刷日志。 */
     private static void logTransition(@NonNull XposedModule module, boolean active) {
         lastWindowActive = active;
+        failedActionAttempts = 0;
         module.log(Log.INFO, TAG, active
                 ? "Rear screen schedule: entering off window"
                 : "Rear screen schedule: leaving off window");
@@ -156,9 +174,9 @@ final class RearScreenScheduleHost {
      * （息屏 ↔ 黑屏）也能立刻生效，不会因为背屏已经睡死而改不动。
      * 同样是 `Locked` 语义，持 `mLock` 调用，与系统 binder 线程一致。
      */
-    private static void forceRearScreenToState(@NonNull XposedModule module, boolean noDoze) {
+    private static boolean forceRearScreenToState(@NonNull XposedModule module, boolean noDoze) {
         Object[] internals = resolvePowerInternals(module);
-        if (internals == null) return;
+        if (internals == null) return false;
         Object powerManagerService = internals[0];
         Object lock = internals[1];
         Object powerGroup = internals[2];
@@ -167,7 +185,7 @@ final class RearScreenScheduleHost {
                     powerGroup.getClass(), boolean.class, long.class, int.class, int.class);
             if (method == null) {
                 module.log(Log.WARN, TAG, "Rear screen schedule: state change skipped, method missing");
-                return;
+                return false;
             }
             method.setAccessible(true);
             synchronized (lock) {
@@ -181,8 +199,10 @@ final class RearScreenScheduleHost {
             module.log(Log.INFO, TAG, noDoze
                     ? "Rear screen schedule: rear screen sleep requested"
                     : "Rear screen schedule: rear screen doze requested");
+            return true;
         } catch (Throwable error) {
             module.log(Log.WARN, TAG, "Rear screen schedule: state change request failed", error);
+            return false;
         }
     }
 
@@ -209,9 +229,9 @@ final class RearScreenScheduleHost {
      * 所以这里同样在 mLock 内调用。拿不到任何一个环节都只打 WARN —— 少了主动点亮，
      * 用户自己双击唤醒仍然可用，不影响时间窗本身。
      */
-    private static void wakeRearScreen(@NonNull XposedModule module) {
+    private static boolean wakeRearScreen(@NonNull XposedModule module) {
         Object[] internals = resolvePowerInternals(module);
-        if (internals == null) return;
+        if (internals == null) return false;
         Object powerManagerService = internals[0];
         Object lock = internals[1];
         Object powerGroup = internals[2];
@@ -220,7 +240,7 @@ final class RearScreenScheduleHost {
                     powerGroup.getClass(), long.class, int.class, String.class, int.class);
             if (wake == null) {
                 module.log(Log.WARN, TAG, "Rear screen schedule: wake skipped, method missing");
-                return;
+                return false;
             }
             wake.setAccessible(true);
             synchronized (lock) {
@@ -232,8 +252,10 @@ final class RearScreenScheduleHost {
                         Process.SYSTEM_UID);
             }
             module.log(Log.INFO, TAG, "Rear screen schedule: rear screen wake requested");
+            return true;
         } catch (Throwable error) {
             module.log(Log.WARN, TAG, "Rear screen schedule: wake request failed", error);
+            return false;
         }
     }
 

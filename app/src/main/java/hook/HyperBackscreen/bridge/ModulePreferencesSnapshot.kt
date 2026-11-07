@@ -71,6 +71,7 @@ internal data class ModulePreferencesSnapshot(
             Constants.KEY_BATTERY_RING_STYLE,
             Constants.KEY_BATTERY_LOW_THRESHOLD,
             Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES,
+            Constants.KEY_AUTO_WALLPAPER_ORDER,
             Constants.KEY_REAR_SCREEN_OFF_TIMEOUT,
             Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME,
             Constants.KEY_REAR_SCREEN_SCHEDULE_ENABLED,

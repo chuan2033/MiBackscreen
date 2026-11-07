@@ -154,6 +154,8 @@
     <string name="about_update_status_latest">已是最新版本</string>
     <string name="about_update_status_available">检测到新版本</string>
     <string name="about_update_status_checking">正在检查更新</string>
+    <string name="about_update_status_failed">检查更新失败</string>
+    <string name="about_update_check_failed">检查更新失败，请检查网络后重试</string>
     <string name="about_update_last_checked">上次检测 %1$s</string>
     <string name="about_update_never_checked">还没有检测过</string>
     <string name="about_update_check_now">检查更新</string>
@@ -286,4 +288,5 @@
     <string name="log_failed_retry">日志生成失败，点击重试</string>
     <string name="log_regenerate">重新生成</string>
     <string name="settings_save_failed">设置保存失败</string>
+    <string name="settings_saved_pending">已暂存在本机，模块服务连接后自动同步</string>
 </resources>

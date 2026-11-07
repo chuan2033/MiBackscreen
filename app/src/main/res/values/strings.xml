@@ -155,6 +155,8 @@
     <string name="about_update_status_latest">Already up to date</string>
     <string name="about_update_status_available">Update available</string>
     <string name="about_update_status_checking">Checking for updates</string>
+    <string name="about_update_status_failed">Couldn\'t check for updates</string>
+    <string name="about_update_check_failed">Update check failed. Check your network and try again</string>
     <string name="about_update_last_checked">Last checked %1$s</string>
     <string name="about_update_never_checked">Never checked</string>
     <string name="about_update_check_now">Check for updates</string>
@@ -289,4 +291,5 @@
     <string name="log_failed_retry">Failed to generate log. Tap to retry</string>
     <string name="log_regenerate">Regenerate</string>
     <string name="settings_save_failed">Could not save this setting</string>
+    <string name="settings_saved_pending">Saved on this device; it will sync once the module service connects</string>
 </resources>

@@ -331,13 +331,19 @@ internal fun HomeScreen(
     LaunchedEffect(backStack.lastOrNull()) {
         focusManager.clearFocus()
     }
+    // 系统返回手势 / 返回键：始终作用于栈顶。
     val navigateBack: () -> Unit = {
         if (backStack.size > 1) backStack.removeLastOrNull()
     }
-    fun openDetail(route: HomeRoute) {
-        // Repeated taps must not push duplicate content keys during a transition.
-        // 详情页之间也能互相进（例如「应用更新」→「版本历史」），只拦栈顶同名的重复入栈。
-        if (backStack.lastOrNull() != route) backStack.add(route)
+    // 页面内的返回按钮：转场期间不拦输入，正在退场的页面仍能响应点击。
+    // 只有调用方页面还在栈顶时才出栈，避免快速连点两次把上一层也一起退掉。
+    fun navigateBackFrom(page: HomeRoute) {
+        if (backStack.size > 1 && backStack.lastOrNull() == page) backStack.removeLastOrNull()
+    }
+    // 入栈只认调用方页面：只有 [from] 仍在栈顶时才进入 [route]。滑入转场期间
+    // 再点露出来的下层页面不会叠出 Main → A → B 这样的栈，也拦掉了同名重复入栈。
+    fun openDetail(from: HomeRoute, route: HomeRoute) {
+        if (backStack.lastOrNull() == from && from != route) backStack.add(route)
     }
 
     val feedback = LocalUiFeedback.current
@@ -349,7 +355,7 @@ internal fun HomeScreen(
         NavDisplayEffects(
             // 不吞输入：松手弹簧放缓之后，blockInputDuringTransition 会让
             // 「刚返回就点」的第一下落在还没 settle 的层上被丢弃（用户实测要点两次）。
-            // 连点由 openDetail 的 `lastOrNull() == Main` 守卫拦重复入栈。
+            // 连点与转场期间的误触由 openDetail / navigateBackFrom 的「调用方必须在栈顶」守卫拦住。
             blockInputDuringTransition = false,
             cornerClipRadius = navCornerRadius,
             backdropColor = navBackdropColor
@@ -392,14 +398,14 @@ internal fun HomeScreen(
                         onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
                         onBackupPreferences = onBackupPreferences,
                         onRestorePreferences = onRestorePreferences,
-                        onBack = navigateBack
+                        onBack = { navigateBackFrom(page) }
                     )
-                    HomeRoute.License -> LicensePage(onBack = navigateBack)
-                    HomeRoute.Donate -> DonatePage(onBack = navigateBack)
+                    HomeRoute.License -> LicensePage(onBack = { navigateBackFrom(page) })
+                    HomeRoute.Donate -> DonatePage(onBack = { navigateBackFrom(page) })
                     HomeRoute.AppPicker -> AppPickerPage(
                         selectedPackages = doubleTapWakeDisabledPackages,
                         onSelectedPackagesChange = onDoubleTapWakeDisabledPackagesChange,
-                        onBack = navigateBack
+                        onBack = { navigateBackFrom(page) }
                     )
                     HomeRoute.BatteryColor -> BatteryColorPage(
                         enableBatteryRing = enableBatteryRing,
@@ -412,7 +418,7 @@ internal fun HomeScreen(
                         onColorChange = onBatteryColorChange,
                         onPercentPositionChange = onBatteryPercentPositionChange,
                         onLayoutCommit = onBatteryLayoutChange,
-                        onBack = navigateBack
+                        onBack = { navigateBackFrom(page) }
                     )
                     HomeRoute.RearScreenTiming -> RearScreenTimingPage(
                         rearScreenOffTimeout = rearScreenOffTimeout,
@@ -425,15 +431,15 @@ internal fun HomeScreen(
                         onKeepRearScreenOnInGameChange = onKeepRearScreenOnInGameChange,
                         onAutoWallpaperIntervalChange = onAutoWallpaperIntervalChange,
                         onAutoWallpaperOrderChange = onAutoWallpaperOrderChange,
-                        onBack = navigateBack
+                        onBack = { navigateBackFrom(page) }
                     )
                     HomeRoute.AppUpdate -> AppUpdatePage(
                         checkUpdates = checkUpdates,
                         onCheckUpdatesChange = onCheckUpdatesChange,
-                        onVersionHistoryClick = { openDetail(HomeRoute.VersionHistory) },
-                        onBack = navigateBack
+                        onVersionHistoryClick = { openDetail(page, HomeRoute.VersionHistory) },
+                        onBack = { navigateBackFrom(page) }
                     )
-                    HomeRoute.VersionHistory -> VersionHistoryPage(onBack = navigateBack)
+                    HomeRoute.VersionHistory -> VersionHistoryPage(onBack = { navigateBackFrom(page) })
                     HomeRoute.Main -> MainContent(
                         enable18ProFeatures = enable18ProFeatures,
                         onEnable18ProFeaturesChange = onEnable18ProFeaturesChange,
@@ -469,18 +475,18 @@ internal fun HomeScreen(
                         onAppLanguageChange = onAppLanguageChange,
                         onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                         onLauncherIconHiddenChange = onLauncherIconHiddenChange,
-                        onSettingsClick = { openDetail(HomeRoute.Settings) },
-                        onAddDisabledAppsClick = { openDetail(HomeRoute.AppPicker) },
-                        onLicenseClick = { openDetail(HomeRoute.License) },
-                        onDonateClick = { openDetail(HomeRoute.Donate) },
-                        onAppUpdateClick = { openDetail(HomeRoute.AppUpdate) },
+                        onSettingsClick = { openDetail(page, HomeRoute.Settings) },
+                        onAddDisabledAppsClick = { openDetail(page, HomeRoute.AppPicker) },
+                        onLicenseClick = { openDetail(page, HomeRoute.License) },
+                        onDonateClick = { openDetail(page, HomeRoute.Donate) },
+                        onAppUpdateClick = { openDetail(page, HomeRoute.AppUpdate) },
                         onRestartScopes = onRestartScopes,
                         themeMode = themeMode,
                         onThemeModeChange = onThemeModeChange,
                         themeSettingsShortcut = themeSettingsShortcut,
                         onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
-                        onBatteryColorClick = { openDetail(HomeRoute.BatteryColor) },
-                        onRearScreenTimingClick = { openDetail(HomeRoute.RearScreenTiming) }
+                        onBatteryColorClick = { openDetail(page, HomeRoute.BatteryColor) },
+                        onRearScreenTimingClick = { openDetail(page, HomeRoute.RearScreenTiming) }
                     )
                 }
             }
@@ -962,7 +968,11 @@ private fun MainContent(
     WindowDialog(
         show = showRestartDialog,
         title = stringResource(R.string.restart_title),
-        onDismissRequest = { showRestartDialog = false }
+        onDismissRequest = { showRestartDialog = false },
+        // 不管怎么关的（确认、点外部、返回），退场动画结束后都清空勾选：
+        // 否则下次打开「系统框架」仍是勾选状态，误点确认会直接重启手机。放在这里而不是
+        // onDismissRequest，退场动画期间勾选框不会先闪一下变成未选。
+        onDismissFinished = { checkedItems.clear() }
     ) {
         // 勾选「系统框架」执行的是重启手机而不是停止进程，选中时确认按钮要把后果写明。
         val anySelected = restartScopeItems.any { checkedItems[it.packageName] == true }
@@ -1014,7 +1024,6 @@ private fun MainContent(
                 val selected = restartScopeItems.filter { checkedItems[it.packageName] == true }
                     .map { it.packageName }
                 if (selected.isNotEmpty()) onRestartScopes(selected)
-                checkedItems.clear()
             }
         )
     }

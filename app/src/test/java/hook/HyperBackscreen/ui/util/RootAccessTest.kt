@@ -24,7 +24,7 @@ class RootAccessTest {
         val process = ProbeProcess(exitCode = 0, completed = false)
         assertFalse(RootAccess.isGranted { process })
         assertTrue(process.destroyed)
-        assertEquals(5_000L, process.timeoutMillis)
+        assertEquals(20_000L, process.timeoutMillis)
     }
 
     @Test fun returningAfterAuthorizationUsesFreshResult() {

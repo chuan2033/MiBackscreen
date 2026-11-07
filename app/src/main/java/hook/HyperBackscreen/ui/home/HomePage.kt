@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.IntOffset
@@ -75,7 +76,13 @@ internal fun HomePage(
     onDonateClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
+    // 用 Activity 级生命周期：NavDisplay 给每个页面的 LocalLifecycleOwner 在被二级页覆盖时降到
+    // STARTED、返回时又 RESUMED，按它跑会每次从二级页返回都重新起一个 su、再查一遍作用域。
+    // 只在整个 App 回到前台时刷新（用户可能刚去授权 root、在 LSPosed 勾选或重启了作用域）。
+    val pageLifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleOwner = remember(context, pageLifecycleOwner) {
+        context.findLifecycleOwnerActivity() ?: pageLifecycleOwner
+    }
     var rootGranted by remember { mutableStateOf<Boolean?>(null) }
     // 「重新检测」只是让这个 key 变一下，复用同一段回到前台时的检测逻辑。
     var rootCheckRequest by remember { mutableStateOf(0) }
@@ -108,9 +115,18 @@ internal fun HomePage(
     var popupShareFailed by rememberSaveable { mutableStateOf(false) }
     var popupFileMissing by rememberSaveable { mutableStateOf(false) }
     var logEntryBounds by remember { mutableStateOf(IntRect.Zero) }
+    // 只记下坐标对象、不写状态：滚动时 onGloballyPositioned 每帧都会回调，
+    // 每帧写 IntRect 会让日志卡片和弹窗跟着每帧重组。打开弹窗时再换算成锚点区域。
+    val logEntryCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    fun refreshLogAnchor() {
+        val coordinates = logEntryCoordinates[0]?.takeIf { it.isAttached } ?: return
+        val position = coordinates.positionInWindow()
+        logEntryBounds = IntRect(IntOffset(position.x.roundToInt(), position.y.roundToInt()), coordinates.size)
+    }
     fun startExport() {
         popupShareFailed = false
         popupFileMissing = false
+        refreshLogAnchor()
         showLogPopup = true
         exporter.start()
     }
@@ -219,24 +235,43 @@ internal fun HomePage(
         }
     }
 
+    // 设备信息只算一次：SystemProperties 走反射、包版本是 PackageManager Binder 调用，
+    // 不放在组合阶段反复执行。rememberSaveable 让列表项滑出再滑回时直接复用。
+    val deviceName = rememberSaveable { currentDeviceName() }
+    val hyperOsVersion = rememberSaveable { currentHyperOSVersion() }
+    val systemVersion = rememberSaveable { currentSystemVersion() }
+    var themeStoreVersion by rememberSaveable { mutableStateOf<String?>(null) }
+    var backscreenVersion by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        if (themeStoreVersion == null || backscreenVersion == null) {
+            val appContext = context.applicationContext
+            val (themeStore, backscreen) = withContext(Dispatchers.IO) {
+                currentPackageVersion(appContext, Constants.THEME_STORE_PACKAGE) to
+                    currentPackageVersion(appContext, Constants.TARGET_PACKAGE)
+            }
+            themeStoreVersion = themeStore
+            backscreenVersion = backscreen
+        }
+    }
     CardBlock {
-        InfoRow(label = stringResource(R.string.home_device), value = currentDeviceName())
-        InfoRow(label = stringResource(R.string.home_system_version), value = currentHyperOSVersion())
-        InfoRow(label = stringResource(R.string.home_android_version), value = currentSystemVersion())
+        InfoRow(label = stringResource(R.string.home_device), value = deviceName)
+        InfoRow(label = stringResource(R.string.home_system_version), value = hyperOsVersion)
+        InfoRow(label = stringResource(R.string.home_android_version), value = systemVersion)
         InfoRow(
             label = stringResource(R.string.home_theme_store_version),
-            value = currentPackageVersion(context, Constants.THEME_STORE_PACKAGE)
+            value = themeStoreVersion ?: "—"
         )
         InfoRow(
             label = stringResource(R.string.home_backscreen_version),
-            value = currentPackageVersion(context, Constants.TARGET_PACKAGE)
+            value = backscreenVersion ?: "—"
         )
     }
 
     CardBlock(pressFeedbackType = PressFeedbackType.None) {
         Box(Modifier.fillMaxWidth().onGloballyPositioned { coordinates ->
-            val position = coordinates.positionInWindow()
-            logEntryBounds = IntRect(IntOffset(position.x.roundToInt(), position.y.roundToInt()), coordinates.size)
+            logEntryCoordinates[0] = coordinates
+            // 弹窗开着时才跟随位置；IntRect 相等时写状态不会触发重组。
+            if (showLogPopup) refreshLogAnchor()
         }) {
             ArrowPreference(
                 title = stringResource(R.string.home_log_title),
@@ -247,6 +282,7 @@ internal fun HomePage(
                     LogExportState.Failed -> stringResource(R.string.log_failed_retry)
                 },
                 onClick = {
+                    refreshLogAnchor()
                     showLogPopup = true
                     if (exportState is LogExportState.Idle || exportState is LogExportState.Failed) {
                         startExport()
@@ -277,4 +313,14 @@ internal fun HomePage(
             onClick = onDonateClick
         )
     }
+}
+
+/** 沿 ContextWrapper 链找到宿主 Activity，取它的生命周期（而不是导航页面级的）。 */
+private fun android.content.Context.findLifecycleOwnerActivity(): androidx.lifecycle.LifecycleOwner? {
+    var current: android.content.Context? = this
+    while (current != null) {
+        if (current is android.app.Activity) return current as? androidx.lifecycle.LifecycleOwner
+        current = (current as? android.content.ContextWrapper)?.baseContext
+    }
+    return null
 }

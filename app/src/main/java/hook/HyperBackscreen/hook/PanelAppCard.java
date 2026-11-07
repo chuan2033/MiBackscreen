@@ -58,17 +58,40 @@ public final class PanelAppCard {
                 || Constants.MODULE_PACKAGE.equals(item.optString("bindApp", ""));
     }
 
+    /** 上一次导出预览图时的内容签名（语言 + 各卡片取值 + 模块版本）；签名不变且文件还在就不重画。 */
+    @Nullable
+    private static volatile String lastPreviewSignature;
+    /** 上一次导出资源包时的描述内容；不变就不重写 zip。 */
+    @Nullable
+    private static volatile String lastPackageContent;
+
+    /**
+     * 确保官方应用卡资源齐全。这条路径挂在宿主高频调用上，所以只在内容真的变了时才写盘：
+     * 图标只导一次；预览图按签名判断；描述 / 元数据 / 资源包按内容比较。
+     */
     public static boolean ensureOfficialResources() {
         Context context = hostContext();
         if (context == null) return false;
+        String description = buildDescriptionXml(context);
+        String meta = buildMetaJson(context);
         return exportOfficialImage(context, Constants.MODULE_PANEL_CARD_ICON, false, () -> renderSquare(context))
-                && exportOfficialImage(context, Constants.MODULE_PANEL_CARD_PREVIEW_LIGHT,
+                && ensurePreviews(context, false)
+                && exportTextFile(Constants.MODULE_PANEL_CARD_DESCRIPTION, description, true)
+                && exportTextFile(Constants.MODULE_PANEL_CARD_META, meta, true)
+                && exportRearScreenPackage(context, description, meta);
+    }
+
+    private static synchronized boolean ensurePreviews(@NonNull Context context, boolean force) {
+        String signature = SwipePanelHost.previewSignature(context);
+        boolean present = new File(Constants.MODULE_PANEL_CARD_PREVIEW_LIGHT).isFile()
+                && new File(Constants.MODULE_PANEL_CARD_PREVIEW_DARK).isFile();
+        if (!force && present && signature.equals(lastPreviewSignature)) return true;
+        boolean ok = exportOfficialImage(context, Constants.MODULE_PANEL_CARD_PREVIEW_LIGHT,
                 true, () -> renderPreview(context, false))
                 && exportOfficialImage(context, Constants.MODULE_PANEL_CARD_PREVIEW_DARK,
-                true, () -> renderPreview(context, true))
-                && exportTextFile(Constants.MODULE_PANEL_CARD_DESCRIPTION, buildDescriptionXml(context), true)
-                && exportTextFile(Constants.MODULE_PANEL_CARD_META, buildMetaJson(context), true)
-                && exportRearScreenPackage(context);
+                true, () -> renderPreview(context, true));
+        if (ok) lastPreviewSignature = signature;
+        return ok;
     }
 
     @Nullable
@@ -104,14 +127,18 @@ public final class PanelAppCard {
             grantReadable(target);
             return true;
         }
+        byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+        if (target.isFile() && target.length() == bytes.length && sameContent(target, bytes)) {
+            return true; // 内容没变就不重写
+        }
         File parent = target.getParentFile();
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             return false;
         }
         grantDirectoryAccess(parent);
-        File tmp = new File(path + ".mibackscreen.tmp");
+        File tmp = tempFor(target);
         try (FileOutputStream out = new FileOutputStream(tmp, false)) {
-            out.write(content.getBytes(StandardCharsets.UTF_8));
+            out.write(bytes);
             out.getFD().sync();
             grantReadable(tmp);
             if (!tmp.renameTo(target)) {
@@ -123,25 +150,59 @@ public final class PanelAppCard {
             return true;
         } catch (Throwable e) {
             Log.w(Constants.LOG_TAG, "Official panel card text export failed: " + path, e);
+            //noinspection ResultOfMethodCallIgnored
+            tmp.delete();
             return false;
         }
     }
 
-    private static synchronized boolean exportRearScreenPackage(@NonNull Context context) {
+    private static boolean sameContent(@NonNull File file, @NonNull byte[] expected) {
+        try (java.io.FileInputStream in = new java.io.FileInputStream(file)) {
+            byte[] actual = new byte[expected.length];
+            int read = 0;
+            while (read < actual.length) {
+                int n = in.read(actual, read, actual.length - read);
+                if (n < 0) return false;
+                read += n;
+            }
+            return java.util.Arrays.equals(actual, expected) && in.read() < 0;
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    /** 临时文件名带进程与线程号，避免两个进程同时导出时互相截断。 */
+    @NonNull
+    private static File tempFor(@NonNull File target) {
+        return new File(target.getAbsolutePath() + ".mibackscreen." + android.os.Process.myPid()
+                + "." + Thread.currentThread().getId() + ".tmp");
+    }
+
+    private static synchronized boolean exportRearScreenPackage(
+            @NonNull Context context,
+            @NonNull String description,
+            @NonNull String meta
+    ) {
         File target = new File(Constants.MODULE_PANEL_CARD_RESOURCE);
+        String content = description + "\u0000" + meta;
+        if (target.isFile() && content.equals(lastPackageContent)) return true;
         File parent = target.getParentFile();
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             return false;
         }
         grantDirectoryAccess(parent);
-        File tmp = new File(target.getAbsolutePath() + ".mibackscreen.tmp");
-        try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(tmp, false))) {
+        File tmp = tempFor(target);
+        try (FileOutputStream file = new FileOutputStream(tmp, false);
+             ZipOutputStream zip = new ZipOutputStream(file)) {
             zip.putNextEntry(new ZipEntry("description.xml"));
-            zip.write(buildDescriptionXml(context).getBytes(StandardCharsets.UTF_8));
+            zip.write(description.getBytes(StandardCharsets.UTF_8));
             zip.closeEntry();
             zip.putNextEntry(new ZipEntry("meta.json"));
-            zip.write(buildMetaJson(context).getBytes(StandardCharsets.UTF_8));
+            zip.write(meta.getBytes(StandardCharsets.UTF_8));
             zip.closeEntry();
+            zip.finish();
+            // rename 之前先落盘，掉电时不会留下一个空的资源包。
+            file.getFD().sync();
         } catch (Throwable e) {
             Log.w(Constants.LOG_TAG, "Official panel card package export failed", e);
             //noinspection ResultOfMethodCallIgnored
@@ -155,6 +216,7 @@ public final class PanelAppCard {
             return false;
         }
         grantReadable(target);
+        lastPackageContent = content;
         return true;
     }
 
@@ -176,7 +238,8 @@ public final class PanelAppCard {
         grantDirectoryAccess(parent);
         Bitmap bitmap = render.get();
         if (bitmap == null) return false;
-        File tmp = new File(path + ".mibackscreen.tmp");
+        File tmp = tempFor(target);
+        boolean replaced = false;
         try (FileOutputStream out = new FileOutputStream(tmp, false)) {
             if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) return false;
             out.getFD().sync();
@@ -187,12 +250,18 @@ public final class PanelAppCard {
                 return false;
             }
             grantReadable(target);
+            replaced = true;
             return true;
         } catch (Throwable e) {
             Log.w(Constants.LOG_TAG, "Official panel card image export failed: " + path, e);
             return false;
         } finally {
             bitmap.recycle();
+            // 压缩失败 / 异常时清掉临时文件，不在资源目录里留垃圾。
+            if (!replaced) {
+                //noinspection ResultOfMethodCallIgnored
+                tmp.delete();
+            }
         }
     }
 
@@ -342,11 +411,8 @@ public final class PanelAppCard {
     public static void refreshPreviews() {
         Context context = hostContext();
         if (context == null) return;
-        if (!new java.io.File(Constants.MODULE_PANEL_CARD_PREVIEW_LIGHT).isFile()) return;
-        exportOfficialImage(context, Constants.MODULE_PANEL_CARD_PREVIEW_LIGHT, true,
-                () -> renderPreview(context, false));
-        exportOfficialImage(context, Constants.MODULE_PANEL_CARD_PREVIEW_DARK, true,
-                () -> renderPreview(context, true));
+        if (!new File(Constants.MODULE_PANEL_CARD_PREVIEW_LIGHT).isFile()) return;
+        ensurePreviews(context, false);
     }
 
     /** 面板图标取自模块 APK 自己的资源，宿主资源里没有这张图。 */

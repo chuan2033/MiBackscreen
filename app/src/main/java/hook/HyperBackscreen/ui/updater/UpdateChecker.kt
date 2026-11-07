@@ -20,11 +20,19 @@ data class UpdateInfo(
     val apkUrl: String,
 )
 
+/** 一次检查的结果：有新版 / 已是最新 / 检查失败（网络或接口异常），三者要区分开展示。 */
+sealed interface UpdateCheckResult {
+    data class Available(val info: UpdateInfo) : UpdateCheckResult
+    data object UpToDate : UpdateCheckResult
+    data object Failed : UpdateCheckResult
+}
+
 /**
  * 查 GitHub Release 有没有比本机更新的正式版。
  *
  * 结果在进程内缓存，两次真实请求之间至少隔 [MIN_INTERVAL_MS]，避免把 GitHub
- * 对未登录请求的配额（每 IP 每小时 60 次）耗尽。检查失败和没有新版是同一个结果——null。
+ * 对未登录请求的配额（每 IP 每小时 60 次）耗尽。检查失败不覆盖缓存、也不计入节流，
+ * 之前查到的新版本会保留，下次可以立即重试。
  */
 object UpdateChecker {
 
@@ -43,7 +51,12 @@ object UpdateChecker {
     var lastCheckAtWallClock: Long = 0L
         private set
 
-    /** 上次检查的结果；可能过期，仅供展示。 */
+    /** 最近一次真实请求是否失败；用于页面提示「检查更新失败」。 */
+    @Volatile
+    var lastCheckFailed: Boolean = false
+        private set
+
+    /** 上次成功检查的结果；可能过期，仅供展示。 */
     fun last(): UpdateInfo? = cached
 
     /** 距上次真实请求是否已满 [MIN_INTERVAL_MS]；从未检查过时为 true。 */
@@ -58,10 +71,18 @@ object UpdateChecker {
      * @param force 忽略 [MIN_INTERVAL_MS] 节流，强制发起请求；页面上的手动「检查更新」用它，
      *   否则启动自动检查之后的十分钟内点按钮没有任何反应。
      */
-    suspend fun check(force: Boolean = false): UpdateInfo? {
-        if (!force && !due()) return cached
+    suspend fun check(force: Boolean = false): UpdateCheckResult {
+        if (!force && !due()) {
+            return cached?.let { UpdateCheckResult.Available(it) } ?: UpdateCheckResult.UpToDate
+        }
         val result = fetch()
-        cached = result
+        if (result == UpdateCheckResult.Failed) {
+            // 失败时保留之前的缓存与检测时间，不能把已查到的新版本清掉、更不能显示成「已是最新」。
+            lastCheckFailed = true
+            return result
+        }
+        cached = (result as? UpdateCheckResult.Available)?.info
+        lastCheckFailed = false
         checkedAt = SystemClock.elapsedRealtime()
         lastCheckAtWallClock = System.currentTimeMillis()
         return result
@@ -77,16 +98,19 @@ object UpdateChecker {
         }
     }
 
-    private suspend fun fetch(): UpdateInfo? = withContext(Dispatchers.IO) {
+    private suspend fun fetch(): UpdateCheckResult = withContext(Dispatchers.IO) {
         try {
-            val newest = readReleases().firstOrNull() ?: return@withContext null
+            // GitHub 按创建时间排序：先发 1.3.0、后给旧分支补发 1.2.7 时，第一条是 1.2.7。
+            // 取版本号最大的一条，而不是列表第一条。
+            val newest = readReleases().maxWithOrNull { a, b -> compareVersions(a.versionName, b.versionName) }
+                ?: return@withContext UpdateCheckResult.UpToDate
             if (!versionAfter(newest.versionName, BuildConfig.VERSION_NAME)) {
-                return@withContext null
+                return@withContext UpdateCheckResult.UpToDate
             }
-            newest
+            UpdateCheckResult.Available(newest)
         } catch (e: Exception) {
             Log.w("MiBackscreen", "update check failed", e)
-            null
+            UpdateCheckResult.Failed
         }
     }
 
@@ -98,7 +122,9 @@ object UpdateChecker {
             connection.readTimeout = 10_000
             connection.setRequestProperty("Accept", "application/vnd.github+json")
             connection.setRequestProperty("User-Agent", "MiBackscreen")
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) return emptyList()
+            // 非 200（限流、服务异常）算失败而不是「没有发布」，交给调用方区分。
+            val code = connection.responseCode
+            if (code != HttpURLConnection.HTTP_OK) throw java.io.IOException("HTTP $code")
             val body = connection.inputStream.bufferedReader().use { it.readText() }
             val array = JSONArray(body)
             val out = ArrayList<UpdateInfo>()
@@ -149,14 +175,17 @@ object UpdateChecker {
     }
 
     /** a 是否比 b 新；按点分段逐段比，段数更多且在共同段相等时算新。 */
-    private fun versionAfter(a: String, b: String): Boolean {
-        val pa = a.split('.').map(String::toInt)
-        val pb = b.split('.').map(String::toInt)
+    private fun versionAfter(a: String, b: String): Boolean = compareVersions(a, b) > 0
+
+    /** 按点分段逐段比较；共同段相等时段数更多的算新。无法解析的段按 0 处理。 */
+    private fun compareVersions(a: String, b: String): Int {
+        val pa = a.split('.').map { it.toIntOrNull() ?: 0 }
+        val pb = b.split('.').map { it.toIntOrNull() ?: 0 }
         val n = minOf(pa.size, pb.size)
         for (i in 0 until n) {
-            if (pa[i] != pb[i]) return pa[i] > pb[i]
+            if (pa[i] != pb[i]) return pa[i].compareTo(pb[i])
         }
-        return pa.size > pb.size
+        return pa.size.compareTo(pb.size)
     }
 
     /** 用浏览器打开 APK 直链，交给浏览器自动下载。 */

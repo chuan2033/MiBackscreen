@@ -26,8 +26,72 @@ public final class PrefsBridge {
     private static final String TAG = Constants.LOG_TAG + ":PrefsBridge";
     private static final String PENDING_PANEL_PREFIX = "__pending_panel__";
     static final String PENDING_UI_PREFIX = "__pending_ui__";
-    private static final ConcurrentHashMap<String, Boolean> sRemoteBooleanOverrides =
+    /**
+     * 宿主进程里刚写成功的值。RemotePreferences 的变更回传有延迟，面板 / 电量环 / 长按拦截
+     * 在这段时间内先读这里，避免显示或执行旧值。只保留 [OVERRIDE_TTL_MS]：过期后一律回到
+     * 远程偏好，否则之后在主 App 里的修改会被这份旧值一直顶掉（直到宿主进程重启）。
+     */
+    private static final long OVERRIDE_TTL_MS = 5_000L;
+
+    private static final class TimedValue {
+        final Object value;
+        final long at;
+
+        TimedValue(Object value) {
+            this.value = value;
+            this.at = android.os.SystemClock.elapsedRealtime();
+        }
+
+        boolean expired() {
+            return android.os.SystemClock.elapsedRealtime() - at > OVERRIDE_TTL_MS;
+        }
+    }
+
+    private static final ConcurrentHashMap<String, TimedValue> sRemoteBooleanOverrides =
             new ConcurrentHashMap<>();
+
+    @Nullable
+    private static Object liveOverride(@NonNull ConcurrentHashMap<String, TimedValue> map, @NonNull String key) {
+        TimedValue timed = map.get(key);
+        if (timed == null) return null;
+        if (timed.expired()) {
+            map.remove(key, timed);
+            return null;
+        }
+        return timed.value;
+    }
+
+    /**
+     * 远程偏好的写入统一放到这条单线程队列：不在主线程做 Binder，按提交顺序落盘；
+     * 本地先记下待同步值，提交成功才清除，失败或进程被杀时由重连后的补交兜底。
+     */
+    private static final java.util.concurrent.ExecutorService REMOTE_WRITER =
+            java.util.concurrent.Executors.newSingleThreadExecutor(task -> {
+                Thread thread = new Thread(task, "MiBackscreen-prefs");
+                thread.setDaemon(true);
+                return thread;
+            });
+
+    /**
+     * 等待此前排队的远程写入全部完成（最多 [timeoutMs]）。重启宿主作用域前调用，
+     * 确保宿主重启后读到的是新值。不要在主线程调用。
+     */
+    public static boolean awaitRemoteWrites(long timeoutMs) {
+        try {
+            REMOTE_WRITER.submit(() -> { }).get(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
+            return true;
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    /** 只存在 App 本地、不进远程偏好的界面设置。备份 / 恢复时必须直接读写本地。 */
+    private static final java.util.Set<String> LOCAL_ONLY_KEYS = new java.util.HashSet<>(java.util.Arrays.asList(
+            Constants.KEY_CHECK_UPDATES,
+            Constants.KEY_FLOATING_NAV_BAR,
+            Constants.KEY_LIQUID_GLASS,
+            Constants.KEY_BOTTOM_BAR_BLUR,
+            Constants.KEY_SHOW_FUNCTION_COUNT));
 
     public static final boolean DEFAULT_DISABLE_LONG_PRESS_EDIT = true;
     public static final boolean DEFAULT_REMOVE_WALLPAPER_LIMIT = true;
@@ -238,25 +302,25 @@ public final class PrefsBridge {
     }
 
     public static void setRemoteBooleanOverride(@NonNull String key, boolean value) {
-        sRemoteBooleanOverrides.put(key, value);
+        sRemoteBooleanOverrides.put(key, new TimedValue(value));
     }
 
     /**
      * 宿主进程里刚由面板写成功的字符串值。RemotePreferences 的变更回传有延迟，
      * 面板与电量环在这段时间内先读这里，避免显示 / 绘制旧值。
      */
-    private static final ConcurrentHashMap<String, String> sRemoteStringOverrides =
+    private static final ConcurrentHashMap<String, TimedValue> sRemoteStringOverrides =
             new ConcurrentHashMap<>();
 
     public static void setRemoteStringOverride(@NonNull String key, @NonNull String value) {
-        sRemoteStringOverrides.put(key, value);
+        sRemoteStringOverrides.put(key, new TimedValue(value));
     }
 
     /** 宿主进程（背屏面板）读字符串偏好：优先刚写成功的覆盖值。 */
     @NonNull
     public static String readStringForRemote(@NonNull String key, @NonNull String def) {
-        String override = sRemoteStringOverrides.get(key);
-        if (override != null) return override;
+        Object override = liveOverride(sRemoteStringOverrides, key);
+        if (override instanceof String) return (String) override;
         SharedPreferences prefs = remotePrefsFromModule();
         if (prefs == null) return def;
         String value = prefs.getString(key, def);
@@ -264,8 +328,8 @@ public final class PrefsBridge {
     }
 
     private static boolean readRemoteBooleanWithOverride(@NonNull String key, boolean def) {
-        Boolean override = sRemoteBooleanOverrides.get(key);
-        if (override != null) return override;
+        Object override = liveOverride(sRemoteBooleanOverrides, key);
+        if (override instanceof Boolean) return (Boolean) override;
         SharedPreferences prefs = remotePrefsFromModule();
         return prefs != null ? prefs.getBoolean(key, def) : def;
     }
@@ -273,21 +337,35 @@ public final class PrefsBridge {
     /** UI 双写；服务未连接时保存待同步值，重连后补交到 RemotePreferences。 */
     private static void writeFromUi(@NonNull Context context, @NonNull String key, boolean value) {
         SharedPreferences localPrefs = local(context);
+        // 先记待同步值：远程提交成功才清，服务断开 / 写丢 / 进程被杀时重连后会补交，不会被远程旧值回滚。
+        localPrefs.edit()
+                .putBoolean(key, value)
+                .putBoolean(PENDING_UI_PREFIX + key, value)
+                .apply();
         SharedPreferences remote = remote();
         if (remote != null) {
-            remote.edit().putBoolean(key, value).apply();
-            localPrefs.edit()
-                    .putBoolean(key, value)
-                    .remove(PENDING_UI_PREFIX + key)
-                    .apply();
-        } else {
-            localPrefs.edit()
-                    .putBoolean(key, value)
-                    .putBoolean(PENDING_UI_PREFIX + key, value)
-                    .apply();
+            REMOTE_WRITER.execute(() -> {
+                boolean saved;
+                try {
+                    saved = remote.edit().putBoolean(key, value).commit();
+                } catch (Throwable error) {
+                    Log.w(TAG, "Remote write failed for " + key, error);
+                    saved = false;
+                }
+                if (saved) clearPendingIfUnchanged(localPrefs, key, value);
+            });
         }
         DiagnosticLogStore.recordLocalAsync(context, "preference_write key=" + key
-                + " value=" + value + " destination=" + (remote != null ? "remote_apply_requested" : "local_pending"));
+                + " value=" + value + " destination=" + (remote != null ? "remote_commit_queued" : "local_pending"));
+    }
+
+    /** 提交成功后清待同步标记；若期间又有新的写入（待同步值已变），保留新的标记。 */
+    private static synchronized void clearPendingIfUnchanged(@NonNull SharedPreferences localPrefs,
+                                                             @NonNull String key,
+                                                             @NonNull Object value) {
+        String pendingKey = PENDING_UI_PREFIX + key;
+        Object pending = localPrefs.getAll().get(pendingKey);
+        if (value.equals(pending)) localPrefs.edit().remove(pendingKey).apply();
     }
 
     private static boolean writeFromUiCommitted(@NonNull Context context, @NonNull String key, boolean value) {
@@ -337,21 +415,25 @@ public final class PrefsBridge {
 
     private static void writeStringFromUi(@NonNull Context context, @NonNull String key, @NonNull String value) {
         SharedPreferences localPrefs = local(context);
+        localPrefs.edit()
+                .putString(key, value)
+                .putString(PENDING_UI_PREFIX + key, value)
+                .apply();
         SharedPreferences remote = remote();
         if (remote != null) {
-            remote.edit().putString(key, value).apply();
-            localPrefs.edit()
-                    .putString(key, value)
-                    .remove(PENDING_UI_PREFIX + key)
-                    .apply();
-        } else {
-            localPrefs.edit()
-                    .putString(key, value)
-                    .putString(PENDING_UI_PREFIX + key, value)
-                    .apply();
+            REMOTE_WRITER.execute(() -> {
+                boolean saved;
+                try {
+                    saved = remote.edit().putString(key, value).commit();
+                } catch (Throwable error) {
+                    Log.w(TAG, "Remote write failed for " + key, error);
+                    saved = false;
+                }
+                if (saved) clearPendingIfUnchanged(localPrefs, key, value);
+            });
         }
         DiagnosticLogStore.recordLocalAsync(context, "preference_write key=" + key
-                + " destination=" + (remote != null ? "remote_apply_requested" : "local_pending"));
+                + " destination=" + (remote != null ? "remote_commit_queued" : "local_pending"));
     }
 
     /**
@@ -728,8 +810,11 @@ public final class PrefsBridge {
     @NonNull
     public static Map<String, String> exportPreferencesForBackup(@NonNull Context context) {        Map<String, String> values = new LinkedHashMap<>();
         for (Map.Entry<String, Boolean> entry : BACKUP_BOOLEAN_DEFAULTS.entrySet()) {
-            values.put(entry.getKey(),
-                    String.valueOf(readForUi(context, entry.getKey(), entry.getValue())));
+            // 本地专用的界面设置远程里没有：走远程读会拿到默认值，还会把默认值写回本地。
+            boolean value = LOCAL_ONLY_KEYS.contains(entry.getKey())
+                    ? local(context).getBoolean(entry.getKey(), entry.getValue())
+                    : readForUi(context, entry.getKey(), entry.getValue());
+            values.put(entry.getKey(), String.valueOf(value));
         }
         for (Map.Entry<String, String> entry : BACKUP_STRING_DEFAULTS.entrySet()) {
             values.put(entry.getKey(),
@@ -753,17 +838,79 @@ public final class PrefsBridge {
             String raw = values.get(entry.getKey());
             if (raw == null) continue;
             String trimmed = raw.trim();
-            writeFromUi(context, entry.getKey(),
-                    "true".equalsIgnoreCase(trimmed) || "1".equals(trimmed));
+            boolean value;
+            if ("true".equalsIgnoreCase(trimmed) || "1".equals(trimmed)) {
+                value = true;
+            } else if ("false".equalsIgnoreCase(trimmed) || "0".equals(trimmed)) {
+                value = false;
+            } else {
+                continue; // 不认识的值不写，保持当前设置
+            }
+            if (LOCAL_ONLY_KEYS.contains(entry.getKey())) {
+                local(context).edit().putBoolean(entry.getKey(), value).apply();
+            } else {
+                writeFromUi(context, entry.getKey(), value);
+            }
             applied++;
         }
         for (String key : BACKUP_STRING_DEFAULTS.keySet()) {
-            String raw = values.get(key);
-            if (raw == null) continue;
-            writeStringFromUi(context, key, raw);
+            String normalized = normalizeBackupString(key, values.get(key));
+            if (normalized == null) continue; // 缺失或非法：保持当前设置，不把脏值写进 Hook
+            writeStringFromUi(context, key, normalized);
             applied++;
         }
         return applied;
+    }
+
+    /**
+     * 恢复备份时逐键校验：与 UI 写入同一套规范化口径，非法值返回 null（跳过，保持当前值）。
+     * 备份文件可能被手改或损坏，不能把 1ms 息屏这类脏值原样写进 Hook。
+     */
+    @Nullable
+    static String normalizeBackupString(@NonNull String key, @Nullable String raw) {
+        if (raw == null) return null;
+        String value = raw.trim();
+        switch (key) {
+            case Constants.KEY_BATTERY_COLOR_IDLE:
+            case Constants.KEY_BATTERY_COLOR_CHARGING:
+            case Constants.KEY_BATTERY_COLOR_LOW:
+                return value.isEmpty() || value.matches("#?([0-9a-fA-F]{6}|[0-9a-fA-F]{8})") ? value : null;
+            case Constants.KEY_BATTERY_PERCENT_POSITION:
+                return value.equals("off") || value.equals("left") || value.equals("right") ? value : null;
+            case Constants.KEY_BATTERY_RING_TRACK:
+                return value.equals("0") || value.equals("1") ? value : null;
+            case Constants.KEY_BATTERY_RING_STYLE:
+                return value.equals("contour") || value.equals("twin") ? value : null;
+            case Constants.KEY_BATTERY_PERCENT_OFFSET_X_LEFT:
+            case Constants.KEY_BATTERY_PERCENT_OFFSET_X_RIGHT:
+                // 空串表示「该侧没调过」，是合法值。
+                return value.isEmpty() || value.matches("-?\\d{1,4}") ? value : null;
+            case Constants.KEY_BATTERY_PERCENT_OFFSET_Y:
+            case Constants.KEY_BATTERY_RING_SCALE:
+            case Constants.KEY_BATTERY_RING_STROKE:
+            case Constants.KEY_BATTERY_PERCENT_TEXT_SIZE:
+            case Constants.KEY_BATTERY_PERCENT_TEXT_WEIGHT:
+            case Constants.KEY_BATTERY_LOW_THRESHOLD:
+                // 数值项读取时会再夹进各自区间，这里只挡掉非数字。
+                return value.matches("-?\\d{1,4}") ? value : null;
+            case Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES:
+            case Constants.KEY_REAR_SCREEN_OFF_TIMEOUT:
+                return normalizePanelStringValue(key, value);
+            case Constants.KEY_AUTO_WALLPAPER_ORDER:
+                return AutoWallpaperRotationPolicy.normalizeOrder(value);
+            case Constants.KEY_REAR_SCREEN_SCHEDULE_START:
+            case Constants.KEY_REAR_SCREEN_SCHEDULE_END:
+                return value.matches("\\d{1,2}:\\d{2}")
+                        ? RearScreenSchedule.normalize(value, value)
+                        : null;
+            case Constants.KEY_REAR_SCREEN_SCHEDULE_MODE:
+                return normalizeRearScreenScheduleMode(value);
+            case Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES:
+                return hook.HyperBackscreen.common.PackageListCodec.encode(
+                        hook.HyperBackscreen.common.PackageListCodec.parse(value));
+            default:
+                return null;
+        }
     }
 
     public static boolean writeEnable18ProFeaturesFromUi(@NonNull Context context, boolean enabled) {
@@ -809,12 +956,16 @@ public final class PrefsBridge {
     public static boolean requestInstallAppCardFromUi(@NonNull Context context) {
         SharedPreferences localPrefs = local(context);
         SharedPreferences remotePrefs = remote();
+        // 每次请求一个新编号：宿主处理过同一编号就不再插入，用户删掉的卡片不会被自动加回来。
+        String requestId = String.valueOf(System.currentTimeMillis());
         if (remotePrefs == null) {
             localPrefs.edit()
                     .putBoolean(Constants.KEY_ENABLE_APP_CARD, true)
                     .putBoolean(Constants.KEY_APP_CARD_INSTALL_REQUEST, true)
+                    .putString(Constants.KEY_APP_CARD_INSTALL_REQUEST_ID, requestId)
                     .putBoolean(PENDING_UI_PREFIX + Constants.KEY_ENABLE_APP_CARD, true)
                     .putBoolean(PENDING_UI_PREFIX + Constants.KEY_APP_CARD_INSTALL_REQUEST, true)
+                    .putString(PENDING_UI_PREFIX + Constants.KEY_APP_CARD_INSTALL_REQUEST_ID, requestId)
                     .apply();
             DiagnosticLogStore.recordLocalAsync(context,
                     "app_card_install_request destination=local_pending");
@@ -823,10 +974,12 @@ public final class PrefsBridge {
         boolean saved = remotePrefs.edit()
                 .putBoolean(Constants.KEY_ENABLE_APP_CARD, true)
                 .putBoolean(Constants.KEY_APP_CARD_INSTALL_REQUEST, true)
+                .putString(Constants.KEY_APP_CARD_INSTALL_REQUEST_ID, requestId)
                 .commit();
         SharedPreferences.Editor editor = localPrefs.edit()
                 .putBoolean(Constants.KEY_ENABLE_APP_CARD, true)
-                .putBoolean(Constants.KEY_APP_CARD_INSTALL_REQUEST, true);
+                .putBoolean(Constants.KEY_APP_CARD_INSTALL_REQUEST, true)
+                .putString(Constants.KEY_APP_CARD_INSTALL_REQUEST_ID, requestId);
         if (saved) {
             editor.remove(PENDING_UI_PREFIX + Constants.KEY_ENABLE_APP_CARD)
                     .remove(PENDING_UI_PREFIX + Constants.KEY_APP_CARD_INSTALL_REQUEST);
@@ -976,9 +1129,9 @@ public final class PrefsBridge {
     }
 
     public static boolean shouldBlockLongPressEdit(@NonNull XposedModule module) {
-        Boolean override = sRemoteBooleanOverrides.get(Constants.KEY_DISABLE_LONG_PRESS_EDIT);
-        return override != null
-                ? override
+        Object override = liveOverride(sRemoteBooleanOverrides, Constants.KEY_DISABLE_LONG_PRESS_EDIT);
+        return override instanceof Boolean
+                ? (Boolean) override
                 : readForHook(module, Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT);
     }
 
@@ -1000,15 +1153,10 @@ public final class PrefsBridge {
         }
     }
 
-    public static void clearAppCardInstallRequest(@NonNull XposedModule module) {
-        try {
-            SharedPreferences prefs = module.getRemotePreferences(Constants.PREF_GROUP);
-            if (prefs != null) {
-                prefs.edit().putBoolean(Constants.KEY_APP_CARD_INSTALL_REQUEST, false).commit();
-            }
-        } catch (Throwable e) {
-            Log.w(TAG, "Failed to clear app card install request", e);
-        }
+    /** 当前安装请求的编号（Hook 侧）；旧版本只有布尔请求，返回空串。 */
+    @NonNull
+    public static String readAppCardInstallRequestId(@NonNull XposedModule module) {
+        return readStringForHook(module, Constants.KEY_APP_CARD_INSTALL_REQUEST_ID, "");
     }
 
     public static boolean shouldRemoveAppCardLimit(@NonNull XposedModule module) {
@@ -1481,6 +1629,21 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_REAR_SCREEN_SCHEDULE_MODE,
                     DEFAULT_REAR_SCREEN_SCHEDULE_MODE);
+            // 兜底：上面的清单是逐键写的，新加的键容易漏（曾漏过数字字重等）。
+            // 这里把所有残留的待同步值按类型补交，再把所有可备份的远程键对齐一遍。
+            for (Map.Entry<String, ?> entry : new java.util.HashMap<>(localPrefs.getAll()).entrySet()) {
+                String pendingKey = entry.getKey();
+                if (!pendingKey.startsWith(PENDING_UI_PREFIX)) continue;
+                String key = pendingKey.substring(PENDING_UI_PREFIX.length());
+                if (entry.getValue() instanceof Boolean) {
+                    flushUiBooleanPreference(localPrefs, remotePrefs, key);
+                } else if (entry.getValue() instanceof String) {
+                    flushUiStringPreference(localPrefs, remotePrefs, key);
+                }
+            }
+            for (Map.Entry<String, String> entry : BACKUP_STRING_DEFAULTS.entrySet()) {
+                syncStringKey(localPrefs, remotePrefs, entry.getKey(), entry.getValue());
+            }
             long pending = localPrefs.getAll().keySet().stream()
                     .filter(key -> key.startsWith(PENDING_UI_PREFIX) || key.startsWith(PENDING_PANEL_PREFIX))
                     .count();

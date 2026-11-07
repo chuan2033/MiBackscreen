@@ -11,6 +11,8 @@ import android.content.ContextWrapper;
 import android.content.Intent;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.Parcel;
 import android.os.SystemClock;
 import android.provider.Settings;
@@ -34,7 +36,9 @@ import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Field;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -123,6 +127,17 @@ public class ModuleMain extends XposedModule {
     /** 背屏息屏超时覆盖最近一次生效值，只在变化时记日志（该方法每次电源状态刷新都会调）。 */
     private volatile long lastRearScreenOffTimeoutAppliedMs = Long.MIN_VALUE;
     private volatile long lastSubscreenAppInfoModified = Long.MIN_VALUE;
+    /**
+     * 官方应用卡同步的节流：应用列表取值方法 c() 调用极其频繁（容量检查、编辑、刷新都会调），
+     * 每次都整套同步会在宿主主线程反复读写文件。索引文件没变时，[OFFICIAL_SYNC_MIN_INTERVAL_MS]
+     * 内只同步一次。
+     */
+    private static final long OFFICIAL_SYNC_MIN_INTERVAL_MS = 3_000L;
+    private volatile long lastOfficialSyncElapsed = Long.MIN_VALUE / 2;
+    private volatile long lastOfficialSyncIndexStamp = Long.MIN_VALUE;
+    /** 进程内互斥 appInfo.json 的读改写；跨进程（背屏中心 / 主题商店）再叠一把文件锁。 */
+    private static final java.util.concurrent.locks.ReentrantLock APP_INFO_LOCK =
+            new java.util.concurrent.locks.ReentrantLock();
     private volatile long lastSubscreenAppInfoLength = Long.MIN_VALUE;
     private volatile int lastSubscreenAppInfoCount = Integer.MIN_VALUE;
     /** insertAppWidget 交易期间置位，供应用卡列表 getter 判断是否需要封顶 size。 */
@@ -439,13 +454,21 @@ public class ModuleMain extends XposedModule {
      * PowerGroup#getGroupId() 是包可见方法，只能按声明方法查找后 setAccessible。
      * 取不到就返回 null，调用方据此放行原逻辑。
      */
+    /** 按 PowerGroup 类缓存 getGroupId；锁内路径不能每次都反射查找 + setAccessible。 */
+    private static volatile Class<?> sPowerGroupClass;
+    private static volatile Method sPowerGroupIdMethod;
+
     @Nullable
     private static Integer readPowerGroupId(@Nullable Object powerGroup) {
         if (powerGroup == null) return null;
-        Method method = findDeclaredMethod(
-                powerGroup.getClass(),
-                Constants.SYSTEM_POWER_GROUP_GET_GROUP_ID_METHOD);
-        if (method == null) return null;
+        Class<?> type = powerGroup.getClass();
+        Method method = sPowerGroupIdMethod;
+        if (method == null || sPowerGroupClass != type) {
+            method = findDeclaredMethod(type, Constants.SYSTEM_POWER_GROUP_GET_GROUP_ID_METHOD);
+            if (method == null) return null;
+            sPowerGroupIdMethod = method;
+            sPowerGroupClass = type;
+        }
         try {
             Object value = method.invoke(powerGroup);
             return value instanceof Integer ? (Integer) value : null;
@@ -600,6 +623,10 @@ public class ModuleMain extends XposedModule {
                         Integer groupIdValue = readPowerGroupId(chain.getArgs().get(0));
                         boolean rearGroup = groupIdValue != null
                                 && groupIdValue == Constants.SYSTEM_SECONDARY_DISPLAY_GROUP_ID;
+                        // 这条路径在 PMS mLock 内、随用户活动高频触发：主屏组直接放行，不读任何偏好。
+                        if (!rearGroup) {
+                            return chain.proceed();
+                        }
                         // 定时关闭背屏优先于其它档位：窗口内把超时压到 1 秒，
                         // 背屏按系统自己的熄灭流程关掉，之后靠 isScreenSkippedWakeup 挡住唤醒。
                         if (rearGroup && PrefsBridge.isRearScreenScheduleActiveNow(this)) {
@@ -616,9 +643,6 @@ public class ModuleMain extends XposedModule {
                         if (overrideMillis <= 0L) {
                             return chain.proceed();
                         }
-                        if (!rearGroup) {
-                            return chain.proceed();
-                        }
                         if (overrideMillis != lastRearScreenOffTimeoutAppliedMs) {
                             lastRearScreenOffTimeoutAppliedMs = overrideMillis;
                             log(Log.INFO, Constants.LOG_TAG,
@@ -627,6 +651,12 @@ public class ModuleMain extends XposedModule {
                         return overrideMillis;
                     }
             );
+            // 预热远程偏好：首次 getRemotePreferences 可能走 Binder，别让它发生在 PMS 锁内。
+            try {
+                PrefsBridge.readRearScreenOffTimeoutMillis(this);
+                PrefsBridge.shouldKeepRearScreenOnInGame(this);
+            } catch (Throwable ignored) {
+            }
         }
         // 时间窗边界没人会触发电源状态重算，交给这个低频线程；只在跨边界时动作。
         RearScreenScheduleHost.install(this);
@@ -674,6 +704,12 @@ public class ModuleMain extends XposedModule {
         }
 
         Class<?> legacyGestureClass = findClass(Constants.HOOK_CLASS, classLoader);
+        // 旧版类名同样会被让给无关类：只有「门控方法返回 boolean + 无参 run()」都对得上才挂。
+        if (legacyGestureClass != null && !isLegacyLongPressGestureClass(legacyGestureClass)) {
+            log(Log.WARN, Constants.LOG_TAG,
+                    "Legacy long press class shape mismatch, skipped: " + legacyGestureClass.getName());
+            legacyGestureClass = null;
+        }
         if (legacyGestureClass != null && legacyGestureClass != gestureClass) {
             hookLongPressMethod(legacyGestureClass, Constants.HOOK_METHOD_GATE, new Class[]{MotionEvent.class}, false);
             hookLongPressMethod(legacyGestureClass, Constants.HOOK_METHOD_RUN, new Class[]{}, null);
@@ -687,6 +723,13 @@ public class ModuleMain extends XposedModule {
                             + Constants.HOOK_CLASS_LONG_PRESS_NEW + ", "
                             + Constants.HOOK_CLASS);
         }
+    }
+
+    private static boolean isLegacyLongPressGestureClass(@NonNull Class<?> candidate) {
+        Method gate = findDeclaredMethod(candidate, Constants.HOOK_METHOD_GATE, MotionEvent.class);
+        Method run = findDeclaredMethod(candidate, Constants.HOOK_METHOD_RUN);
+        return gate != null && gate.getReturnType() == boolean.class
+                && run != null && run.getReturnType() == void.class;
     }
 
     /**
@@ -880,8 +923,17 @@ public class ModuleMain extends XposedModule {
             @Nullable Object listManager
     ) {
         if (listManager == null) return;
-        syncOfficialPanelAppCardWithSubscreenIndex();
-        cleanupDeletedSubscreenAppInfoEntries();
+        File indexFile = new File(Constants.SUBSCREEN_APP_INFO_FILE);
+        long indexStamp = indexFile.isFile() ? indexFile.lastModified() ^ (indexFile.length() << 20) : 0L;
+        long nowElapsed = SystemClock.elapsedRealtime();
+        if (indexStamp != lastOfficialSyncIndexStamp
+                || nowElapsed - lastOfficialSyncElapsed >= OFFICIAL_SYNC_MIN_INTERVAL_MS) {
+            syncOfficialPanelAppCardWithSubscreenIndex();
+            cleanupDeletedSubscreenAppInfoEntries();
+            lastOfficialSyncElapsed = nowElapsed;
+            lastOfficialSyncIndexStamp = indexFile.isFile()
+                    ? indexFile.lastModified() ^ (indexFile.length() << 20) : 0L;
+        }
         File appInfoFile = new File(Constants.SUBSCREEN_APP_INFO_FILE);
         if (!appInfoFile.isFile()) return;
 
@@ -893,10 +945,15 @@ public class ModuleMain extends XposedModule {
         }
 
         try {
-            ArrayList<Object> items = readSubscreenAppInfoList(classLoader, appInfoFile);
-            if (items == null) return;
+            // 只在确认是宿主的列表管理器实例时才写回，防止混淆名漂移后把列表塞进无关对象。
+            Class<?> listManagerClass = TargetResolver.resolveClass(classLoader, SubScreenTargets.APP_LIST_MANAGER);
+            if (listManagerClass == null || !listManagerClass.isInstance(listManager)) return;
             String listFieldName = TargetMembers.fieldName(
                     TargetMembers.resolveField(listManager.getClass(), ArrayList.class, "c"), "c");
+            Object current = getFieldValue(listManager, listFieldName);
+            ArrayList<Object> items = readSubscreenAppInfoList(
+                    classLoader, appInfoFile, current instanceof List<?> list ? list : null);
+            if (items == null) return;
             if (setFieldValue(listManager, listFieldName, items)) {
                 lastSubscreenAppInfoModified = modified;
                 lastSubscreenAppInfoLength = length;
@@ -911,7 +968,7 @@ public class ModuleMain extends XposedModule {
     }
 
     private void refreshActiveSubscreenAppInfoCache(@NonNull ClassLoader classLoader) {
-        Class<?> listManagerClass = findClass(Constants.SUBSCREEN_APP_LIST_MANAGER_CLASS, classLoader);
+        Class<?> listManagerClass = TargetResolver.resolveClass(classLoader, SubScreenTargets.APP_LIST_MANAGER);
         if (listManagerClass == null) return;
         Object listManager = getStaticFieldValueByType(listManagerClass, listManagerClass);
         refreshSubscreenAppInfoCacheIfChanged(classLoader, listManager);
@@ -927,11 +984,27 @@ public class ModuleMain extends XposedModule {
                 TargetMembers.resolveField(listManager.getClass(), HashSet.class, "a"), "a");
         Object listenersValue = getFieldValue(listManager, listenersFieldName);
         if (!(listenersValue instanceof Collection<?> listeners) || listeners.isEmpty()) return;
+        ArrayList<Object> payload = new ArrayList<>(items);
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            // 监听器会直接刷新宿主 UI；从 Binder 线程进来时切回主线程再通知。
+            ArrayList<Object> snapshot = new ArrayList<>(listeners);
+            new Handler(Looper.getMainLooper()).post(() ->
+                    notifySubscreenAppInfoListenersNow(classLoader, snapshot, payload, source));
+            return;
+        }
+        notifySubscreenAppInfoListenersNow(classLoader, new ArrayList<>(listeners), payload, source);
+    }
+
+    private void notifySubscreenAppInfoListenersNow(
+            @NonNull ClassLoader classLoader,
+            @NonNull List<?> listeners,
+            @NonNull ArrayList<Object> payload,
+            @NonNull String source
+    ) {
         Class<?> entryClass = TargetResolver.resolveClass(classLoader, SubScreenTargets.LAUNCHER_ENTRY);
         if (entryClass == null) return;
-        ArrayList<Object> payload = new ArrayList<>(items);
         int notified = 0;
-        for (Object listener : new ArrayList<>(listeners)) {
+        for (Object listener : listeners) {
             if (listener == null) continue;
             Method callback = TargetMembers.resolveMethod(
                     listener.getClass(), void.class,
@@ -952,21 +1025,43 @@ public class ModuleMain extends XposedModule {
         }
     }
 
+    /**
+     * 按 appInfo.json 重建宿主列表。宿主内存里已有的同一条目（resId + mtzPath 相同）原样复用，
+     * 保留宿主自己填的多语言名称、Intent 等字段；只有文件里新出现的条目才按 JSON 构造。
+     */
     @Nullable
     private ArrayList<Object> readSubscreenAppInfoList(
             @NonNull ClassLoader classLoader,
-            @NonNull File appInfoFile
+            @NonNull File appInfoFile,
+            @Nullable List<?> currentItems
     ) {
         try {
-            Class<?> entryClass = Class.forName(
-                    Constants.SUBSCREEN_LAUNCHER_ENTRY_CLASS, false, classLoader);
+            Class<?> entryClass = TargetResolver.resolveClass(classLoader, SubScreenTargets.LAUNCHER_ENTRY);
+            if (entryClass == null) return null;
             Constructor<?> constructor = entryClass.getDeclaredConstructor();
             constructor.setAccessible(true);
+            HashMap<String, ArrayDeque<Object>> existing = new HashMap<>();
+            if (currentItems != null) {
+                for (Object old : currentItems) {
+                    if (!entryClass.isInstance(old)) continue;
+                    existing.computeIfAbsent(entryKey(
+                                    getFieldValue(old, Constants.SUBSCREEN_LAUNCHER_ENTRY_RES_ID_FIELD),
+                                    getFieldValue(old, Constants.SUBSCREEN_LAUNCHER_ENTRY_MTZ_FIELD)),
+                            k -> new ArrayDeque<>()).add(old);
+                }
+            }
             JSONArray array = new JSONArray(readUtf8(appInfoFile, MAX_THEME_INDEX_BYTES));
             ArrayList<Object> items = new ArrayList<>(array.length());
             for (int i = 0; i < array.length(); i++) {
                 JSONObject item = array.optJSONObject(i);
                 if (item == null) continue;
+                ArrayDeque<Object> reusable = existing.get(entryKey(
+                        item.optString("resId", null), item.optString("mtzPath", null)));
+                Object reused = reusable == null ? null : reusable.poll();
+                if (reused != null) {
+                    items.add(reused);
+                    continue;
+                }
                 Object entry = constructor.newInstance();
                 String appNameSetter = TargetMembers.methodName(
                         TargetMembers.resolveMethod(
@@ -997,6 +1092,11 @@ public class ModuleMain extends XposedModule {
             log(Log.WARN, Constants.LOG_TAG, "readSubscreenAppInfoList failed", e);
             return null;
         }
+    }
+
+    @NonNull
+    private static String entryKey(@Nullable Object resId, @Nullable Object mtzPath) {
+        return (resId == null ? "" : resId.toString()) + "\u0000" + (mtzPath == null ? "" : mtzPath.toString());
     }
 
     /**
@@ -1163,6 +1263,15 @@ public class ModuleMain extends XposedModule {
      * 系统设置页不读这个下标，而是直接预览 Secure Settings 中 theme_rear_widget
      * 的第一项，因此两边会长期显示不同壁纸。
      */
+    /**
+     * MainPanel 的生命周期 / 选择回调都是 void 方法；名字被宿主重排给了有返回值的方法时，
+     * 说明已经不是同一个目标，宁可不挂。
+     */
+    @Nullable
+    private static Method voidOnly(@Nullable Method method) {
+        return method != null && method.getReturnType() == void.class ? method : null;
+    }
+
     private void installRearScreenSelectionSyncHook(@NonNull ClassLoader classLoader) {
         Class<?> mainPanelClass = findClass(Constants.HOOK_CLASS_MAIN_PANEL, classLoader);
         if (mainPanelClass == null) {
@@ -1172,11 +1281,11 @@ public class ModuleMain extends XposedModule {
         }
 
         hookMethodIfPresent(
-                findFirstDeclaredMethod(
+                voidOnly(findFirstDeclaredMethod(
                         mainPanelClass,
                         new Class[]{boolean.class},
                         Constants.HOOK_METHOD_REQUEST_EXIT_EDIT_18PRO,
-                        Constants.HOOK_METHOD_REQUEST_EXIT_EDIT),
+                        Constants.HOOK_METHOD_REQUEST_EXIT_EDIT)),
                 Constants.HOOK_CLASS_MAIN_PANEL + "#["
                         + Constants.HOOK_METHOD_REQUEST_EXIT_EDIT_18PRO + ", "
                         + Constants.HOOK_METHOD_REQUEST_EXIT_EDIT + "]",
@@ -1208,11 +1317,11 @@ public class ModuleMain extends XposedModule {
         );
 
         hookMethodIfPresent(
-                findFirstDeclaredMethod(
+                voidOnly(findFirstDeclaredMethod(
                         mainPanelClass,
                         new Class[]{},
                         Constants.HOOK_METHOD_SAVE_USER_SELECTION_18PRO,
-                        Constants.HOOK_METHOD_SAVE_USER_SELECTION),
+                        Constants.HOOK_METHOD_SAVE_USER_SELECTION)),
                 Constants.HOOK_CLASS_MAIN_PANEL + "#["
                         + Constants.HOOK_METHOD_SAVE_USER_SELECTION_18PRO + ", "
                         + Constants.HOOK_METHOD_SAVE_USER_SELECTION + "]",
@@ -1242,7 +1351,7 @@ public class ModuleMain extends XposedModule {
         }
 
         hookMethodIfPresent(
-                findDeclaredMethod(mainPanelClass, Constants.HOOK_METHOD_MAIN_PANEL_RESUME),
+                voidOnly(findDeclaredMethod(mainPanelClass, Constants.HOOK_METHOD_MAIN_PANEL_RESUME)),
                 Constants.HOOK_CLASS_MAIN_PANEL + "#"
                         + Constants.HOOK_METHOD_MAIN_PANEL_RESUME,
                 chain -> {
@@ -1256,7 +1365,7 @@ public class ModuleMain extends XposedModule {
                     return result;
                 });
         hookMethodIfPresent(
-                findDeclaredMethod(mainPanelClass, Constants.HOOK_METHOD_MAIN_PANEL_PAUSE),
+                voidOnly(findDeclaredMethod(mainPanelClass, Constants.HOOK_METHOD_MAIN_PANEL_PAUSE)),
                 Constants.HOOK_CLASS_MAIN_PANEL + "#"
                         + Constants.HOOK_METHOD_MAIN_PANEL_PAUSE,
                 chain -> {
@@ -1266,7 +1375,7 @@ public class ModuleMain extends XposedModule {
                     return chain.proceed();
                 });
         hookMethodIfPresent(
-                findDeclaredMethod(mainPanelClass, Constants.HOOK_METHOD_MAIN_PANEL_DESTROY),
+                voidOnly(findDeclaredMethod(mainPanelClass, Constants.HOOK_METHOD_MAIN_PANEL_DESTROY)),
                 Constants.HOOK_CLASS_MAIN_PANEL + "#"
                         + Constants.HOOK_METHOD_MAIN_PANEL_DESTROY,
                 chain -> {
@@ -1276,10 +1385,10 @@ public class ModuleMain extends XposedModule {
                     return chain.proceed();
                 });
         hookMethodIfPresent(
-                findDeclaredMethod(
+                voidOnly(findDeclaredMethod(
                         mainPanelClass,
                         Constants.HOOK_METHOD_MAIN_PANEL_AOD_CHANGED,
-                        boolean.class),
+                        boolean.class)),
                 Constants.HOOK_CLASS_MAIN_PANEL + "#"
                         + Constants.HOOK_METHOD_MAIN_PANEL_AOD_CHANGED,
                 chain -> {
@@ -1945,6 +2054,15 @@ public class ModuleMain extends XposedModule {
                 new Class[]{Object.class},
                 Constants.THEME_APPLY_RESULT_CLASS + "#" + Constants.THEME_APPLY_RESULT_METHOD,
                 chain -> {
+                    // invokeSuspend 是协程状态机入口，每过一个挂起点都会再进一次；
+                    // 预处理只在首次进入（label == 0）时做，避免中途改路径、重复拷文件。
+                    Object label = getFieldValue(chain.getThisObject(), "label");
+                    if (label instanceof Integer && (Integer) label != 0) {
+                        Object resumed = chain.proceed();
+                        // 壁纸文件在后续挂起点之后才复制进运行目录，放开读权限这一步每次恢复都要兜。
+                        if (PrefsBridge.shouldFixRearScreenApply(this)) grantRearScreenRuntimeAccess();
+                        return resumed;
+                    }
                     boolean fixApply = PrefsBridge.shouldFixRearScreenApply(this);
                     boolean removeLimit = PrefsBridge.shouldRemoveWallpaperLimit(this);
                     Object bean = fixApply || removeLimit
@@ -2322,13 +2440,27 @@ public class ModuleMain extends XposedModule {
                     || !(supplementalItems instanceof List<?> extras)) {
                 continue;
             }
-            @SuppressWarnings("unchecked")
-            List<Object> mutableCurrent = (List<Object>) current;
+            ArrayList<Object> toAdd = new ArrayList<>();
             for (Object item : extras) {
                 if (isRearPersonalizationAiItem(item)
-                        && !containsRearPresetItem(mutableCurrent, item)) {
-                    mutableCurrent.add(item);
-                    added++;
+                        && !containsRearPresetItem(current, item)
+                        && !containsRearPresetItem(toAdd, item)) {
+                    toAdd.add(item);
+                }
+            }
+            if (toAdd.isEmpty()) continue;
+            // 一次性 addAll：宿主列表若是不可变 List，会在改动前就抛异常，不会留下改了一半的状态；
+            // 这时换成副本，通过 setter 写回。
+            try {
+                @SuppressWarnings("unchecked")
+                List<Object> mutableCurrent = (List<Object>) current;
+                mutableCurrent.addAll(toAdd);
+                added += toAdd.size();
+            } catch (UnsupportedOperationException immutable) {
+                ArrayList<Object> copy = new ArrayList<>(current);
+                copy.addAll(toAdd);
+                if (setListProperty(existing, "setItemList", copy)) {
+                    added += toAdd.size();
                 }
             }
         }
@@ -2341,15 +2473,39 @@ public class ModuleMain extends XposedModule {
     ) {
         int missing = supplemental.size() - target.size();
         if (missing <= 0) return 0;
-        int limit = Math.min(missing, supplemental.size());
-        for (int i = limit - 1; i >= 0; i--) {
-            target.add(0, supplemental.get(i));
+        // 按 categoryType 去重：目标里已有的分类不再从补充来源插一份。
+        ArrayList<Object> leading = new ArrayList<>();
+        for (Object category : supplemental) {
+            if (leading.size() >= missing) break;
+            String type = asString(callNoArgMethodQuietly(category, "getCategoryType"));
+            if (type != null && findRearPresetCategory(target, type) != null) continue;
+            leading.add(category);
         }
+        int limit = leading.size();
+        if (limit == 0) return 0;
+        target.addAll(0, leading);
         log(Log.INFO, Constants.LOG_TAG,
                 "Rear personalization preset leading categories restored: added=" + limit
                         + ", source=" + supplemental.size()
                         + ", result=" + target.size());
         return limit;
+    }
+
+    private static boolean setListProperty(@NonNull Object target, @NonNull String setter, @NonNull List<?> value) {
+        for (Class<?> c = target.getClass(); c != null; c = c.getSuperclass()) {
+            for (Method m : c.getDeclaredMethods()) {
+                if (!m.getName().equals(setter) || m.getParameterCount() != 1) continue;
+                if (!m.getParameterTypes()[0].isAssignableFrom(value.getClass())) continue;
+                try {
+                    m.setAccessible(true);
+                    m.invoke(target, value);
+                    return true;
+                } catch (Throwable ignored) {
+                    return false;
+                }
+            }
+        }
+        return false;
     }
 
     @Nullable
@@ -2505,6 +2661,10 @@ public class ModuleMain extends XposedModule {
                             && themeAiShortcutControllers.contains(data.get(position))) {
                         Object holder = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
                         bindThemeAiShortcutRow(holder);
+                    } else {
+                        // 普通设置项复用了之前被我们改过的行：把原来的点击监听和图标还回去。
+                        Object holder = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                        restoreThemeSettingsRow(holder);
                     }
                     return result;
                 }
@@ -2660,7 +2820,8 @@ public class ModuleMain extends XposedModule {
         List<String> keys = new ArrayList<>();
         for (Object item : rawList) {
             Object key = callNoArgMethodResolved(item, String.class, "g");
-            if (key instanceof String) keys.add((String) key);
+            // 与 rawList 一一对齐（取不到 key 的条目占 null 位），算出的下标才能直接用于 rawList。
+            keys.add(key instanceof String ? (String) key : null);
         }
         List<Integer> insertionIndexes = SettingsEntryPlacement.insertionIndexesAfterAnchor(
                 keys, (shouldInsertAi ? 1 : 0) + (shouldInsertModule ? 1 : 0));
@@ -2806,10 +2967,68 @@ public class ModuleMain extends XposedModule {
         return hasKnownRearScreenEntry;
     }
 
+    /** 被模块入口借用过的 RecyclerView 行 → 借用前的点击监听与图标。 */
+    private final Map<View, OriginalSettingsRow> borrowedSettingsRows =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    private static final class OriginalSettingsRow {
+        @Nullable final View.OnClickListener listener;
+        @Nullable final ImageView iconView;
+        @Nullable final Drawable icon;
+        /** 我们设上去的监听；还原时只有当前监听仍是它才替换，宿主每次 bind 自己重设的就不动。 */
+        @Nullable View.OnClickListener borrowed;
+
+        OriginalSettingsRow(@Nullable View.OnClickListener listener,
+                            @Nullable ImageView iconView, @Nullable Drawable icon) {
+            this.listener = listener;
+            this.iconView = iconView;
+            this.icon = icon;
+        }
+    }
+
+    @Nullable
+    private static View.OnClickListener currentClickListener(@NonNull View row) {
+        try {
+            Object info = getFieldValue(row, "mListenerInfo");
+            Object value = getFieldValue(info, "mOnClickListener");
+            return value instanceof View.OnClickListener ? (View.OnClickListener) value : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private void setBorrowedClickListener(@NonNull View row, @NonNull View.OnClickListener listener) {
+        row.setOnClickListener(listener);
+        OriginalSettingsRow original = borrowedSettingsRows.get(row);
+        if (original != null) original.borrowed = listener;
+    }
+
+    @SuppressLint("DiscouragedApi")
+    private void rememberOriginalSettingsRow(@NonNull View row) {
+        if (borrowedSettingsRows.containsKey(row)) return;
+        View.OnClickListener listener = currentClickListener(row);
+        int iconId = row.getResources().getIdentifier("icon", "id", Constants.THEME_STORE_PACKAGE);
+        View iconView = iconId == 0 ? null : row.findViewById(iconId);
+        ImageView image = iconView instanceof ImageView ? (ImageView) iconView : null;
+        borrowedSettingsRows.put(row, new OriginalSettingsRow(
+                listener, image, image == null ? null : image.getDrawable()));
+    }
+
+    private void restoreThemeSettingsRow(@Nullable Object holder) {
+        Object itemViewValue = getFieldValue(holder, "itemView");
+        if (!(itemViewValue instanceof View row)) return;
+        OriginalSettingsRow original = borrowedSettingsRows.remove(row);
+        if (original == null) return;
+        View.OnClickListener current = currentClickListener(row);
+        if (current != null && current == original.borrowed) row.setOnClickListener(original.listener);
+        if (original.iconView != null) original.iconView.setImageDrawable(original.icon);
+    }
+
     @SuppressLint("DiscouragedApi")
     private void bindThemeSettingsShortcutRow(@Nullable Object holder) {
         Object itemViewValue = getFieldValue(holder, "itemView");
         if (!(itemViewValue instanceof View row)) return;
+        rememberOriginalSettingsRow(row);
         Context context = row.getContext();
         int titleId = context.getResources().getIdentifier(
                 "title", "id", Constants.THEME_STORE_PACKAGE);
@@ -2833,7 +3052,7 @@ public class ModuleMain extends XposedModule {
                 }
             }
         }
-        row.setOnClickListener(v -> {
+        setBorrowedClickListener(row, v -> {
             try {
                 v.getContext().startActivity(moduleSettingsIntent());
             } catch (Throwable e) {
@@ -2848,6 +3067,7 @@ public class ModuleMain extends XposedModule {
     private void bindThemeAiShortcutRow(@Nullable Object holder) {
         Object itemViewValue = getFieldValue(holder, "itemView");
         if (!(itemViewValue instanceof View row)) return;
+        rememberOriginalSettingsRow(row);
         Context context = row.getContext();
         int titleId = context.getResources().getIdentifier(
                 "title", "id", Constants.THEME_STORE_PACKAGE);
@@ -2857,7 +3077,7 @@ public class ModuleMain extends XposedModule {
                 ((TextView) titleView).setText(ModuleStrings.get(context, "ai_rear_screen_title", "AI陪伴", "AI Companion"));
             }
         }
-        row.setOnClickListener(v -> {
+        setBorrowedClickListener(row, v -> {
             try {
                 Intent intent = resolveRearScreenAiIntent(v.getContext().getClassLoader());
                 if (intent != null) {
@@ -3172,6 +3392,13 @@ public class ModuleMain extends XposedModule {
     }
 
     private void syncAiGeneratedAppCardsToSubscreenIndexNow() {
+        withAppInfoLock(() -> {
+            syncAiGeneratedAppCardsToSubscreenIndexNowLocked();
+            return Boolean.TRUE;
+        });
+    }
+
+    private void syncAiGeneratedAppCardsToSubscreenIndexNowLocked() {
         if (!PrefsBridge.shouldEnable18ProFeatures(this)) return;
         File runtimeFile = new File(Constants.THEME_AI_APP_RUNTIME_FILE);
         File appInfoFile = new File(Constants.SUBSCREEN_APP_INFO_FILE);
@@ -3257,6 +3484,11 @@ public class ModuleMain extends XposedModule {
     }
 
     private boolean cleanupDeletedSubscreenAppInfoEntries() {
+        Boolean result = withAppInfoLock(this::cleanupDeletedSubscreenAppInfoEntriesLocked);
+        return Boolean.TRUE.equals(result);
+    }
+
+    private boolean cleanupDeletedSubscreenAppInfoEntriesLocked() {
         File appInfoFile = new File(Constants.SUBSCREEN_APP_INFO_FILE);
         if (!appInfoFile.isFile()) return false;
         try {
@@ -3279,9 +3511,19 @@ public class ModuleMain extends XposedModule {
     }
 
     private boolean syncOfficialPanelAppCardWithSubscreenIndex() {
+        Boolean result = withAppInfoLock(this::syncOfficialPanelAppCardWithSubscreenIndexLocked);
+        return Boolean.TRUE.equals(result);
+    }
+
+    private boolean syncOfficialPanelAppCardWithSubscreenIndexLocked() {
         File appInfoFile = new File(Constants.SUBSCREEN_APP_INFO_FILE);
         boolean enabled = PrefsBridge.shouldEnableAppCard(this);
-        boolean installRequested = PrefsBridge.shouldInstallAppCard(this);
+        // 安装请求带一次性编号：宿主进程写不了远程偏好，没法把请求清掉。处理过的编号记在安装标记里，
+        // 同一个请求只插入一次 —— 用户之后在背屏编辑里删掉卡片，不会被自动加回来。
+        String requestId = PrefsBridge.readAppCardInstallRequestId(this);
+        String handledId = readOfficialPanelCardHandledRequest();
+        boolean installRequested = PrefsBridge.shouldInstallAppCard(this)
+                && (requestId.isEmpty() ? handledId == null : !requestId.equals(handledId));
         JSONObject officialItem = null;
         try {
             JSONArray current = appInfoFile.isFile()
@@ -3330,11 +3572,8 @@ public class ModuleMain extends XposedModule {
             }
             if (!changed) {
                 if (enabled) {
-                    if (found && !installMarked) {
-                        markOfficialPanelCardInstalled();
-                    }
-                    if (found && installRequested) {
-                        PrefsBridge.clearAppCardInstallRequest(this);
+                    if (found && (!installMarked || installRequested)) {
+                        markOfficialPanelCardInstalled(requestId);
                     }
                     grantOfficialPanelCardAccess();
                 } else if (installMarked) {
@@ -3345,10 +3584,7 @@ public class ModuleMain extends XposedModule {
             backupFileOnce(appInfoFile);
             writeJsonArray(appInfoFile, updated);
             if (enabled && updatedContainsOfficialPanelCard(updated)) {
-                markOfficialPanelCardInstalled();
-                if (installRequested) {
-                    PrefsBridge.clearAppCardInstallRequest(this);
-                }
+                markOfficialPanelCardInstalled(requestId);
             } else if (!enabled) {
                 clearOfficialPanelCardInstallMark();
             }
@@ -3384,13 +3620,25 @@ public class ModuleMain extends XposedModule {
         return new File(Constants.MODULE_PANEL_CARD_INSTALL_MARK).isFile();
     }
 
-    private void markOfficialPanelCardInstalled() {
+    /** 安装标记里记的是已处理的安装请求编号；旧版本写的是 "1"。没有标记返回 null。 */
+    @Nullable
+    private String readOfficialPanelCardHandledRequest() {
+        File mark = new File(Constants.MODULE_PANEL_CARD_INSTALL_MARK);
+        if (!mark.isFile()) return null;
+        try {
+            return readUtf8(mark, 256).trim();
+        } catch (Throwable e) {
+            return "";
+        }
+    }
+
+    private void markOfficialPanelCardInstalled(@NonNull String requestId) {
         File mark = new File(Constants.MODULE_PANEL_CARD_INSTALL_MARK);
         File parent = mark.getParentFile();
         try {
             if (parent != null && !parent.exists() && !parent.mkdirs()) return;
             try (FileOutputStream out = new FileOutputStream(mark, false)) {
-                out.write("1".getBytes(StandardCharsets.UTF_8));
+                out.write((requestId.isEmpty() ? "1" : requestId).getBytes(StandardCharsets.UTF_8));
                 out.getFD().sync();
             }
             grantThemeResourceAssetAccess(mark);
@@ -3529,12 +3777,69 @@ public class ModuleMain extends XposedModule {
         }
     }
 
+    @NonNull
+    private static File uniqueTempFile(@NonNull File target) {
+        return new File(target.getAbsolutePath() + ".mibackscreen." + android.os.Process.myPid()
+                + "." + Thread.currentThread().getId() + ".tmp");
+    }
+
+    /**
+     * 在 appInfo.json 的读改写外面加锁：进程内用可重入锁，跨进程用旁边的锁文件。
+     * 锁文件建不出来（目录权限）时只保留进程内互斥，不影响原逻辑。
+     */
+    @Nullable
+    private <T> T withAppInfoLock(@NonNull java.util.concurrent.Callable<T> body) {
+        if (APP_INFO_LOCK.isHeldByCurrentThread()) {
+            try {
+                return body.call();
+            } catch (Throwable e) {
+                log(Log.WARN, Constants.LOG_TAG, "app index update failed", e);
+                return null;
+            }
+        }
+        APP_INFO_LOCK.lock();
+        java.io.RandomAccessFile lockHandle = null;
+        java.nio.channels.FileLock fileLock = null;
+        try {
+            try {
+                File lockFile = new File(Constants.SUBSCREEN_APP_INFO_FILE + ".mibackscreen.lock");
+                lockHandle = new java.io.RandomAccessFile(lockFile, "rw");
+                //noinspection ResultOfMethodCallIgnored
+                lockFile.setReadable(true, false);
+                //noinspection ResultOfMethodCallIgnored
+                lockFile.setWritable(true, false);
+                fileLock = lockHandle.getChannel().lock();
+            } catch (Throwable lockError) {
+                log(Log.DEBUG, Constants.LOG_TAG, "app index file lock unavailable: " + lockError);
+            }
+            return body.call();
+        } catch (Throwable e) {
+            log(Log.WARN, Constants.LOG_TAG, "app index update failed", e);
+            return null;
+        } finally {
+            if (fileLock != null) {
+                try {
+                    fileLock.release();
+                } catch (Throwable ignored) {
+                }
+            }
+            if (lockHandle != null) {
+                try {
+                    lockHandle.close();
+                } catch (Throwable ignored) {
+                }
+            }
+            APP_INFO_LOCK.unlock();
+        }
+    }
+
     private void writeJsonArray(@NonNull File file, @NonNull JSONArray array) throws IOException {
         File parent = file.getParentFile();
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             throw new IOException("Failed to create parent directory: " + parent.getAbsolutePath());
         }
-        File tmp = new File(file.getAbsolutePath() + ".mibackscreen.tmp");
+        // 临时文件名带进程与线程号：背屏中心和主题商店可能同时写同一个索引，固定名字会互相截断。
+        File tmp = uniqueTempFile(file);
         byte[] bytes = array.toString().getBytes(StandardCharsets.UTF_8);
         try (FileOutputStream out = new FileOutputStream(tmp, false)) {
             out.write(bytes);
@@ -3730,13 +4035,19 @@ public class ModuleMain extends XposedModule {
             String target = rightsDir + baseName;
 
             File targetFile = new File(target);
+            File sourceFile = new File(rightPath);
             if (targetFile.exists()) {
+                // 目标可能是之前借用的「最新授权文件」兜底副本；真正的授权文件到了就换回来。
+                if (sourceFile.isFile() && !sourceFile.equals(targetFile)
+                        && (sourceFile.length() != targetFile.length()
+                        || sourceFile.lastModified() > targetFile.lastModified())) {
+                    safeCopy(sourceFile, targetFile);
+                }
                 grantReadAccess(targetFile);
                 callMethod(bean, "setRightPath", target);
                 return;
             }
 
-            File sourceFile = new File(rightPath);
             if (!sourceFile.exists()) {
                 File fallback = findNewestRightsFile(rightsDir, target);
                 if (fallback != null) {
@@ -3880,9 +4191,19 @@ public class ModuleMain extends XposedModule {
             boolean changed = rewriteThemeMagicFileReferences(root, target, stats);
             if (changed) {
                 byte[] bytes = root.toString().getBytes(StandardCharsets.UTF_8);
-                try (FileOutputStream out = new FileOutputStream(editConfig, false)) {
-                    out.write(bytes);
-                    out.getFD().sync();
+                // 先写临时文件再 rename：写到一半被杀、或宿主恰好在读时，原配置不会被截断。
+                File tmp = uniqueTempFile(editConfig);
+                try {
+                    try (FileOutputStream out = new FileOutputStream(tmp, false)) {
+                        out.write(bytes);
+                        out.getFD().sync();
+                    }
+                    if (!tmp.renameTo(editConfig)) {
+                        throw new IOException("Failed to replace " + editConfig.getAbsolutePath());
+                    }
+                } finally {
+                    //noinspection ResultOfMethodCallIgnored
+                    tmp.delete();
                 }
                 grantThemeResourceAssetAccess(editConfig);
                 log(Log.INFO, Constants.LOG_TAG,
@@ -4594,18 +4915,35 @@ public class ModuleMain extends XposedModule {
             @NonNull Class<?>[] parameterTypes,
             @Nullable Object blockedReturn
     ) {
+        Method method = findDeclaredMethod(targetClass, methodName, parameterTypes);
+        // 拦截时按真实返回类型给默认值：基本类型返回 null 会被框架拆箱成异常。
+        Object fallback = method == null ? blockedReturn : defaultReturnFor(method.getReturnType(), blockedReturn);
         hookMethodIfPresent(
-                targetClass,
-                methodName,
-                parameterTypes,
+                method,
                 targetClass.getName() + "#" + methodName,
                 chain -> {
                     if (PrefsBridge.shouldBlockLongPressEdit(this)) {
-                        return blockedReturn;
+                        return fallback;
                     }
                     return chain.proceed();
                 }
         );
+    }
+
+    @Nullable
+    private static Object defaultReturnFor(@NonNull Class<?> type, @Nullable Object preferred) {
+        if (type == void.class || type == Void.class) return null;
+        if (type == boolean.class) return preferred instanceof Boolean ? preferred : Boolean.FALSE;
+        if (type == Boolean.class) return preferred instanceof Boolean ? preferred : null;
+        if (!type.isPrimitive()) return type.isInstance(preferred) ? preferred : null;
+        if (type == int.class) return 0;
+        if (type == long.class) return 0L;
+        if (type == float.class) return 0f;
+        if (type == double.class) return 0d;
+        if (type == short.class) return (short) 0;
+        if (type == byte.class) return (byte) 0;
+        if (type == char.class) return (char) 0;
+        return null;
     }
 
     private boolean hookMethodIfPresent(

@@ -22,11 +22,19 @@ import hook.HyperBackscreen.BuildConfig
 import hook.HyperBackscreen.bridge.PrefsBridge
 import hook.HyperBackscreen.common.Constants
 import io.github.libxposed.api.XposedModule
+import java.lang.ref.WeakReference
 
 object BatteryRingHost {
-    private var ring: BatteryRingView? = null
+    private var ringRef = WeakReference<BatteryRingView>(null)
+    private var ring: BatteryRingView?
+        get() = ringRef.get()
+        set(value) {
+            ringRef = WeakReference(value)
+        }
     private var syncReceiver: BroadcastReceiver? = null
-    private var syncReceiverActivity: Activity? = null
+    /** 只弱引用：Activity 销毁时 release() 没被调用到，也不会被这里一直攥着。 */
+    private var syncReceiverActivityRef = WeakReference<Activity>(null)
+    private val syncReceiverActivity: Activity? get() = syncReceiverActivityRef.get()
 
     @JvmStatic
     fun show(activity: Activity, module: XposedModule) {
@@ -61,6 +69,11 @@ object BatteryRingHost {
 
     @JvmStatic
     fun setEnabled(activity: Activity, enabled: Boolean) {
+        // 面板保存回调可能在 Activity 已经暂停销毁之后才回来；这时再注册接收器、挂 View 就泄漏了。
+        if (activity.isDestroyed || activity.isFinishing) {
+            PrefsBridge.setRemoteBooleanOverride(Constants.KEY_ENABLE_BATTERY_RING, enabled)
+            return
+        }
         ensureSyncReceiver(activity)
         removeRing(activity)
         PrefsBridge.setRemoteBooleanOverride(Constants.KEY_ENABLE_BATTERY_RING, enabled)
@@ -109,7 +122,7 @@ object BatteryRingHost {
         if (syncReceiverActivity === activity) {
             syncReceiver?.let { runCatching { activity.unregisterReceiver(it) } }
             syncReceiver = null
-            syncReceiverActivity = null
+            syncReceiverActivityRef = WeakReference(null)
         }
     }
 
@@ -141,13 +154,16 @@ object BatteryRingHost {
             }
         }
         runCatching {
+            // 只收持有模块签名权限的发送方（模块 App），第三方应用不能借这条广播改长按拦截 / 电量环。
             activity.registerReceiver(
                 receiver,
                 IntentFilter(Constants.ACTION_SYNC_BATTERY_RING),
+                Constants.PERMISSION_SYNC_HOST,
+                null,
                 Context.RECEIVER_EXPORTED,
             )
             syncReceiver = receiver
-            syncReceiverActivity = activity
+            syncReceiverActivityRef = WeakReference(activity)
         }
     }
 

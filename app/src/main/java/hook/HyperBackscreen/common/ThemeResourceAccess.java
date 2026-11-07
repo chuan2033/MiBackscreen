@@ -11,11 +11,24 @@ public final class ThemeResourceAccess {
     }
 
     public static boolean isGrantablePath(String path) {
-        return isThemeMagicPath(path) || isRearScreenRuntimePath(path);
+        return isNormalizedAbsolute(path) && (isThemeMagicPath(path) || isRearScreenRuntimePath(path));
     }
 
     public static boolean isThemeMagicUserPath(String path) {
-        return path != null && path.startsWith(THEME_MAGIC_USERS_DIR);
+        return isNormalizedAbsolute(path) && path.startsWith(THEME_MAGIC_USERS_DIR);
+    }
+
+    /**
+     * 路径来自下载的主题资源 JSON，必须先挡掉 {@code ..} / {@code .} 段和重复斜杠，
+     * 否则 {@code /data/system/theme_magic/users/0/../../..} 这样的路径能绕过前缀判断。
+     */
+    static boolean isNormalizedAbsolute(String path) {
+        if (path == null || !path.startsWith("/") || path.indexOf('\u0000') >= 0) return false;
+        if (path.contains("//")) return false;
+        for (String segment : path.split("/")) {
+            if (segment.equals("..") || segment.equals(".")) return false;
+        }
+        return true;
     }
 
     private static boolean isThemeMagicPath(String path) {

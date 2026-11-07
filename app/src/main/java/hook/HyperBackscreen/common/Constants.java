@@ -10,6 +10,8 @@ public final class Constants {
     public static final String KEY_REMOVE_WALLPAPER_LIMIT = "remove_wallpaper_limit";
     public static final String KEY_ENABLE_APP_CARD = "enable_app_card";
     public static final String KEY_APP_CARD_INSTALL_REQUEST = "app_card_install_request";
+    /** 每次「添加到我的应用卡」生成的一次性编号；宿主按它判断请求是否已处理过。 */
+    public static final String KEY_APP_CARD_INSTALL_REQUEST_ID = "app_card_install_request_id";
     public static final String KEY_ENABLE_18_PRO_FEATURES = "enable_18_pro_features";
     public static final String KEY_ENABLE_BATTERY_RING = "enable_battery_ring";
     // 背屏电量显示颜色覆盖，格式 #AARRGGBB；空字符串表示跟随系统（SystemUI 电池资源色）。
@@ -75,6 +77,8 @@ public final class Constants {
     public static final String KEY_THEME_SETTINGS_SHORTCUT = "theme_settings_shortcut";
     public static final String PANEL_PREFERENCE_AUTHORITY = MODULE_PACKAGE + ".PanelPreferences";
     public static final String PANEL_PREFERENCE_METHOD_SET = "set_panel_preference";
+    /** 模块 → 宿主同步广播的签名级权限：宿主注册接收器时要求发送方持有，挡住第三方应用。 */
+    public static final String PERMISSION_SYNC_HOST = MODULE_PACKAGE + ".permission.SYNC_HOST";
     /** 背屏面板写字符串偏好（息屏档位、换壁纸间隔、电量环样式），键与取值都有白名单。 */
     public static final String PANEL_PREFERENCE_METHOD_SET_STRING = "set_panel_string_preference";
     public static final String ACTION_SYNC_BATTERY_RING =

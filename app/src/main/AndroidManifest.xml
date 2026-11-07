@@ -2,6 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- 模块 → 宿主（背屏中心）同步广播的签名级权限：宿主只接收持有它的发送方（即模块自己）。 -->
+    <permission
+        android:name="${applicationId}.permission.SYNC_HOST"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="${applicationId}.permission.SYNC_HOST" />
+
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"

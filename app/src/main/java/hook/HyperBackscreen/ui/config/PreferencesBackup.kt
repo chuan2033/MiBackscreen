@@ -135,11 +135,16 @@ internal object PreferencesBackup {
         val staging = File(File(context.cacheDir, "config-backup").apply { mkdirs() }, FILE_NAME)
         if (!runCatching { staging.writeText(text) }.isSuccess) return false
         val target = targetFile().absolutePath
-        val command = "cp -f ${shellQuote(staging.absolutePath)} ${shellQuote(target)}; " +
-            "if [ -f ${shellQuote(target)} ]; then chmod 0644 ${shellQuote(target)} 2>/dev/null; " +
-            "echo $WRITE_MARKER; fi"
-        val output = runRoot(command, MAX_READ_BYTES) ?: return false
-        return output.contains(WRITE_MARKER)
+        // 原子替换：先复制到同目录的临时文件，成功后再 mv 覆盖。直接 cp -f 会先截断唯一那份备份，
+        // 中途超时被杀或存储写满时旧备份就坏了；同一分区内的 mv 是 rename，要么全新要么全旧。
+        val temp = "$target.tmp"
+        val command = "if cp -f ${shellQuote(staging.absolutePath)} ${shellQuote(temp)} && " +
+            "[ -s ${shellQuote(temp)} ] && mv -f ${shellQuote(temp)} ${shellQuote(target)}; then " +
+            "chmod 0644 ${shellQuote(target)} 2>/dev/null; echo $WRITE_MARKER; " +
+            "else rm -f ${shellQuote(temp)}; fi"
+        val output = runRoot(command, MAX_READ_BYTES)
+        runCatching { staging.delete() }
+        return output?.contains(WRITE_MARKER) == true
     }
 
     private fun targetFile(): File {

@@ -1,5 +1,8 @@
 package hook.HyperBackscreen.ui.battery
 
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -189,18 +192,23 @@ internal fun BatteryColorPage(
     if (rearScreenSupported) {
         // 背屏当前壁纸的真实截图。壁纸随时可能在背屏上被切换或重新截图，这里按文件指纹轮询，
         // 变化时重新解码；读取失败保留上一张，预览在完全没有截图时回退到纯色面板。
-        LaunchedEffect(Unit) {
+        // 只在页面可见（RESUMED）时轮询：退到后台或被别的页面盖住就停，回来再续；
+        // 指纹放在循环外，恢复轮询时壁纸没变就不会重复解码。
+        val lifecycleOwner = LocalLifecycleOwner.current
+        LaunchedEffect(lifecycleOwner) {
             var lastStamp: String? = null
-            while (true) {
-                val source = withContext(Dispatchers.IO) { RearScreenWallpaper.resolve() }
-                if (source != null && source.stamp != lastStamp) {
-                    val image = withContext(Dispatchers.IO) { RearScreenWallpaper.decode(source) }
-                    if (image != null) {
-                        wallpaper = image
-                        lastStamp = source.stamp
+            lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                while (true) {
+                    val source = withContext(Dispatchers.IO) { RearScreenWallpaper.resolve() }
+                    if (source != null && source.stamp != lastStamp) {
+                        val image = withContext(Dispatchers.IO) { RearScreenWallpaper.decode(source) }
+                        if (image != null) {
+                            wallpaper = image
+                            lastStamp = source.stamp
+                        }
                     }
+                    delay(WallpaperPollIntervalMillis)
                 }
-                delay(WallpaperPollIntervalMillis)
             }
         }
     }

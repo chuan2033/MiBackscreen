@@ -4,6 +4,12 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 internal object RootAccess {
+    /**
+     * 首次检测会弹出 Magisk / KSU 授权框，要给用户留出点「允许」的时间；
+     * 5 秒太短，用户还没点完就超时被判成「未授权」。
+     */
+    private const val GRANT_TIMEOUT_SECONDS = 20L
+
     fun isGranted(startProcess: () -> Process = {
         ProcessBuilder("su", "-c", "test \"\$(id -u)\" = 0")
             .redirectOutput(File("/dev/null"))
@@ -14,7 +20,7 @@ internal object RootAccess {
         return try {
             process = startProcess()
             process.outputStream.close()
-            process.waitFor(5, TimeUnit.SECONDS) && process.exitValue() == 0
+            process.waitFor(GRANT_TIMEOUT_SECONDS, TimeUnit.SECONDS) && process.exitValue() == 0
         } catch (interrupted: InterruptedException) {
             Thread.currentThread().interrupt()
             false

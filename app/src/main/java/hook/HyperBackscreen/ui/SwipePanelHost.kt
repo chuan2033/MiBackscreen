@@ -3,6 +3,7 @@ package hook.HyperBackscreen.ui
 import android.view.VelocityTracker
 import hook.HyperBackscreen.ui.battery.BatteryRingStyle
 import hook.HyperBackscreen.hook.PanelAppCard
+import hook.HyperBackscreen.hook.AutoWallpaperRotationHost
 import android.widget.ImageView
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.HapticFeedbackConstants
@@ -424,21 +425,30 @@ object SwipePanelHost {
 
     /** 按屏幕坐标（rawX / rawY）算速度：面板在拖动时会缩放，局部坐标会跟着变形。 */
     private class RawVelocity {
-        private val tracker = VelocityTracker.obtain()
+        /** 用到时才取，[recycle] 后归还给系统池；下次再用会重新取一个。 */
+        private var tracker: VelocityTracker? = null
 
-        fun clear() = tracker.clear()
+        private fun tracker(): VelocityTracker = tracker ?: VelocityTracker.obtain().also { tracker = it }
+
+        fun clear() = tracker?.clear() ?: Unit
 
         fun add(event: MotionEvent) {
             val copy = MotionEvent.obtain(event)
             copy.setLocation(event.rawX, event.rawY)
-            tracker.addMovement(copy)
+            tracker().addMovement(copy)
             copy.recycle()
         }
 
         /** 向上的速度（px/s），向下或静止时为 0。 */
         fun upwardVelocity(): Float {
-            tracker.computeCurrentVelocity(1000)
-            return max(0f, -tracker.yVelocity)
+            val t = tracker ?: return 0f
+            t.computeCurrentVelocity(1000)
+            return max(0f, -t.yVelocity)
+        }
+
+        fun recycle() {
+            tracker?.recycle()
+            tracker = null
         }
     }
 
@@ -562,6 +572,9 @@ object SwipePanelHost {
                     && dy < -slop && abs(dy) > abs(dx) * 1.15f) {
                     launcherGestureDraggingUp = true
                     card.animate().cancel()
+                    // 接下来的 MOVE / UP 都由这里消费，View 树收不到；先补发一个 CANCEL，
+                    // 让按下的卡片退出 pressed / 缩放状态，也不会在松手时误触发点击。
+                    cancelViewTreeTouch(event)
                     Log.d(TAG, "launcher gesture upward drag captured")
                 }
                 if (launcherGestureDraggingUp) {
@@ -602,10 +615,25 @@ object SwipePanelHost {
                 launcherGestureFromBottom = false
                 launcherGestureDraggingUp = false
                 launcherGestureDismissDistance = 0f
-                return true
+                // CANCEL 必须继续往下分发，子 View 才能复位。
+                return false
             }
         }
-        return launcherGestureFromBottom
+        // 多指等其它事件：拖动中才吞，否则交给宿主照常处理。
+        return launcherGestureDraggingUp
+    }
+
+    private fun cancelViewTreeTouch(source: MotionEvent) {
+        val target: View = hostActivity.get()?.window?.decorView ?: container ?: return
+        val cancel = MotionEvent.obtain(source)
+        cancel.action = MotionEvent.ACTION_CANCEL
+        try {
+            target.dispatchTouchEvent(cancel)
+        } catch (t: Throwable) {
+            Log.w(TAG, "cancel dispatch failed", t)
+        } finally {
+            cancel.recycle()
+        }
     }
 
     private data class BuiltPanel(
@@ -725,6 +753,30 @@ object SwipePanelHost {
     } catch (t: Throwable) {
         Log.w(TAG, "Panel preview render failed", t)
         null
+    }
+
+    /**
+     * 预览图的内容签名：语言 + 每张卡片的标题与当前取值 + 模块版本。
+     * 签名不变说明预览图画出来也一样，应用卡导出时据此跳过重画（那条路径挂在宿主高频调用上）。
+     */
+    @JvmStatic
+    fun previewSignature(context: Context): String = try {
+        val strings = PanelStrings(context, allowModuleResources = true)
+        buildString {
+            append(BuildConfig.VERSION_CODE).append('|')
+            append(context.resources.configuration.locales.toLanguageTags()).append('|')
+            for (spec in panelTileSpecs(strings)) {
+                append(spec.title).append('=')
+                when (spec) {
+                    is ToggleTileSpec -> append(spec.read())
+                    is CycleTileSpec -> append(spec.read())
+                }
+                append(';')
+            }
+        }
+    } catch (t: Throwable) {
+        // 读不出来就当作每次都变，退回到原来的「总是重画」。
+        "error:" + System.nanoTime()
     }
 
     /**
@@ -895,13 +947,9 @@ object SwipePanelHost {
             write = { context, value ->
                 PrefsBridge.requestPanelStringWrite(context, Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES, value)
             },
-            // 定时器在本进程里，直接发同一条广播让它按新间隔重排，和主 App 改设置时走同一路径。
-            onSaved = { activity, value ->
-                activity.sendBroadcast(
-                    Intent(Constants.ACTION_SYNC_AUTO_WALLPAPER)
-                        .setPackage(Constants.TARGET_PACKAGE)
-                        .putExtra(Constants.EXTRA_INTERVAL_MINUTES, AutoWallpaperInterval.fromPref(value).minutes)
-                )
+            // 定时器就在本进程里，直接通知它按新间隔重排（同步广播要求模块签名权限，宿主发不出）。
+            onSaved = { _, value ->
+                AutoWallpaperRotationHost.updateIntervalForAll(AutoWallpaperInterval.fromPref(value).minutes)
             },
         )
         return specs
@@ -963,7 +1011,7 @@ object SwipePanelHost {
                         render()
                         persist(host, spec.title, { spec.write(host, next) }) { saved ->
                             if (saved) {
-                                spec.onSaved(host, next)
+                                if (!host.isDestroyed && !host.isFinishing) spec.onSaved(host, next)
                             } else {
                                 checked = !next
                                 render()
@@ -999,7 +1047,7 @@ object SwipePanelHost {
                         render()
                         persist(host, spec.title, { spec.write(host, next) }) { saved ->
                             if (saved) {
-                                spec.onSaved(host, next)
+                                if (!host.isDestroyed && !host.isFinishing) spec.onSaved(host, next)
                             } else {
                                 current = previous
                                 render()
@@ -1187,6 +1235,14 @@ object SwipePanelHost {
         // 无法自行复位 FLAG_DISALLOW_INTERCEPT（SwipeDismissCard 上滑时置位）。该标记残留会让
         // 宿主手势层持续收不到触摸，表现为关闭面板后要再滑一次长按才恢复。移除前显式清掉。
         panel?.parent?.requestDisallowInterceptTouchEvent(false)
+        // 拖到一半被移除（宿主收起列表、Activity 暂停）时，宿主容器还停在拖动中的缩放 / 透明度上；
+        // 动画对象是宿主自己的 launcher_container，必须在脱离之前复位。
+        if (container === expectedRoot) {
+            panel?.let { card ->
+                val target = launcherAnimationTarget(expectedRoot, card)
+                if (target !== card) resetDismissTarget(target)
+            }
+        }
         clearGestureExclusion(expectedRoot.rootView)
         parent?.removeView(expectedRoot)
         if (container === expectedRoot) clearReferences()
@@ -1207,6 +1263,7 @@ object SwipePanelHost {
         launcherTouchDownX = 0f
         launcherTouchDownY = 0f
         launcherSwipeClickSuppressUntil = 0L
+        launcherVelocity.recycle()
     }
 
     private fun dp(context: Context, value: Int): Float =
@@ -1281,6 +1338,11 @@ object SwipePanelHost {
         private var draggingUp = false
         private var dismissDistance = 0f
         private val velocity = RawVelocity()
+
+        override fun onDetachedFromWindow() {
+            super.onDetachedFromWindow()
+            velocity.recycle()
+        }
 
         override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
             when (event.actionMasked) {

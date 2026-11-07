@@ -47,7 +47,10 @@ internal fun RearScreenTimingPage(
     onBack: () -> Unit
 ) {
     // 关闭时间与开启时间共用同一个弹窗，只换标题与初值。
+    // 显示与内容分开：关闭时只收 show，字段等退场动画结束（onDismissFinished）再清，
+    // 否则退场期间标题变空、内容塌掉，弹窗会先缩一下再消失。
     var editingSchedule by remember { mutableStateOf<ScheduleTimeField?>(null) }
+    var showScheduleDialog by remember { mutableStateOf(false) }
 
     DetailPageScaffold(
         title = stringResource(R.string.rear_screen_timing_title),
@@ -116,12 +119,12 @@ internal fun RearScreenTimingPage(
                     ArrowPreference(
                         title = stringResource(R.string.rear_screen_schedule_start_title),
                         summary = rearScreenSchedule.start,
-                        onClick = { editingSchedule = ScheduleTimeField.START }
+                        onClick = { editingSchedule = ScheduleTimeField.START; showScheduleDialog = true }
                     )
                     ArrowPreference(
                         title = stringResource(R.string.rear_screen_schedule_end_title),
                         summary = rearScreenSchedule.end,
-                        onClick = { editingSchedule = ScheduleTimeField.END }
+                        onClick = { editingSchedule = ScheduleTimeField.END; showScheduleDialog = true }
                     )
                     // 只有两个选项，用分段控件一眼看全，比下拉少点一次。
                     BasicComponent(
@@ -147,14 +150,15 @@ internal fun RearScreenTimingPage(
 
     val editing = editingSchedule
     WindowDialog(
-        show = editing != null,
+        show = showScheduleDialog && editing != null,
         title = when (editing) {
             ScheduleTimeField.START -> stringResource(R.string.rear_screen_schedule_start_title)
             ScheduleTimeField.END -> stringResource(R.string.rear_screen_schedule_end_title)
             null -> ""
         },
         summary = stringResource(R.string.rear_screen_schedule_dialog_summary),
-        onDismissRequest = { editingSchedule = null }
+        onDismissRequest = { showScheduleDialog = false },
+        onDismissFinished = { if (!showScheduleDialog) editingSchedule = null }
     ) {
         editing?.let { field ->
             val initial = when (field) {
@@ -170,9 +174,9 @@ internal fun RearScreenTimingPage(
                             ScheduleTimeField.END -> rearScreenSchedule.withEnd(minutes)
                         }
                     )
-                    editingSchedule = null
+                    showScheduleDialog = false
                 },
-                onCancel = { editingSchedule = null }
+                onCancel = { showScheduleDialog = false }
             )
         }
     }
