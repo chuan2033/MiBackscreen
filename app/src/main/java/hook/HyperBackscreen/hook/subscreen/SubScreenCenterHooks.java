@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.WeakHashMap;
 import java.util.HashSet;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import org.json.JSONArray;
@@ -53,6 +54,7 @@ import hook.HyperBackscreen.bridge.PrefsBridge;
 import hook.HyperBackscreen.common.Constants;
 import hook.HyperBackscreen.panel.SwipePanelHost;
 import hook.HyperBackscreen.batteryring.BatteryRingHost;
+import hook.HyperBackscreen.hook.target.MusicWhitelistShape;
 import hook.HyperBackscreen.hook.target.SubScreenTargets;
 import hook.HyperBackscreen.hook.target.TargetMembers;
 import hook.HyperBackscreen.hook.target.TargetResolver;
@@ -87,6 +89,8 @@ public final class SubScreenCenterHooks {
     private volatile long lastOfficialSyncIndexStamp = Long.MIN_VALUE;
     private volatile long lastSubscreenAppInfoLength = Long.MIN_VALUE;
     private volatile int lastSubscreenAppInfoCount = Integer.MIN_VALUE;
+    /** 用户追加的音乐应用名单（按原始串缓存解析结果）。 */
+    private final MusicWidgetWhitelist musicWidgetWhitelist = new MusicWidgetWhitelist();
     /** insertAppWidget 交易期间置位，供应用卡列表 getter 判断是否需要封顶 size。 */
     private static final ThreadLocal<Boolean> APP_CARD_INSERT_ACTIVE = new ThreadLocal<>();
 
@@ -693,6 +697,48 @@ public final class SubScreenCenterHooks {
                     return result;
                 }
         );
+    }
+
+    /**
+     * 背屏音乐控件白名单：背屏中心只对云控名单里的音乐应用显示背屏音乐卡片
+     * （SmartAssistantManager 日志 "Unsupported music app: %s, removing widget"）。
+     * 判定类的 c(String) 对用户名单里的包返回 true，b() 的返回集合并入用户名单。
+     * 名单为空时两个 Hook 都直接走原逻辑。改名单后要重启背屏中心才会重新拉卡片。
+     */
+    public void installMusicWidgetWhitelistHooks(@NonNull ClassLoader classLoader) {
+        try {
+            Class<?> whitelistClass = TargetResolver.resolveClass(classLoader, SubScreenTargets.MUSIC_WHITELIST);
+            if (whitelistClass == null) {
+                module.log(Log.WARN, Constants.LOG_TAG, "Music widget whitelist target missing");
+                return;
+            }
+            String label = whitelistClass.getName();
+            Method memberCheck = MusicWhitelistShape.memberCheckMethod(whitelistClass);
+            Method whitelist = MusicWhitelistShape.whitelistMethod(whitelistClass);
+            module.hookMethodIfPresent(
+                    memberCheck,
+                    label + "#" + (memberCheck == null ? "?" : memberCheck.getName()) + "(String)",
+                    chain -> {
+                        Object packageName = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                        Set<String> extra = musicWidgetWhitelist.packages(
+                                PrefsBridge.readMusicWidgetWhitelistPackagesForHook(module));
+                        if (MusicWidgetWhitelist.isExtraMusicApp(extra, packageName)) return true;
+                        return chain.proceed();
+                    }
+            );
+            module.hookMethodIfPresent(
+                    whitelist,
+                    label + "#" + (whitelist == null ? "?" : whitelist.getName()) + "()",
+                    chain -> {
+                        Object original = chain.proceed();
+                        Set<String> extra = musicWidgetWhitelist.packages(
+                                PrefsBridge.readMusicWidgetWhitelistPackagesForHook(module));
+                        return MusicWidgetWhitelist.merge(original, extra);
+                    }
+            );
+        } catch (Throwable throwable) {
+            module.log(Log.WARN, Constants.LOG_TAG, "Music widget whitelist hook failed", throwable);
+        }
     }
 
     public void installAutoWallpaperRotationHooks(@NonNull ClassLoader classLoader) {

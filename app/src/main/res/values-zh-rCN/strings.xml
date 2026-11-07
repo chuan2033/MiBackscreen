@@ -290,4 +290,36 @@
     <string name="log_regenerate">重新生成</string>
     <string name="settings_save_failed">设置保存失败</string>
     <string name="settings_saved_pending">已暂存在本机，模块服务连接后自动同步</string>
+    <!-- 按应用禁用背屏双击熄屏 -->
+    <string name="double_tap_sleep_title">双击熄屏黑名单</string>
+    <string name="double_tap_sleep_summary_none">未选择应用，功能未启用</string>
+    <plurals name="double_tap_sleep_summary_count">
+        <item quantity="other">已对 %1$d 个应用生效</item>
+    </plurals>
+    <string name="double_tap_sleep_picker_hint">勾选的应用在前台运行时，背屏亮着时双击不会熄屏。切换到对应应用时生效，全部取消即恢复系统默认。</string>
+    <!-- 背屏音乐控件白名单 -->
+    <string name="music_widget_whitelist_title">背屏音乐控件白名单</string>
+    <string name="music_widget_whitelist_summary_none">未追加应用，使用系统内置名单</string>
+    <plurals name="music_widget_whitelist_summary_count">
+        <item quantity="other">已追加 %1$d 个应用</item>
+    </plurals>
+    <string name="music_widget_whitelist_picker_hint">背屏只为内置名单里的音乐应用显示音乐卡片。勾选的应用在播放时也会显示背屏音乐卡片。</string>
+    <!-- 背屏录屏 -->
+    <string name="rear_record_title">背屏录屏</string>
+    <string name="rear_record_entry_summary">用 root 录制背屏画面并保存到相册</string>
+    <string name="rear_record_hint">需要 root 权限。录制期间每隔几秒唤醒一次背屏保持亮屏；最长录制 3 分钟，到时自动停止。离开本页或切到后台也会停止并保存。</string>
+    <string name="rear_record_state_idle">准备就绪</string>
+    <string name="rear_record_state_recording">录制中</string>
+    <string name="rear_record_idle_summary">视频保存到 Movies/MiBackscreen</string>
+    <string name="rear_record_starting">正在准备…</string>
+    <string name="rear_record_recording">%1$s / %2$s</string>
+    <string name="rear_record_saving">正在保存…</string>
+    <string name="rear_record_start">开始录制</string>
+    <string name="rear_record_stop">停止并保存</string>
+    <string name="rear_record_saved">已保存到相册：%1$s</string>
+    <string name="rear_record_failed_no_root">没有 root 权限，无法录制背屏</string>
+    <string name="rear_record_failed_display">找不到背屏显示器，无法录制</string>
+    <string name="rear_record_failed_start">录屏启动失败</string>
+    <string name="rear_record_failed_empty">没有录到画面，未保存（背屏可能没有亮起）</string>
+    <string name="rear_record_failed_save">保存到相册失败</string>
 </resources>

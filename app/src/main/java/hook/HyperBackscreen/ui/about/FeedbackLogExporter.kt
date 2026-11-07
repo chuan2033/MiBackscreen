@@ -286,6 +286,8 @@ internal object FeedbackLogExporter {
         appendLine("disable_rear_screen_cover=${PrefsBridge.readDisableRearScreenCoverForUi(context)}")
         appendLine("disable_double_tap_wake=${PrefsBridge.readDisableDoubleTapWakeForUi(context)}")
         appendLine("double_tap_wake_disabled_packages=${PrefsBridge.readDoubleTapWakeDisabledPackagesForUi(context)}")
+        appendLine("double_tap_sleep_disabled_packages=${PrefsBridge.readDoubleTapSleepDisabledPackagesForUi(context)}")
+        appendLine("music_widget_whitelist_packages=${PrefsBridge.readMusicWidgetWhitelistPackagesForUi(context)}")
         appendLine("theme_settings_shortcut=${PrefsBridge.readThemeSettingsShortcutForUi(context)}")
         appendLine("floating_nav_bar=${PrefsBridge.readFloatingNavBar(context)}")
         appendLine("liquid_glass=${PrefsBridge.readLiquidGlass(context)}")

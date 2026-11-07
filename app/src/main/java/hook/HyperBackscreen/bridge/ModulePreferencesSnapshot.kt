@@ -42,6 +42,8 @@ internal data class ModulePreferencesSnapshot(
     val rearScreenScheduleEnd: String = PrefsBridge.DEFAULT_REAR_SCREEN_SCHEDULE_END,
     val rearScreenScheduleMode: String = PrefsBridge.DEFAULT_REAR_SCREEN_SCHEDULE_MODE,
     val faceEnrollmentCompat: Boolean = PrefsBridge.DEFAULT_FACE_ENROLLMENT_COMPAT,
+    val doubleTapSleepDisabledPackages: String = PrefsBridge.DEFAULT_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES,
+    val musicWidgetWhitelistPackages: String = PrefsBridge.DEFAULT_MUSIC_WIDGET_WHITELIST_PACKAGES,
 ) {
     companion object {
         private val keys = setOf(
@@ -56,6 +58,8 @@ internal data class ModulePreferencesSnapshot(
             Constants.KEY_THEME_SETTINGS_SHORTCUT,
             Constants.KEY_DISABLE_DOUBLE_TAP_WAKE,
             Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,
+            Constants.KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES,
+            Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES,
             Constants.KEY_BATTERY_COLOR_IDLE,
             Constants.KEY_BATTERY_COLOR_CHARGING,
             Constants.KEY_BATTERY_COLOR_LOW,
@@ -104,6 +108,10 @@ internal data class ModulePreferencesSnapshot(
                 disableDoubleTapWake = boolean(Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, PrefsBridge.DEFAULT_DISABLE_DOUBLE_TAP_WAKE),
                 doubleTapWakeDisabledPackages = value(Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES) as? String
                     ?: PrefsBridge.DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,
+                doubleTapSleepDisabledPackages = value(Constants.KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES) as? String
+                    ?: PrefsBridge.DEFAULT_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES,
+                musicWidgetWhitelistPackages = value(Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES) as? String
+                    ?: PrefsBridge.DEFAULT_MUSIC_WIDGET_WHITELIST_PACKAGES,
                 batteryColorIdle = value(Constants.KEY_BATTERY_COLOR_IDLE) as? String
                     ?: PrefsBridge.DEFAULT_BATTERY_COLOR,
                 batteryColorCharging = value(Constants.KEY_BATTERY_COLOR_CHARGING) as? String

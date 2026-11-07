@@ -76,6 +76,16 @@ public final class Constants {
     public static final String KEY_DISABLE_REAR_SCREEN_COVER = "disable_rear_screen_cover";
     public static final String KEY_DISABLE_DOUBLE_TAP_WAKE = "disable_double_tap_wake";
     public static final String KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES = "double_tap_wake_disabled_packages";
+    /**
+     * 用户追加的背屏音乐控件白名单（包名列表，PackageListCodec 编码）。名单里的应用会被
+     * 背屏中心当成「支持的音乐应用」，播放时显示背屏音乐卡片。空 = 完全沿用宿主内置名单。
+     */
+    public static final String KEY_MUSIC_WIDGET_WHITELIST_PACKAGES = "music_widget_whitelist_packages";
+    /**
+     * 按应用禁用背屏「双击熄屏」（包名列表，PackageListCodec 编码）。与上面的双击唤醒名单
+     * 互不相干：那份管「熄屏时双击不亮」，这份管「亮屏时双击不灭」。
+     */
+    public static final String KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES = "double_tap_sleep_disabled_packages";
     public static final String KEY_THEME_SETTINGS_SHORTCUT = "theme_settings_shortcut";
     public static final String PANEL_PREFERENCE_AUTHORITY = MODULE_PACKAGE + ".PanelPreferences";
     public static final String PANEL_PREFERENCE_METHOD_SET = "set_panel_preference";
@@ -138,6 +148,14 @@ public final class Constants {
     public static final String SYSTEM_POWER_MANAGER_SERVICE_IMPL_FIELD = "mPowerManagerServiceImpl";
     public static final String SYSTEM_ACTIVITY_TASK_MANAGER_FIELD = "mActivityTaskManager";
     public static final String SYSTEM_FOREGROUND_APP_PACKAGE_FIELD = "mForegroundAppPackageName";
+    // 背屏「双击熄屏」手势（miui-services.jar，未混淆）。onFocusedWindowChanged 按新焦点窗口的包名
+    // 决定 mGestureEnable：在内置名单 PACKAGE_WITHOUT_DOUBLE_TAP_GESTURE 里就关掉，否则恢复为 true；
+    // onPointerEvent 只有 mSetGestureEnable && mGestureEnable && mIsFlagEnable 都为真才 goToSleep。
+    public static final String SYSTEM_SUBSCREEN_DOUBLE_TAP_GESTURE_CLASS =
+            "com.miui.server.input.gesture.multifingergesture.gesture.MiuiSubscreenDoubleTapGesture";
+    public static final String SYSTEM_ON_FOCUSED_WINDOW_CHANGED_METHOD = "onFocusedWindowChanged";
+    public static final String SYSTEM_GESTURE_ENABLE_FIELD = "mGestureEnable";
+    public static final String SYSTEM_WINDOW_STATE_OWNING_PACKAGE_METHOD = "getOwningPackage";
     /** ActivityTaskManagerService 的栈顶 ActivityRecord，只读字段、不取锁。 */
     public static final String SYSTEM_TOP_RESUMED_ACTIVITY_FIELD = "mTopResumedActivity";
     /** ActivityRecord 的包名字段。 */
@@ -375,6 +393,9 @@ public final class Constants {
     // 背屏应用卡总闸：18 Pro 包会通过这些目标判断/隐藏应用卡运行时。
     public static final String SUBSCREEN_DEVICE_CONFIG_CLASS = "o2.j";
     public static final String SUBSCREEN_DEVICE_CONFIG_APP_WIDGET_METHOD = "d";
+    // 背屏音乐控件判定类（智能助理卡片用）：静态 c(String)boolean 判断某包是不是音乐应用，
+    // 静态 b()HashSet 给 MAML 音乐控件返回白名单。混淆名随版本变（m2.a / A2.a），由 DexKit 定位。
+    public static final String SUBSCREEN_MUSIC_WHITELIST_CLASS = "m2.a";
     public static final String SUBSCREEN_GUIDE_SETTINGS_CLASS = "k2.s";
     public static final String SUBSCREEN_GUIDE_HIDDEN_METHOD = "h0";
     public static final String SUBSCREEN_APP_CARD_GUIDE_KEY = "app_card";

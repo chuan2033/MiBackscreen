@@ -14,6 +14,16 @@ internal class ClassTarget(
     val packages: List<String>,
     val strings: List<String>,
     val fallbackNames: List<String>,
+    /**
+     * true 时 [strings] 按整个常量精确相等匹配（默认是子串匹配）。像 "music" 这种短词
+     * 用子串匹配会命中一大片类，必须精确匹配。
+     */
+    val exactStrings: Boolean = false,
+    /**
+     * 可选的结构校验：类加载出来后再按方法形状确认一次。字符串命中多个时用它挑出唯一一个；
+     * 缓存 / 兜底名字加载出来的类同样要过这一关，不满足视为失配。
+     */
+    val shape: ((Class<*>) -> Boolean)? = null,
 )
 
 /**
@@ -87,6 +97,21 @@ internal object SubScreenTargets {
         fallbackNames = listOf(Constants.SUBSCREEN_SERVICE_BINDER_CLASS),
     )
 
+    /**
+     * 背屏音乐控件判定类：静态 c(String)boolean 判断包名是否音乐应用（"unified.music" 恒为真，
+     * 其余查云控 Map 里类型是否为 "music"），静态 b()HashSet 收集白名单交给 MAML 音乐控件。
+     * 包名会随版本变（m2 / A2），不限定搜索包；短词 "music" 必须精确匹配，再按方法形状确认。
+     */
+    @JvmField
+    val MUSIC_WHITELIST = ClassTarget(
+        id = "music_whitelist",
+        packages = emptyList(),
+        strings = listOf("unified.music", "music"),
+        fallbackNames = listOf(Constants.SUBSCREEN_MUSIC_WHITELIST_CLASS),
+        exactStrings = true,
+        shape = MusicWhitelistShape::matches,
+    )
+
     val all: List<ClassTarget> = listOf(
         APP_LIST_MANAGER,
         APP_LIST_LISTENER,
@@ -96,5 +121,6 @@ internal object SubScreenTargets {
         GUIDE_SETTINGS,
         LAUNCHER_GESTURE,
         SERVICE_BINDER,
+        MUSIC_WHITELIST,
     )
 }
