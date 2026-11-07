@@ -59,6 +59,10 @@ internal data class LyricLineUpdate(
     val session: LyricSession,
     val text: String?,
     val paused: Boolean = false,
+    /**
+     * 歌名。主动拉取（getLatestLyric）得到的歌词不带发布方包名，只能靠歌名和卡片当前播放的歌对上。
+     */
+    val title: String? = null,
 )
 
 /** 一张音乐卡片此刻的状态，加上背屏桌面 / 息屏这两个全局状态。 */
@@ -69,6 +73,8 @@ internal data class LyricCardState(
     val cardVisible: Boolean,
     val launcherResumed: Boolean,
     val inAod: Boolean,
+    /** 卡片当前播放的歌名（MediaMetadata 的 title），用于核对主动拉取的歌词。 */
+    val cardTitle: String? = null,
 )
 
 internal object RearLyricPolicy {
@@ -81,8 +87,14 @@ internal object RearLyricPolicy {
     fun lyricToShow(line: LyricLineUpdate?, card: LyricCardState): String? {
         if (!card.enabled || line == null) return null
         val text = normalize(line.text) ?: return null
-        val publisher = line.session.publisher?.takeIf { it.isNotBlank() } ?: return null
-        if (publisher != card.cardPackage) return null
+        val publisher = line.session.publisher?.takeIf { it.isNotBlank() }
+        if (publisher != null) {
+            if (publisher != card.cardPackage) return null
+        } else {
+            // 主动拉取的「当前这一句」没有发布方包名：歌名和卡片正在播的歌一致才显示。
+            val title = line.title?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+            if (title != card.cardTitle?.trim()) return null
+        }
         if (!card.cardPlaying || line.paused) return null
         if (!card.cardVisible || !card.launcherResumed || card.inAod) return null
         return text

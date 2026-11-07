@@ -115,6 +115,12 @@ internal object RearLyricHost {
         ensureReceiver(activity)
         synchronized(lock) { launcherResumed = true }
         if (isEnabled()) startSource()
+        // 已订阅但还没拿到歌词（刚订阅、或之前一直在息屏）：补拉一次当前句，不等下一次换句。
+        val needPull = synchronized(lock) { latest == null }
+        if (needPull) {
+            val current = synchronized(lock) { source }
+            if (current?.isRegistered == true) runCatching { BackgroundTasks.execute { current.pullLatest() } }
+        }
         runOnMain { applyAll() }
     }
 
@@ -241,8 +247,13 @@ internal object RearLyricHost {
                 cardVisible = refl.visible(element),
                 launcherResumed = resumed,
                 inAod = aod,
+                cardTitle = refl.title(element),
             )
             val text = RearLyricPolicy.lyricToShow(line, state)
+            if (hook.HyperBackscreen.BuildConfig.DEBUG) {
+                log(Log.INFO, "lyric trace: line='${line?.text}' pub=${line?.session?.publisher} paused=${line?.paused} " +
+                    "state=$state stock=${card.stock} -> show='${text}'")
+            }
             var dirty = false
             synchronized(lock) {
                 if (card.stock) {
@@ -316,6 +327,7 @@ internal object RearLyricHost {
         private val requestUpdate: Method,
         private val setValue: Method,
         private val getString: Method,
+        private val metadataField: Field?,
     ) {
         fun artist(element: Any): String? = artistVar.get(element)?.let { getString.invoke(it) as? String }
 
@@ -340,6 +352,11 @@ internal object RearLyricHost {
             // 根暂停（卡片不在前台）时不写；字段缺失时只看可见性。
             return resumedField?.getBoolean(element) ?: true
         }
+
+        fun title(element: Any): String? = runCatching {
+            (metadataField?.get(element) as? android.media.MediaMetadata)
+                ?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE)
+        }.getOrNull()
 
         fun clientPackage(element: Any): String? {
             val controller = musicController.get(element) ?: return null
@@ -390,6 +407,7 @@ internal object RearLyricHost {
                     requestUpdate = requestUpdate,
                     setValue = setValue,
                     getString = getString,
+                    metadataField = field(music, "mMetadata"),
                 )
             }
         }

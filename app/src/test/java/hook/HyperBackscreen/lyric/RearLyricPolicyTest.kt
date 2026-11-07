@@ -38,6 +38,16 @@ class RearLyricPolicyTest {
         assertNull(RearLyricPolicy.lyricToShow(line.copy(session = LyricSession(null, "song-1")), card))
     }
 
+    @Test fun pulledLineWithoutPublisherMatchesByTitle() {
+        // getLatestLyric 拉回来的当前句没有发布方包名：歌名对得上才显示
+        val pulled = LyricLineUpdate(LyricSession(null, "song-1"), "晴天的风", title = "晴天")
+        assertEquals("晴天的风", RearLyricPolicy.lyricToShow(pulled, card.copy(cardTitle = "晴天")))
+        assertEquals("晴天的风", RearLyricPolicy.lyricToShow(pulled, card.copy(cardTitle = " 晴天 ")))
+        assertNull(RearLyricPolicy.lyricToShow(pulled, card.copy(cardTitle = "七里香")))
+        assertNull(RearLyricPolicy.lyricToShow(pulled, card.copy(cardTitle = null)))
+        assertNull(RearLyricPolicy.lyricToShow(pulled.copy(title = null), card.copy(cardTitle = "晴天")))
+    }
+
     @Test fun normalizeKeepsFirstNonBlankLineTrimmed() {
         assertEquals("原文", RearLyricPolicy.normalize("  原文 \r\n翻译"))
         assertEquals("第二行", RearLyricPolicy.normalize("\n  \r第二行"))

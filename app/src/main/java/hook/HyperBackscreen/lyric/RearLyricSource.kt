@@ -32,6 +32,12 @@ internal class RearLyricSource(
         fun register(): Boolean
         fun unregister()
         val binder: IBinder?
+
+        /**
+         * 主动拉一次「当前这一句」。SuperLyric 只在换句时推送，新订阅方在下一次换句前拿不到当前句，
+         * 背屏中心每次重新订阅后会空等一整句（长句 / 间奏可达数十秒），表现为背屏歌词跟不上主屏。
+         */
+        fun pullLatest() {}
     }
 
     private val lock = Any()
@@ -73,7 +79,14 @@ internal class RearLyricSource(
         }
         watchDeath(created)
         log("SuperLyric receiver registered via $type")
+        runCatching { created.pullLatest() }
         return true
+    }
+
+    /** 已订阅但手上没有歌词时（例如背屏桌面回到前台）补拉一次当前句。 */
+    fun pullLatest() {
+        val current = synchronized(lock) { backend } ?: return
+        runCatching { current.pullLatest() }
     }
 
     fun stop() {
@@ -191,6 +204,17 @@ internal class RearLyricSource(
             if (binder.isBinderAlive) manager.unregisterReceiver(stub)
         }
 
+        override fun pullLatest() {
+            val data = manager.latestLyric ?: return
+            if (data.isStopPayload) return
+            val update = project(null, data)
+            if (hook.HyperBackscreen.BuildConfig.DEBUG) {
+                log("SuperLyric pulled latest: text='${update.text}' title='${update.title}'")
+            }
+            if (update.text.isNullOrBlank()) return
+            onLine(update)
+        }
+
         private fun project(publisher: String?, data: SuperLyricData): LyricLineUpdate {
             val session = LyricSession(publisher, data.lyricId)
             val lines = synchronized(cacheLock) {
@@ -201,7 +225,7 @@ internal class RearLyricSource(
             }
             val index = if (data.hasCurrentLyricIndex()) data.currentLyricIndex else -1
             val line = data.lyric ?: data.getLyricAt(index) ?: lines?.getOrNull(index)
-            return LyricLineUpdate(session, line?.text)
+            return LyricLineUpdate(session, line?.text, title = runCatching { data.title }.getOrNull())
         }
     }
 
