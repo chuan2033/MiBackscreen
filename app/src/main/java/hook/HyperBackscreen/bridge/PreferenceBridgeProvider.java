@@ -58,7 +58,7 @@ public final class PreferenceBridgeProvider extends ContentProvider {
                 // 用规范化后的值，和写进偏好的保持一致；同步排不进队列也不影响这次写入已成功。
                 try {
                     hook.HyperBackscreen.ui.util.RearScreenTimeoutSync.INSTANCE.apply(
-                            hook.HyperBackscreen.ui.RearScreenOffTimeout.Companion.fromPref(normalized));
+                            hook.HyperBackscreen.model.RearScreenOffTimeout.Companion.fromPref(normalized));
                 } catch (RuntimeException error) {
                     Log.w(TAG, "Rear screen timeout sync skipped", error);
                 }

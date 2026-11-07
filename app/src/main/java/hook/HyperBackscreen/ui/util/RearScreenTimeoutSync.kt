@@ -2,7 +2,7 @@ package hook.HyperBackscreen.ui.util
 
 import android.util.Log
 import hook.HyperBackscreen.common.Constants
-import hook.HyperBackscreen.ui.RearScreenOffTimeout
+import hook.HyperBackscreen.model.RearScreenOffTimeout
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException

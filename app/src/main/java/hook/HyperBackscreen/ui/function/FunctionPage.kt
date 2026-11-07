@@ -6,9 +6,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import hook.HyperBackscreen.R
-import hook.HyperBackscreen.ui.FunctionGroupCounts
+
 import hook.HyperBackscreen.common.PackageListCodec
-import hook.HyperBackscreen.ui.battery.BatteryRingGeometry
+import hook.HyperBackscreen.batteryring.BatteryRingGeometry
 import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.components.CollapsibleFunctionGroup
 import top.yukonga.miuix.kmp.preference.ArrowPreference

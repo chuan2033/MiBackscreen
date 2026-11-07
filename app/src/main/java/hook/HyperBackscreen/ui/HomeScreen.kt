@@ -1,5 +1,14 @@
 package hook.HyperBackscreen.ui
 
+import hook.HyperBackscreen.model.AutoWallpaperInterval
+import hook.HyperBackscreen.model.AutoWallpaperOrder
+import hook.HyperBackscreen.model.RearScreenOffTimeout
+import hook.HyperBackscreen.model.RearScreenSchedulePrefs
+import hook.HyperBackscreen.ui.function.FunctionGroupCounts
+import hook.HyperBackscreen.ui.function.countEnabledFunctions
+import hook.HyperBackscreen.ui.function.countFunctionGroups
+import hook.HyperBackscreen.ui.navigation.HomeNavigationPolicy
+import hook.HyperBackscreen.ui.navigation.HomeRoute
 import hook.HyperBackscreen.ui.home.ActivationState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -58,11 +67,11 @@ import hook.HyperBackscreen.ui.about.AppUpdatePage
 import hook.HyperBackscreen.ui.about.DonatePage
 import hook.HyperBackscreen.ui.about.LicensePage
 import hook.HyperBackscreen.ui.about.VersionHistoryPage
-import hook.HyperBackscreen.ui.battery.BatteryRingGeometry
+import hook.HyperBackscreen.batteryring.BatteryRingGeometry
 import hook.HyperBackscreen.ui.battery.BatteryColorPage
 import hook.HyperBackscreen.ui.battery.BatteryColorSlot
-import hook.HyperBackscreen.ui.battery.BatteryPercentPosition
-import hook.HyperBackscreen.ui.battery.BatteryRingLayout
+import hook.HyperBackscreen.batteryring.BatteryPercentPosition
+import hook.HyperBackscreen.batteryring.BatteryRingLayout
 import hook.HyperBackscreen.ui.components.BlurredBar
 import hook.HyperBackscreen.ui.components.FloatingBottomBar
 import hook.HyperBackscreen.ui.components.FunctionCountBadge

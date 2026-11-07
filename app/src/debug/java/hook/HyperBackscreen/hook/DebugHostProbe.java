@@ -22,7 +22,7 @@ import java.util.function.Consumer;
 import hook.HyperBackscreen.common.Constants;
 import hook.HyperBackscreen.common.BackgroundTasks;
 import hook.HyperBackscreen.bridge.PrefsBridge;
-import hook.HyperBackscreen.ui.SwipePanelHost;
+import hook.HyperBackscreen.panel.SwipePanelHost;
 import io.github.libxposed.api.XposedModule;
 
 /** Debug builds only. Shell/root DUMP permission required; fixtures use reserved notification IDs. */
@@ -67,7 +67,7 @@ public final class DebugHostProbe {
                     } else if ("cards".equals(command)) cards(loader);
                     else if ("prefs".equals(command)) BackgroundTasks.execute(() -> preferences(ctx));
                     else if ("battery-ring".equals(command)) {
-                        boolean shown = hook.HyperBackscreen.ui.battery.BatteryRingHost.previewForDebug(
+                        boolean shown = hook.HyperBackscreen.batteryring.BatteryRingHost.previewForDebug(
                                 intent.getIntExtra("percent", -1), intent.getBooleanExtra("charging", false));
                         Log.i(Constants.LOG_TAG, "PROBE battery ring available=" + shown);
                     }

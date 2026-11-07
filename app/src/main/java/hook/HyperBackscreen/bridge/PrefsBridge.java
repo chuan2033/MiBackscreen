@@ -1351,22 +1351,22 @@ public final class PrefsBridge {
         switch (key) {
             case Constants.KEY_REAR_SCREEN_OFF_TIMEOUT: {
                 String normalized = normalizeRearScreenOffTimeout(value);
-                for (hook.HyperBackscreen.ui.RearScreenOffTimeout entry
-                        : hook.HyperBackscreen.ui.RearScreenOffTimeout.getEntries()) {
+                for (hook.HyperBackscreen.model.RearScreenOffTimeout entry
+                        : hook.HyperBackscreen.model.RearScreenOffTimeout.getEntries()) {
                     if (entry.getPrefValue().equals(normalized)) return normalized;
                 }
                 return null;
             }
             case Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES: {
-                for (hook.HyperBackscreen.ui.AutoWallpaperInterval entry
-                        : hook.HyperBackscreen.ui.AutoWallpaperInterval.getEntries()) {
+                for (hook.HyperBackscreen.model.AutoWallpaperInterval entry
+                        : hook.HyperBackscreen.model.AutoWallpaperInterval.getEntries()) {
                     if (entry.getPrefValue().equals(value)) return value;
                 }
                 return null;
             }
             case Constants.KEY_BATTERY_RING_STYLE: {
-                for (hook.HyperBackscreen.ui.battery.BatteryRingStyle entry
-                        : hook.HyperBackscreen.ui.battery.BatteryRingStyle.getEntries()) {
+                for (hook.HyperBackscreen.batteryring.BatteryRingStyle entry
+                        : hook.HyperBackscreen.batteryring.BatteryRingStyle.getEntries()) {
                     if (entry.getPrefValue().equals(value)) return value;
                 }
                 return null;
