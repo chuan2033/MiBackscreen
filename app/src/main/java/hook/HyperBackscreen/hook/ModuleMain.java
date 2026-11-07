@@ -3784,8 +3784,49 @@ public class ModuleMain extends XposedModule {
     }
 
     /**
-     * 在 appInfo.json 的读改写外面加锁：进程内用可重入锁，跨进程用旁边的锁文件。
-     * 锁文件建不出来（目录权限）时只保留进程内互斥，不影响原逻辑。
+     * appInfo.json 的跨进程锁目录。和附加资源模块（ksu-module 的 appinfo_txn.sh）共用同一个协议：
+     * <ul>
+     *   <li>加锁 = {@code mkdir} 这个目录（原子操作，成功即持有）；解锁 = 删掉它；</li>
+     *   <li>目录已存在且修改时间超过 {@link #APP_INFO_LOCK_STALE_MS} 视为持有者已死，删掉重抢。</li>
+     * </ul>
+     * 不用 FileChannel 锁：那是 fcntl 锁，shell 侧的 busybox 拿不到同一把；而且它会无限期阻塞，
+     * 这里的调用方可能就在宿主主线程上。
+     */
+    static final String APP_INFO_LOCK_DIR = Constants.SUBSCREEN_APP_INFO_FILE + ".mibackscreen.lockd";
+    private static final long APP_INFO_LOCK_STALE_MS = 30_000L;
+    /** 宿主线程上最多等这么久；拿不到就退回只有进程内互斥（与改动前的最坏情况相同）。 */
+    private static final long APP_INFO_LOCK_WAIT_MS = 2_000L;
+
+    private static boolean acquireAppInfoDirLock(@NonNull File lockDir) {
+        long deadline = SystemClock.uptimeMillis() + APP_INFO_LOCK_WAIT_MS;
+        while (true) {
+            if (lockDir.mkdir()) return true;
+            long modified = lockDir.lastModified();
+            if (modified > 0 && System.currentTimeMillis() - modified > APP_INFO_LOCK_STALE_MS) {
+                deleteLockDir(lockDir);
+                continue;
+            }
+            if (!lockDir.getParentFile().isDirectory()) return false;
+            if (SystemClock.uptimeMillis() >= deadline) return false;
+            SystemClock.sleep(50L);
+        }
+    }
+
+    private static void deleteLockDir(@NonNull File lockDir) {
+        File[] children = lockDir.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                //noinspection ResultOfMethodCallIgnored
+                child.delete();
+            }
+        }
+        //noinspection ResultOfMethodCallIgnored
+        lockDir.delete();
+    }
+
+    /**
+     * 在 appInfo.json 的读改写外面加锁：进程内用可重入锁，跨进程用 {@link #APP_INFO_LOCK_DIR}。
+     * 锁目录建不出来（目录权限）或等超时，只保留进程内互斥，不影响原逻辑。
      */
     @Nullable
     private <T> T withAppInfoLock(@NonNull java.util.concurrent.Callable<T> body) {
@@ -3798,37 +3839,23 @@ public class ModuleMain extends XposedModule {
             }
         }
         APP_INFO_LOCK.lock();
-        java.io.RandomAccessFile lockHandle = null;
-        java.nio.channels.FileLock fileLock = null;
+        File lockDir = new File(APP_INFO_LOCK_DIR);
+        boolean crossProcess = false;
         try {
             try {
-                File lockFile = new File(Constants.SUBSCREEN_APP_INFO_FILE + ".mibackscreen.lock");
-                lockHandle = new java.io.RandomAccessFile(lockFile, "rw");
-                //noinspection ResultOfMethodCallIgnored
-                lockFile.setReadable(true, false);
-                //noinspection ResultOfMethodCallIgnored
-                lockFile.setWritable(true, false);
-                fileLock = lockHandle.getChannel().lock();
+                crossProcess = acquireAppInfoDirLock(lockDir);
+                if (!crossProcess) {
+                    log(Log.DEBUG, Constants.LOG_TAG, "app index cross-process lock unavailable, continuing");
+                }
             } catch (Throwable lockError) {
-                log(Log.DEBUG, Constants.LOG_TAG, "app index file lock unavailable: " + lockError);
+                log(Log.DEBUG, Constants.LOG_TAG, "app index cross-process lock failed: " + lockError);
             }
             return body.call();
         } catch (Throwable e) {
             log(Log.WARN, Constants.LOG_TAG, "app index update failed", e);
             return null;
         } finally {
-            if (fileLock != null) {
-                try {
-                    fileLock.release();
-                } catch (Throwable ignored) {
-                }
-            }
-            if (lockHandle != null) {
-                try {
-                    lockHandle.close();
-                } catch (Throwable ignored) {
-                }
-            }
+            if (crossProcess) deleteLockDir(lockDir);
             APP_INFO_LOCK.unlock();
         }
     }
