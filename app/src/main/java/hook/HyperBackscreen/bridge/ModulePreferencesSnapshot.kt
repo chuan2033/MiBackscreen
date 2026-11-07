@@ -48,6 +48,7 @@ internal data class ModulePreferencesSnapshot(
     val rearVideoUnlockLimits: Boolean = PrefsBridge.DEFAULT_REAR_VIDEO_UNLOCK_LIMITS,
     val rearVideoKeepAudio: Boolean = PrefsBridge.DEFAULT_REAR_VIDEO_KEEP_AUDIO,
     val enableRearLyric: Boolean = PrefsBridge.DEFAULT_ENABLE_REAR_LYRIC,
+    val rearLyricInAod: Boolean = PrefsBridge.DEFAULT_REAR_LYRIC_IN_AOD,
 ) {
     companion object {
         private val keys = setOf(
@@ -93,6 +94,7 @@ internal data class ModulePreferencesSnapshot(
             Constants.KEY_REAR_VIDEO_UNLOCK_LIMITS,
             Constants.KEY_REAR_VIDEO_KEEP_AUDIO,
             Constants.KEY_ENABLE_REAR_LYRIC,
+            Constants.KEY_REAR_LYRIC_IN_AOD,
         )
 
         /** One in-memory snapshot, with no Binder call or cache write during observation. */
@@ -188,6 +190,7 @@ internal data class ModulePreferencesSnapshot(
                 ),
                 rearVideoKeepAudio = boolean(Constants.KEY_REAR_VIDEO_KEEP_AUDIO, PrefsBridge.DEFAULT_REAR_VIDEO_KEEP_AUDIO),
                 enableRearLyric = boolean(Constants.KEY_ENABLE_REAR_LYRIC, PrefsBridge.DEFAULT_ENABLE_REAR_LYRIC),
+                rearLyricInAod = boolean(Constants.KEY_REAR_LYRIC_IN_AOD, PrefsBridge.DEFAULT_REAR_LYRIC_IN_AOD),
             )
         }
 

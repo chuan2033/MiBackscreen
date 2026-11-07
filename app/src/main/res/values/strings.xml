@@ -340,8 +340,10 @@
     <string name="rear_video_keep_audio_title">Keep video wallpaper sound</string>
     <string name="rear_video_keep_audio_summary">Newly set rear videos keep their audio track and play at media volume without interrupting music. Videos set earlier must be picked again to have sound</string>
     <string name="rear_lyric_title">Rear screen live lyrics</string>
-    <string name="rear_lyric_summary">While music plays, the artist line on the rear music card shows the current lyric. Requires SuperLyric, enabled in LSPosed for System Framework and your music apps, then a reboot</string>
+    <string name="rear_lyric_summary">While music plays, the title line on the rear music card shows the current lyric and the artist line shows “Title - Artist”. Requires SuperLyric, enabled in LSPosed for System Framework and your music apps, then a reboot</string>
     <string name="rear_lyric_status_label" translatable="false">SuperLyric</string>
+    <string name="rear_lyric_in_aod_title">Show lyrics on rear AOD</string>
+    <string name="rear_lyric_in_aod_summary">Keep showing the current lyric while the rear screen is in always-on display. The rear screen refreshes once per lyric line, using slightly more battery</string>
     <string name="rear_lyric_status_checking">Checking…</string>
     <string name="rear_lyric_status_v4">Connected · 4.x</string>
     <string name="rear_lyric_status_legacy">Connected · 3.x</string>

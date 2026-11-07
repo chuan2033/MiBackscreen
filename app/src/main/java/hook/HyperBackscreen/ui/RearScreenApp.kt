@@ -392,7 +392,10 @@ internal fun RearScreenApp() {
         }
         // 歌词开关不重启背屏中心，和手动切换一样只发同步广播。
         if (after.enableRearLyric != before.enableRearLyric) {
-            sendRearLyricSync(context, after.enableRearLyric)
+            sendRearLyricSync(context, Constants.KEY_ENABLE_REAR_LYRIC, after.enableRearLyric)
+        }
+        if (after.rearLyricInAod != before.rearLyricInAod) {
+            sendRearLyricSync(context, Constants.KEY_REAR_LYRIC_IN_AOD, after.rearLyricInAod)
         }
         val scopes = linkedSetOf<String>()
         if (after.enable18ProFeatures != before.enable18ProFeatures) {
@@ -803,7 +806,22 @@ internal fun RearScreenApp() {
                                 val saved = withContext(Dispatchers.IO) {
                                     PrefsBridge.writeEnableRearLyricFromUi(context, newValue)
                                 }
-                                if (saved) sendRearLyricSync(context, newValue)
+                                if (saved) sendRearLyricSync(context, Constants.KEY_ENABLE_REAR_LYRIC, newValue)
+                                else feedback.show(savedPending)
+                            } finally {
+                                savingRearLyric = false
+                            }
+                        }
+                    }
+                    RearMediaSwitch.REAR_LYRIC_IN_AOD -> if (!savingRearLyric) {
+                        savingRearLyric = true
+                        rearMedia = rearMedia.copy(rearLyricInAod = newValue)
+                        scope.launch {
+                            try {
+                                val saved = withContext(Dispatchers.IO) {
+                                    PrefsBridge.writeRearLyricInAodFromUi(context, newValue)
+                                }
+                                if (saved) sendRearLyricSync(context, Constants.KEY_REAR_LYRIC_IN_AOD, newValue)
                                 else feedback.show(savedPending)
                             } finally {
                                 savingRearLyric = false
@@ -921,11 +939,12 @@ private fun sendBatteryRingSync(context: Context, key: String, value: Boolean) {
     )
 }
 
-/** 通知背屏中心歌词开关已变；接收端要求发送方持有模块签名权限。 */
-private fun sendRearLyricSync(context: Context, enabled: Boolean) {
+/** 通知背屏中心歌词相关开关已变（总开关 / AOD 显示）；接收端要求发送方持有模块签名权限。 */
+private fun sendRearLyricSync(context: Context, key: String, enabled: Boolean) {
     context.sendBroadcast(
         Intent(Constants.ACTION_SYNC_REAR_LYRIC)
             .setPackage(Constants.TARGET_PACKAGE)
+            .putExtra(Constants.EXTRA_PREFERENCE_KEY, key)
             .putExtra(Constants.EXTRA_PREFERENCE_VALUE, enabled)
     )
 }
@@ -935,6 +954,7 @@ private fun rearMediaOf(values: ModulePreferencesSnapshot) = RearMediaSwitches(
     videoUnlockLimits = values.rearVideoUnlockLimits,
     videoKeepAudio = values.rearVideoKeepAudio,
     rearLyric = values.enableRearLyric,
+    rearLyricInAod = values.rearLyricInAod,
 )
 
 private fun sendAutoWallpaperSync(context: Context, interval: AutoWallpaperInterval) {
