@@ -1,0 +1,75 @@
+[
+  {
+    "resId": "1c922ed0-d694-508e-8de9-2d8b2ebf59a5",
+    "appName": "精选台历",
+    "mtzPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/01_weather/calendar/rearscreen",
+    "appIconPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/01_weather/calendar/app/app_icon.png",
+    "previewLightPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/01_weather/calendar/preview/preview_rearscreen_0.png",
+    "previewDarkPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/01_weather/calendar/preview/preview_rearscreen_dark_0.png",
+    "bindApp": "com.android.calendar",
+    "isGame": false,
+    "isPreset": true,
+    "appCardType": 1
+  },
+  {
+    "resId": "36b61506-b02b-5f68-aaa9-7977f6804281",
+    "appName": "临近日程",
+    "mtzPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/01_weather/schedule/rearscreen",
+    "appIconPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/01_weather/schedule/app/app_icon.png",
+    "previewLightPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/01_weather/schedule/preview/preview_rearscreen_0.png",
+    "previewDarkPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/01_weather/schedule/preview/preview_rearscreen_dark_0.png",
+    "bindApp": "com.android.calendar",
+    "isGame": false,
+    "isPreset": true,
+    "appCardType": 1
+  },
+  {
+    "resId": "44630e40-115e-590f-b81e-a72cae9efab4",
+    "appName": "隐身模式",
+    "mtzPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/02_utility/privacy/rearscreen",
+    "appIconPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/02_utility/privacy/app/app_icon.png",
+    "previewLightPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/02_utility/privacy/preview/preview_rearscreen_0.png",
+    "previewDarkPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/02_utility/privacy/preview/preview_rearscreen_dark_0.png",
+    "bindApp": "com.miui.securitycenter",
+    "isGame": false,
+    "isPreset": true,
+    "appCardType": 1
+  },
+  {
+    "resId": "04d7ca77-4e02-57b0-b9c3-21d12d3f0620",
+    "appName": "米家摄像机",
+    "mtzPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/03_smart/home/rearscreen",
+    "appIconPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/03_smart/home/app/app_icon.png",
+    "previewLightPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/03_smart/home/preview/preview_rearscreen_0.png",
+    "previewDarkPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/03_smart/home/preview/preview_rearscreen_dark_0.png",
+    "bindApp": "com.xiaomi.smarthome",
+    "isGame": false,
+    "isPreset": true,
+    "appCardType": 1
+  },
+  {
+    "resId": "62d7c4e8-91a3-5b2f-8c0d-4e1f2a3b4c5d",
+    "appName": "小米汽车",
+    "mtzPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/03_smart/car/rearscreen",
+    "appIconPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/03_smart/car/app/app_icon.png",
+    "previewLightPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/03_smart/car/preview/preview_rearscreen_0.png",
+    "previewDarkPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/03_smart/car/preview/preview_rearscreen_dark_0.png",
+    "bindApp": "com.mi.car.mobile",
+    "isGame": false,
+    "isPreset": true,
+    "appCardType": 1
+  },
+  {
+    "resId": "f05e6e29-5eeb-573c-bf31-f1da128f2b5f",
+    "appName": "股票行情",
+    "mtzPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/04_lift/stock/rearscreen",
+    "appIconPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/04_lift/stock/app/app_icon.png",
+    "previewLightPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/04_lift/stock/preview/preview_rearscreen_0.png",
+    "previewDarkPath": "/data/system/theme_magic/users/0/mibackscreen_18/appcard/normal/04_lift/stock/preview/preview_rearscreen_dark_0.png",
+    "bindApp": "com.miui.personalassistant",
+    "isGame": false,
+    "isPreset": true,
+    "appCardType": 1
+  }
+]
+
