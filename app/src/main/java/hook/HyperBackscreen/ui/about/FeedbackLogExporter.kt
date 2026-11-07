@@ -14,7 +14,7 @@ import hook.HyperBackscreen.R
 import hook.HyperBackscreen.bridge.DiagnosticLogStore
 import hook.HyperBackscreen.bridge.PrefsBridge
 import hook.HyperBackscreen.common.Constants
-import hook.HyperBackscreen.ui.LauncherIconController
+import hook.HyperBackscreen.ui.util.LauncherIconController
 import hook.HyperBackscreen.ui.util.RearDisplayCompatibility
 import hook.HyperBackscreen.ui.util.currentDeviceName
 import hook.HyperBackscreen.ui.util.currentHyperOSVersion

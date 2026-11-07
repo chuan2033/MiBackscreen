@@ -1,5 +1,11 @@
 package hook.HyperBackscreen.ui
 
+import hook.HyperBackscreen.model.AutoWallpaperInterval
+import hook.HyperBackscreen.model.AutoWallpaperOrder
+import hook.HyperBackscreen.model.RearScreenOffTimeout
+import hook.HyperBackscreen.model.RearScreenSchedulePrefs
+import hook.HyperBackscreen.ui.util.LauncherIconController
+import hook.HyperBackscreen.ui.util.scopeActionCommands
 import hook.HyperBackscreen.ui.home.ActivationState
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
@@ -47,8 +53,8 @@ import hook.HyperBackscreen.ui.updater.UpdateChecker
 import hook.HyperBackscreen.ui.updater.UpdateDialog
 import hook.HyperBackscreen.ui.updater.UpdateInfo
 import hook.HyperBackscreen.ui.battery.BatteryColorSlot
-import hook.HyperBackscreen.ui.battery.BatteryPercentPosition
-import hook.HyperBackscreen.ui.battery.BatteryRingLayout
+import hook.HyperBackscreen.batteryring.BatteryPercentPosition
+import hook.HyperBackscreen.batteryring.BatteryRingLayout
 import hook.HyperBackscreen.ui.config.PreferencesBackup
 import hook.HyperBackscreen.ui.util.AppLanguage
 import hook.HyperBackscreen.ui.util.RearDisplayCompatibility

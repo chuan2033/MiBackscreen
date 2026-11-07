@@ -21,8 +21,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import hook.HyperBackscreen.common.Constants;
-import hook.HyperBackscreen.ui.SwipePanelHost;
-
+import hook.HyperBackscreen.panel.SwipePanelHost;
 /**
  * 背屏上滑面板里的 MiBackscreen 官方应用卡。
  *

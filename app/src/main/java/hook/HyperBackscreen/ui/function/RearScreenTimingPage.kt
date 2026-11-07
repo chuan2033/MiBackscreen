@@ -13,11 +13,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
-import hook.HyperBackscreen.ui.AutoWallpaperInterval
-import hook.HyperBackscreen.ui.AutoWallpaperOrder
-import hook.HyperBackscreen.ui.RearScreenOffTimeout
-import hook.HyperBackscreen.ui.RearScreenScheduleMode
-import hook.HyperBackscreen.ui.RearScreenSchedulePrefs
+import hook.HyperBackscreen.model.AutoWallpaperInterval
+import hook.HyperBackscreen.model.AutoWallpaperOrder
+import hook.HyperBackscreen.model.RearScreenOffTimeout
+import hook.HyperBackscreen.model.RearScreenScheduleMode
+import hook.HyperBackscreen.model.RearScreenSchedulePrefs
 import hook.HyperBackscreen.ui.components.AnimatedPreferenceVisibility
 import hook.HyperBackscreen.ui.components.CardBlock
 import top.yukonga.miuix.kmp.preference.ArrowPreference

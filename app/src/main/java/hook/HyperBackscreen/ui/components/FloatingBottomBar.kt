@@ -98,7 +98,7 @@ import top.yukonga.miuix.kmp.utils.Platform
 import top.yukonga.miuix.kmp.utils.platform
 import androidx.compose.ui.graphics.luminance
 import hook.HyperBackscreen.ui.liquid.*
-import hook.HyperBackscreen.ui.HomeNavigationPolicy
+import hook.HyperBackscreen.ui.navigation.HomeNavigationPolicy
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
