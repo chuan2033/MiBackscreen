@@ -17,6 +17,9 @@ internal fun countEnabledFunctions(
     keepRearScreenOnInGame: Boolean = false,
     // 非校准机型不显示背屏电量显示开关，计数也要跟着排除。
     batteryRingSupported: Boolean = true,
+    // 两份新名单：非空即视为启用。
+    doubleTapSleepFilterActive: Boolean = false,
+    musicWidgetWhitelistActive: Boolean = false,
 ): Int = listOf(
     disableLongPress,
     removeWallpaperLimit,
@@ -30,6 +33,8 @@ internal fun countEnabledFunctions(
     rearScreenOffTimeoutActive,
     faceEnrollmentCompat,
     keepRearScreenOnInGame,
+    doubleTapSleepFilterActive,
+    musicWidgetWhitelistActive,
 ).count { it }
 
 /**
@@ -55,8 +60,10 @@ internal fun countFunctionGroups(
     fixRearScreenApply: Boolean,
     faceEnrollmentCompat: Boolean,
     removeWallpaperLimit: Boolean,
+    doubleTapSleepFilterActive: Boolean = false,
+    musicWidgetWhitelistActive: Boolean = false,
 ): FunctionGroupCounts = FunctionGroupCounts(
-    system = listOf(disableRearScreenCover, disableDoubleTapWake).count { it },
+    system = listOf(disableRearScreenCover, disableDoubleTapWake, doubleTapSleepFilterActive).count { it },
     subscreen = listOf(
         enableBatteryRing && batteryRingSupported,
         disableLongPress,
@@ -64,6 +71,7 @@ internal fun countFunctionGroups(
         autoWallpaperEnabled,
         rearScreenOffTimeoutActive,
         keepRearScreenOnInGame,
+        musicWidgetWhitelistActive,
     ).count { it },
     theme = listOf(fixRearScreenApply, faceEnrollmentCompat, removeWallpaperLimit).count { it },
 )

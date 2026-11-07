@@ -83,7 +83,10 @@ private enum class AppFilter(@get:StringRes val labelRes: Int) {
 internal fun AppPickerPage(
     selectedPackages: String,
     onSelectedPackagesChange: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    // 同一个选择页给多份名单复用：标题与页首说明按名单区分，默认是「双击亮屏黑名单」。
+    @StringRes titleRes: Int = R.string.app_picker_title,
+    @StringRes hintRes: Int = R.string.app_picker_double_tap_hint,
 ) {
     val context = LocalContext.current
 
@@ -148,7 +151,7 @@ internal fun AppPickerPage(
     }
 
     DetailPageScaffold(
-        title = stringResource(R.string.app_picker_title),
+        title = stringResource(titleRes),
         onBack = onBack,
         // 筛选收进右上角「更多」菜单：列表顶部不再常驻一排分段按钮。
         actions = {
@@ -189,7 +192,7 @@ internal fun AppPickerPage(
         // 「名单非空即启用、清空即关闭」是隐式规则，在入口页把它说清楚。
         item(key = "picker_hint") {
             Text(
-                text = stringResource(R.string.app_picker_double_tap_hint),
+                text = stringResource(hintRes),
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                 style = MiuixTheme.textStyles.body2,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary

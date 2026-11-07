@@ -83,6 +83,8 @@ import hook.HyperBackscreen.ui.animation.springToPage
 import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.NavigationBarDefaults
 import hook.HyperBackscreen.ui.config.AppPickerPage
+import hook.HyperBackscreen.ui.recorder.RearScreenRecordPage
+import hook.HyperBackscreen.common.PackageListCodec
 import hook.HyperBackscreen.ui.config.ConfigPage
 import hook.HyperBackscreen.ui.function.FunctionPage
 import hook.HyperBackscreen.ui.function.RearScreenTimingPage
@@ -260,6 +262,8 @@ internal fun HomeScreen(
     disableRearScreenCover: Boolean,
     disableDoubleTapWake: Boolean,
     doubleTapWakeDisabledPackages: String,
+    doubleTapSleepDisabledPackages: String,
+    musicWidgetWhitelistPackages: String,
     launcherIconHidden: Boolean,
     moduleActivated: ActivationState,
     onDisableLongPressChange: (Boolean) -> Unit,
@@ -281,6 +285,10 @@ internal fun HomeScreen(
     onEnableAppCardChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onDoubleTapWakeDisabledPackagesChange: (String) -> Unit,
+    onDoubleTapSleepDisabledPackagesChange: (String) -> Unit,
+    onMusicWidgetWhitelistPackagesChange: (String) -> Unit,
+    /** 音乐白名单选择页出栈时回调：名单改过就重启背屏中心让它生效。 */
+    onMusicWidgetWhitelistPickerClosed: () -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
     onRestartScopes: (List<String>) -> Unit,
     themeMode: ThemeMode,
@@ -298,6 +306,12 @@ internal fun HomeScreen(
     onBatteryPercentPositionChange: (BatteryPercentPosition) -> Unit,
     onBatteryLayoutChange: (BatteryRingLayout) -> Unit
 ) {
+    val doubleTapSleepFilterActive = remember(doubleTapSleepDisabledPackages) {
+        PackageListCodec.parse(doubleTapSleepDisabledPackages).isNotEmpty()
+    }
+    val musicWidgetWhitelistActive = remember(musicWidgetWhitelistPackages) {
+        PackageListCodec.parse(musicWidgetWhitelistPackages).isNotEmpty()
+    }
     val enabledFunctionCount = countEnabledFunctions(
         enableBatteryRing = enableBatteryRing,
         batteryRingSupported = BatteryRingGeometry.isCalibratedDevice(Build.DEVICE),
@@ -313,6 +327,8 @@ internal fun HomeScreen(
         faceEnrollmentCompat = faceEnrollmentCompat,
         disableRearScreenCover = disableRearScreenCover,
         disableDoubleTapWake = disableDoubleTapWake,
+        doubleTapSleepFilterActive = doubleTapSleepFilterActive,
+        musicWidgetWhitelistActive = musicWidgetWhitelistActive,
     )
     val functionGroupCounts = countFunctionGroups(
         disableRearScreenCover = disableRearScreenCover,
@@ -328,6 +344,8 @@ internal fun HomeScreen(
         fixRearScreenApply = fixRearScreenApply,
         faceEnrollmentCompat = faceEnrollmentCompat,
         removeWallpaperLimit = removeWallpaperLimit,
+        doubleTapSleepFilterActive = doubleTapSleepFilterActive,
+        musicWidgetWhitelistActive = musicWidgetWhitelistActive,
     )
     var selected by rememberSaveable { mutableStateOf(HomeNavigationPolicy.Tab.HOME) }
     val backStack = rememberNavBackStack<HomeRoute>(HomeRoute.Main)
@@ -336,6 +354,13 @@ internal fun HomeScreen(
     val aboutListState = rememberLazyListState()
     val focusManager = LocalFocusManager.current
 
+    // 音乐白名单页出栈（返回键 / 手势 / 页内返回都算）时通知上层：选择期间不逐项重启背屏中心，
+    // 离开页面后统一重启一次。
+    val musicPickerOpen = HomeRoute.MusicWhitelistAppPicker in backStack
+    val onMusicPickerClosed by rememberUpdatedState(onMusicWidgetWhitelistPickerClosed)
+    LaunchedEffect(musicPickerOpen) {
+        if (!musicPickerOpen) onMusicPickerClosed()
+    }
     // Covered entries can remain composed in miuix-nav 0.9.4; release their input focus.
     LaunchedEffect(backStack.lastOrNull()) {
         focusManager.clearFocus()
@@ -449,6 +474,21 @@ internal fun HomeScreen(
                         onBack = { navigateBackFrom(page) }
                     )
                     HomeRoute.VersionHistory -> VersionHistoryPage(onBack = { navigateBackFrom(page) })
+                    HomeRoute.DoubleTapSleepAppPicker -> AppPickerPage(
+                        selectedPackages = doubleTapSleepDisabledPackages,
+                        onSelectedPackagesChange = onDoubleTapSleepDisabledPackagesChange,
+                        onBack = { navigateBackFrom(page) },
+                        titleRes = R.string.double_tap_sleep_title,
+                        hintRes = R.string.double_tap_sleep_picker_hint
+                    )
+                    HomeRoute.MusicWhitelistAppPicker -> AppPickerPage(
+                        selectedPackages = musicWidgetWhitelistPackages,
+                        onSelectedPackagesChange = onMusicWidgetWhitelistPackagesChange,
+                        onBack = { navigateBackFrom(page) },
+                        titleRes = R.string.music_widget_whitelist_title,
+                        hintRes = R.string.music_widget_whitelist_picker_hint
+                    )
+                    HomeRoute.RearScreenRecord -> RearScreenRecordPage(onBack = { navigateBackFrom(page) })
                     HomeRoute.Main -> MainContent(
                         enable18ProFeatures = enable18ProFeatures,
                         onEnable18ProFeaturesChange = onEnable18ProFeaturesChange,
@@ -471,6 +511,8 @@ internal fun HomeScreen(
                         appLanguage = appLanguage,
                         disableRearScreenCover = disableRearScreenCover,
                         doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
+                        doubleTapSleepDisabledPackages = doubleTapSleepDisabledPackages,
+                        musicWidgetWhitelistPackages = musicWidgetWhitelistPackages,
                         launcherIconHidden = launcherIconHidden,
                         moduleActivated = moduleActivated,
                         onDisableLongPressChange = onDisableLongPressChange,
@@ -486,6 +528,9 @@ internal fun HomeScreen(
                         onLauncherIconHiddenChange = onLauncherIconHiddenChange,
                         onSettingsClick = { openDetail(page, HomeRoute.Settings) },
                         onAddDisabledAppsClick = { openDetail(page, HomeRoute.AppPicker) },
+                        onDoubleTapSleepAppsClick = { openDetail(page, HomeRoute.DoubleTapSleepAppPicker) },
+                        onMusicWidgetWhitelistClick = { openDetail(page, HomeRoute.MusicWhitelistAppPicker) },
+                        onRearScreenRecordClick = { openDetail(page, HomeRoute.RearScreenRecord) },
                         onLicenseClick = { openDetail(page, HomeRoute.License) },
                         onDonateClick = { openDetail(page, HomeRoute.Donate) },
                         onAppUpdateClick = { openDetail(page, HomeRoute.AppUpdate) },
@@ -589,6 +634,8 @@ private fun MainTabPage(
     faceEnrollmentCompat: Boolean,
     disableRearScreenCover: Boolean,
     doubleTapWakeDisabledPackages: String,
+    doubleTapSleepDisabledPackages: String,
+    musicWidgetWhitelistPackages: String,
     themeMode: ThemeMode,
     onDonateClick: () -> Unit,
     onDisableLongPressChange: (Boolean) -> Unit,
@@ -598,6 +645,9 @@ private fun MainTabPage(
     onFaceEnrollmentCompatChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onAddDisabledAppsClick: () -> Unit,
+    onDoubleTapSleepAppsClick: () -> Unit,
+    onMusicWidgetWhitelistClick: () -> Unit,
+    onRearScreenRecordClick: () -> Unit,
     onBatteryColorClick: () -> Unit,
     onRearScreenTimingClick: () -> Unit,
     onLicenseClick: () -> Unit,
@@ -688,6 +738,8 @@ private fun MainTabPage(
                             faceEnrollmentCompat = faceEnrollmentCompat,
                             disableRearScreenCover = disableRearScreenCover,
                             doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
+                            doubleTapSleepDisabledPackages = doubleTapSleepDisabledPackages,
+                            musicWidgetWhitelistPackages = musicWidgetWhitelistPackages,
                             onDisableLongPressChange = onDisableLongPressChange,
                             onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
                             onRemoveAppCardLimitChange = onRemoveAppCardLimitChange,
@@ -695,6 +747,9 @@ private fun MainTabPage(
                             onFaceEnrollmentCompatChange = onFaceEnrollmentCompatChange,
                             onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                             onAddDisabledAppsClick = onAddDisabledAppsClick,
+                            onDoubleTapSleepAppsClick = onDoubleTapSleepAppsClick,
+                            onMusicWidgetWhitelistClick = onMusicWidgetWhitelistClick,
+                            onRearScreenRecordClick = onRearScreenRecordClick,
                             onBatteryColorClick = onBatteryColorClick,
                             onRearScreenTimingClick = onRearScreenTimingClick
                         )
@@ -741,6 +796,8 @@ private fun MainContent(
     appLanguage: AppLanguage,
     disableRearScreenCover: Boolean,
     doubleTapWakeDisabledPackages: String,
+    doubleTapSleepDisabledPackages: String,
+    musicWidgetWhitelistPackages: String,
     launcherIconHidden: Boolean,
     moduleActivated: ActivationState,
     onDisableLongPressChange: (Boolean) -> Unit,
@@ -756,6 +813,9 @@ private fun MainContent(
     onLauncherIconHiddenChange: (Boolean) -> Unit,
     onSettingsClick: () -> Unit,
     onAddDisabledAppsClick: () -> Unit,
+    onDoubleTapSleepAppsClick: () -> Unit,
+    onMusicWidgetWhitelistClick: () -> Unit,
+    onRearScreenRecordClick: () -> Unit,
     onLicenseClick: () -> Unit,
     onDonateClick: () -> Unit,
     onAppUpdateClick: () -> Unit,
@@ -849,6 +909,8 @@ private fun MainContent(
                 faceEnrollmentCompat = faceEnrollmentCompat,
                 disableRearScreenCover = disableRearScreenCover,
                 doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
+                doubleTapSleepDisabledPackages = doubleTapSleepDisabledPackages,
+                musicWidgetWhitelistPackages = musicWidgetWhitelistPackages,
                 themeMode = themeMode,
                 onDonateClick = onDonateClick,
                 onDisableLongPressChange = onDisableLongPressChange,
@@ -858,6 +920,9 @@ private fun MainContent(
                 onFaceEnrollmentCompatChange = onFaceEnrollmentCompatChange,
                 onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                 onAddDisabledAppsClick = onAddDisabledAppsClick,
+                onDoubleTapSleepAppsClick = onDoubleTapSleepAppsClick,
+                onMusicWidgetWhitelistClick = onMusicWidgetWhitelistClick,
+                onRearScreenRecordClick = onRearScreenRecordClick,
                 onBatteryColorClick = onBatteryColorClick,
                 onRearScreenTimingClick = onRearScreenTimingClick,
                 onLicenseClick = onLicenseClick,

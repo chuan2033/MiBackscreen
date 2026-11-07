@@ -14,5 +14,9 @@ internal enum class HomeRoute : NavKey {
     BatteryColor,
     RearScreenTiming,
     AppUpdate,
-    VersionHistory
+    VersionHistory,
+    // 新路由只追加在末尾（见 HomeRouteTest）。
+    DoubleTapSleepAppPicker,
+    MusicWhitelistAppPicker,
+    RearScreenRecord
 }

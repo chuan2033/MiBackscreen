@@ -155,6 +155,10 @@ public final class PrefsBridge {
     public static final boolean DEFAULT_DISABLE_REAR_SCREEN_COVER = false;
     public static final boolean DEFAULT_DISABLE_DOUBLE_TAP_WAKE = false;
     public static final String DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES = "";
+    /** 背屏音乐控件白名单默认空：完全沿用背屏中心内置（云控）名单。 */
+    public static final String DEFAULT_MUSIC_WIDGET_WHITELIST_PACKAGES = "";
+    /** 按应用禁用背屏双击熄屏的名单默认空：系统原逻辑不变。 */
+    public static final String DEFAULT_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES = "";
     public static final boolean DEFAULT_THEME_SETTINGS_SHORTCUT = true;
 
     /**
@@ -219,6 +223,12 @@ public final class PrefsBridge {
                 Constants.KEY_REAR_SCREEN_SCHEDULE_MODE,
                 DEFAULT_REAR_SCREEN_SCHEDULE_MODE);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES, DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
+        BACKUP_STRING_DEFAULTS.put(
+                Constants.KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES,
+                DEFAULT_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES);
+        BACKUP_STRING_DEFAULTS.put(
+                Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES,
+                DEFAULT_MUSIC_WIDGET_WHITELIST_PACKAGES);
     }
 
     private PrefsBridge() {
@@ -911,6 +921,9 @@ public final class PrefsBridge {
             case Constants.KEY_REAR_SCREEN_SCHEDULE_MODE:
                 return normalizeRearScreenScheduleMode(value);
             case Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES:
+            case Constants.KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES:
+            case Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES:
+                // 包名列表：按同一套编码重新规范化，非法项直接丢掉。
                 return hook.HyperBackscreen.common.PackageListCodec.encode(
                         hook.HyperBackscreen.common.PackageListCodec.parse(value));
             default:
@@ -1084,6 +1097,30 @@ public final class PrefsBridge {
         writeStringFromUi(context, Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES, packages);
     }
 
+    @NonNull
+    public static String readDoubleTapSleepDisabledPackagesForUi(@NonNull Context context) {
+        return readStringForUi(
+                context,
+                Constants.KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES,
+                DEFAULT_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES);
+    }
+
+    public static void writeDoubleTapSleepDisabledPackagesFromUi(@NonNull Context context, @NonNull String packages) {
+        writeStringFromUi(context, Constants.KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES, packages);
+    }
+
+    @NonNull
+    public static String readMusicWidgetWhitelistPackagesForUi(@NonNull Context context) {
+        return readStringForUi(
+                context,
+                Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES,
+                DEFAULT_MUSIC_WIDGET_WHITELIST_PACKAGES);
+    }
+
+    public static void writeMusicWidgetWhitelistPackagesFromUi(@NonNull Context context, @NonNull String packages) {
+        writeStringFromUi(context, Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES, packages);
+    }
+
     public static boolean readThemeSettingsShortcutForUi(@NonNull Context context) {
         return readForUi(context, Constants.KEY_THEME_SETTINGS_SHORTCUT, DEFAULT_THEME_SETTINGS_SHORTCUT);
     }
@@ -1207,6 +1244,28 @@ public final class PrefsBridge {
                 Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,
                 DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
         return RearScreenWakeMatcher.matchesAnyPackage(raw, packageNames);
+    }
+
+    /**
+     * system_server 里「双击熄屏」焦点回调用：当前焦点应用是否在用户的禁用名单里。
+     * 只读 LSPosed 远程偏好（进程内缓存），名单为空直接返回 false。
+     */
+    public static boolean shouldSkipDoubleTapSleepForPackage(@NonNull XposedModule module, @Nullable String packageName) {
+        if (packageName == null || packageName.isEmpty()) return false;
+        String raw = readStringForHook(
+                module,
+                Constants.KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES,
+                DEFAULT_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES);
+        return RearScreenWakeMatcher.matchesAnyPackage(raw, packageName);
+    }
+
+    /** 背屏中心音乐控件 Hook 用：用户追加的音乐应用名单原始串（未解析）。 */
+    @NonNull
+    public static String readMusicWidgetWhitelistPackagesForHook(@NonNull XposedModule module) {
+        return readStringForHook(
+                module,
+                Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES,
+                DEFAULT_MUSIC_WIDGET_WHITELIST_PACKAGES);
     }
 
     /**
@@ -1469,6 +1528,8 @@ public final class PrefsBridge {
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_DOUBLE_TAP_WAKE);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_THEME_SETTINGS_SHORTCUT);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_IDLE);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_CHARGING);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_LOW);
@@ -1535,6 +1596,16 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,
                     DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES,
+                    DEFAULT_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES,
+                    DEFAULT_MUSIC_WIDGET_WHITELIST_PACKAGES);
             syncStringKey(
                     localPrefs,
                     remotePrefs,

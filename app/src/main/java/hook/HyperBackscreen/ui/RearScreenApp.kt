@@ -205,6 +205,14 @@ internal fun RearScreenApp() {
     var doubleTapWakeDisabledPackages by remember {
         mutableStateOf(initialPrefs.doubleTapWakeDisabledPackages)
     }
+    var doubleTapSleepDisabledPackages by remember {
+        mutableStateOf(initialPrefs.doubleTapSleepDisabledPackages)
+    }
+    var musicWidgetWhitelistPackages by remember {
+        mutableStateOf(initialPrefs.musicWidgetWhitelistPackages)
+    }
+    // 音乐白名单在选择页里改过：离开选择页时重启一次背屏中心（宿主只在加载卡片时读名单）。
+    var musicWidgetWhitelistDirty by remember { mutableStateOf(false) }
     // 桌面图标隐藏状态是 PackageManager Binder 调用，挪到 IO 线程读，不放在组合阶段。
     var launcherIconHidden by remember { mutableStateOf(false) }
     LaunchedEffect(context) {
@@ -300,6 +308,8 @@ internal fun RearScreenApp() {
                 disableRearScreenCover = values.disableRearScreenCover
                 disableDoubleTapWake = values.disableDoubleTapWake
                 doubleTapWakeDisabledPackages = values.doubleTapWakeDisabledPackages
+                doubleTapSleepDisabledPackages = values.doubleTapSleepDisabledPackages
+                musicWidgetWhitelistPackages = values.musicWidgetWhitelistPackages
                 moduleActivated = when {
                     ModuleApp.getService() != null -> ActivationState.ACTIVE
                     // 服务断开（之前已激活）或等待超时后仍没有服务，才算未激活。
@@ -388,6 +398,10 @@ internal fun RearScreenApp() {
         if (after.faceEnrollmentCompat != before.faceEnrollmentCompat) scopes += Constants.THEME_STORE_PACKAGE
         if (after.themeSettingsShortcut != before.themeSettingsShortcut) scopes += Constants.THEME_STORE_PACKAGE
         if (after.enableAppCard != before.enableAppCard) scopes += Constants.TARGET_PACKAGE
+        if (after.musicWidgetWhitelistPackages != before.musicWidgetWhitelistPackages) {
+            scopes += Constants.TARGET_PACKAGE
+        }
+        // 双击熄屏名单由 system_server 在每次焦点切换时现读，不需要重启任何作用域。
         val installAppCard = after.enableAppCard && !before.enableAppCard
         if (scopes.isEmpty() && !installAppCard) return
         scope.launch {
@@ -504,6 +518,8 @@ internal fun RearScreenApp() {
             disableRearScreenCover = disableRearScreenCover,
             disableDoubleTapWake = disableDoubleTapWake,
             doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
+            doubleTapSleepDisabledPackages = doubleTapSleepDisabledPackages,
+            musicWidgetWhitelistPackages = musicWidgetWhitelistPackages,
             launcherIconHidden = launcherIconHidden,
             moduleActivated = moduleActivated,
             onDisableLongPressChange = { newValue ->
@@ -668,6 +684,22 @@ internal fun RearScreenApp() {
                 if (disableDoubleTapWake != enabled) {
                     disableDoubleTapWake = enabled
                     PrefsBridge.writeDisableDoubleTapWakeFromUi(context, enabled)
+                }
+            },
+            onDoubleTapSleepDisabledPackagesChange = { newValue ->
+                // system_server 下一次焦点切换时现读，不重启作用域。
+                doubleTapSleepDisabledPackages = newValue
+                PrefsBridge.writeDoubleTapSleepDisabledPackagesFromUi(context, newValue)
+            },
+            onMusicWidgetWhitelistPackagesChange = { newValue ->
+                musicWidgetWhitelistPackages = newValue
+                PrefsBridge.writeMusicWidgetWhitelistPackagesFromUi(context, newValue)
+                musicWidgetWhitelistDirty = true
+            },
+            onMusicWidgetWhitelistPickerClosed = {
+                if (musicWidgetWhitelistDirty) {
+                    musicWidgetWhitelistDirty = false
+                    refreshScopes(Constants.TARGET_PACKAGE)
                 }
             },
             onLauncherIconHiddenChange = { newValue ->

@@ -136,6 +136,7 @@ public class ModuleMain extends XposedModule {
                     subScreenCenterHooks.installQuickPanelDispatchHook(param.getClassLoader());
                     subScreenCenterHooks.installRearScreenSelectionSyncHook(param.getClassLoader());
                     subScreenCenterHooks.installAutoWallpaperRotationHooks(param.getClassLoader());
+                    subScreenCenterHooks.installMusicWidgetWhitelistHooks(param.getClassLoader());
                     hooksInstalled = true;
                     log(Log.INFO, Constants.LOG_TAG, "Hooks installed for " + Constants.TARGET_PACKAGE);
                 } catch (Throwable throwable) {

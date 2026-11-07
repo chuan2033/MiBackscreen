@@ -10,6 +10,7 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.LinkedHashSet;
 
@@ -41,6 +42,13 @@ public final class SystemServerHooks {
     /** 按 PowerGroup 类缓存 getGroupId；锁内路径不能每次都反射查找 + setAccessible。 */
     private static volatile Class<?> sPowerGroupClass;
     private static volatile Method sPowerGroupIdMethod;
+    /** 双击熄屏过滤：WindowState#getOwningPackage 与 mGestureEnable 字段，按类缓存。 */
+    private static volatile Class<?> sOwningPackageClass;
+    private static volatile Method sOwningPackageMethod;
+    private static volatile Class<?> sGestureEnableClass;
+    private static volatile Field sGestureEnableField;
+    /** 最近一次因名单关掉双击熄屏的包名，只在变化时记日志。 */
+    private volatile String lastDoubleTapSleepBlockedPackage;
 
     public SystemServerHooks(@NonNull ModuleMain module) {
         this.module = module;
@@ -278,7 +286,129 @@ public final class SystemServerHooks {
                     return chain.proceed();
                 }
         );
+        // 按应用禁用双击熄屏：与上面的 Hook 互不依赖，类缺失只记 WARN，不影响返回值。
+        installDoubleTapSleepFilterHook(classLoader);
         return coverHookInstalled && (powerWakeHookInstalled || coverWakeHookInstalled);
+    }
+
+    /**
+     * 按应用禁用背屏「双击熄屏」。
+     *
+     * <p>MiuiSubscreenDoubleTapGesture#onFocusedWindowChanged 按新焦点窗口的包名刷新
+     * mGestureEnable（内置名单里的应用关掉，其余恢复 true），onPointerEvent 只在它为 true 时
+     * goToSleep。这里在原方法之后补一刀：新焦点包名在用户名单里就把 mGestureEnable 置 false。
+     * 名单变化在下一次焦点切换时生效。
+     *
+     * <p>system_server 敏感：回调里只做字段读写与一次进程内偏好读取，所有异常吞掉只记日志。
+     */
+    private void installDoubleTapSleepFilterHook(@NonNull ClassLoader classLoader) {
+        try {
+            Class<?> gestureClass = findClass(Constants.SYSTEM_SUBSCREEN_DOUBLE_TAP_GESTURE_CLASS, classLoader);
+            if (gestureClass == null) {
+                module.log(Log.WARN, Constants.LOG_TAG,
+                        "System hook target missing: " + Constants.SYSTEM_SUBSCREEN_DOUBLE_TAP_GESTURE_CLASS);
+                return;
+            }
+            Method focusChanged = null;
+            for (Method method : gestureClass.getDeclaredMethods()) {
+                if (Constants.SYSTEM_ON_FOCUSED_WINDOW_CHANGED_METHOD.equals(method.getName())
+                        && method.getParameterTypes().length == 2) {
+                    focusChanged = method;
+                    break;
+                }
+            }
+            module.hookMethodIfPresent(
+                    focusChanged,
+                    Constants.SYSTEM_SUBSCREEN_DOUBLE_TAP_GESTURE_CLASS + "#"
+                            + Constants.SYSTEM_ON_FOCUSED_WINDOW_CHANGED_METHOD,
+                    chain -> {
+                        Object result = chain.proceed();
+                        try {
+                            Object newFocus = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                            String packageName = owningPackage(newFocus);
+                            if (packageName != null
+                                    && PrefsBridge.shouldSkipDoubleTapSleepForPackage(module, packageName)
+                                    && disableGesture(chain.getThisObject())) {
+                                // 同一个应用里焦点来回切（弹窗、输入法）会反复触发，只在包名变化时记一次。
+                                if (!packageName.equals(lastDoubleTapSleepBlockedPackage)) {
+                                    lastDoubleTapSleepBlockedPackage = packageName;
+                                    module.log(Log.INFO, Constants.LOG_TAG,
+                                            "Rear screen double tap sleep disabled for " + packageName);
+                                }
+                            } else if (packageName != null) {
+                                lastDoubleTapSleepBlockedPackage = null;
+                            }
+                        } catch (Throwable error) {
+                            module.log(Log.WARN, Constants.LOG_TAG,
+                                    "Double tap sleep filter failed: " + error);
+                        }
+                        return result;
+                    }
+            );
+            // 预热远程偏好：首次读取可能走 Binder，不要放到焦点回调里。
+            PrefsBridge.shouldSkipDoubleTapSleepForPackage(module, Constants.MODULE_PACKAGE);
+        } catch (Throwable throwable) {
+            module.log(Log.WARN, Constants.LOG_TAG, "Double tap sleep filter hook failed: " + throwable);
+        }
+    }
+
+    /** WindowState#getOwningPackage()；按类缓存 Method，回调里不重复反射查找。 */
+    @Nullable
+    private static String owningPackage(@Nullable Object windowState) {
+        if (windowState == null) return null;
+        Class<?> type = windowState.getClass();
+        Method method = sOwningPackageMethod;
+        if (method == null || sOwningPackageClass != type) {
+            method = findMethodInHierarchy(type, Constants.SYSTEM_WINDOW_STATE_OWNING_PACKAGE_METHOD);
+            if (method == null) return null;
+            sOwningPackageMethod = method;
+            sOwningPackageClass = type;
+        }
+        try {
+            Object value = method.invoke(windowState);
+            return value instanceof String && !((String) value).isEmpty() ? (String) value : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    @Nullable
+    private static Method findMethodInHierarchy(@NonNull Class<?> type, @NonNull String name) {
+        Class<?> current = type;
+        while (current != null) {
+            Method method = findDeclaredMethod(current, name);
+            if (method != null) return method;
+            current = current.getSuperclass();
+        }
+        return null;
+    }
+
+    /** 把手势对象的 mGestureEnable 置 false；字段按类缓存。 */
+    private static boolean disableGesture(@Nullable Object gesture) {
+        if (gesture == null) return false;
+        Class<?> type = gesture.getClass();
+        Field field = sGestureEnableField;
+        if (field == null || sGestureEnableClass != type) {
+            field = null;
+            Class<?> current = type;
+            while (current != null && field == null) {
+                try {
+                    field = current.getDeclaredField(Constants.SYSTEM_GESTURE_ENABLE_FIELD);
+                } catch (NoSuchFieldException ignored) {
+                    current = current.getSuperclass();
+                }
+            }
+            if (field == null || field.getType() != boolean.class) return false;
+            field.setAccessible(true);
+            sGestureEnableField = field;
+            sGestureEnableClass = type;
+        }
+        try {
+            field.setBoolean(gesture, false);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     @Nullable

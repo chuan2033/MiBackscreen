@@ -35,7 +35,12 @@ internal fun FunctionPage(
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFaceEnrollmentCompatChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
-    onAddDisabledAppsClick: () -> Unit
+    onAddDisabledAppsClick: () -> Unit,
+    doubleTapSleepDisabledPackages: String,
+    musicWidgetWhitelistPackages: String,
+    onDoubleTapSleepAppsClick: () -> Unit,
+    onMusicWidgetWhitelistClick: () -> Unit,
+    onRearScreenRecordClick: () -> Unit
 ) {
     val batteryRingSupported = BatteryRingGeometry.isCalibratedDevice(Build.DEVICE)
     Column {
@@ -79,6 +84,21 @@ internal fun FunctionPage(
                     },
                     onClick = onAddDisabledAppsClick
                 )
+                // 与双击亮屏名单并列：这份管背屏亮着时「双击熄屏」，两份名单互不影响。
+                val sleepDisabledCount = PackageListCodec.parse(doubleTapSleepDisabledPackages).size
+                ArrowPreference(
+                    title = stringResource(R.string.double_tap_sleep_title),
+                    summary = if (sleepDisabledCount == 0) {
+                        stringResource(R.string.double_tap_sleep_summary_none)
+                    } else {
+                        pluralStringResource(
+                            R.plurals.double_tap_sleep_summary_count,
+                            sleepDisabledCount,
+                            sleepDisabledCount
+                        )
+                    },
+                    onClick = onDoubleTapSleepAppsClick
+                )
             }
 
             CollapsibleFunctionGroup(
@@ -110,6 +130,20 @@ internal fun FunctionPage(
                     title = stringResource(R.string.rear_screen_timing_title),
                     onClick = onRearScreenTimingClick
                 )
+                val musicAppCount = PackageListCodec.parse(musicWidgetWhitelistPackages).size
+                ArrowPreference(
+                    title = stringResource(R.string.music_widget_whitelist_title),
+                    summary = if (musicAppCount == 0) {
+                        stringResource(R.string.music_widget_whitelist_summary_none)
+                    } else {
+                        pluralStringResource(
+                            R.plurals.music_widget_whitelist_summary_count,
+                            musicAppCount,
+                            musicAppCount
+                        )
+                    },
+                    onClick = onMusicWidgetWhitelistClick
+                )
             }
 
             CollapsibleFunctionGroup(
@@ -136,6 +170,15 @@ internal fun FunctionPage(
                     title = stringResource(R.string.home_remove_wallpaper_limit_title)
                 )
             }
+        }
+
+        // 背屏工具：模块 App 自己用 root 完成的动作，不对应任何 Xposed 作用域，单独一张卡片。
+        CardBlock(pressFeedbackType = PressFeedbackType.None) {
+            ArrowPreference(
+                title = stringResource(R.string.rear_record_title),
+                summary = stringResource(R.string.rear_record_entry_summary),
+                onClick = onRearScreenRecordClick
+            )
         }
     }
 }

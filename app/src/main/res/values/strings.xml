@@ -293,4 +293,38 @@
     <string name="log_regenerate">Regenerate</string>
     <string name="settings_save_failed">Could not save this setting</string>
     <string name="settings_saved_pending">Saved on this device; it will sync once the module service connects</string>
+    <!-- 按应用禁用背屏双击熄屏 -->
+    <string name="double_tap_sleep_title">Double-tap sleep blocklist</string>
+    <string name="double_tap_sleep_summary_none">No apps selected, feature off</string>
+    <plurals name="double_tap_sleep_summary_count">
+        <item quantity="one">Active for %1$d app</item>
+        <item quantity="other">Active for %1$d apps</item>
+    </plurals>
+    <string name="double_tap_sleep_picker_hint">While a checked app is in the foreground, double-tapping the lit rear screen will not turn it off. Takes effect when you switch to that app; uncheck all to restore the system default.</string>
+    <!-- 背屏音乐控件白名单 -->
+    <string name="music_widget_whitelist_title">Rear music widget apps</string>
+    <string name="music_widget_whitelist_summary_none">No apps added, using the built-in list</string>
+    <plurals name="music_widget_whitelist_summary_count">
+        <item quantity="one">%1$d app added</item>
+        <item quantity="other">%1$d apps added</item>
+    </plurals>
+    <string name="music_widget_whitelist_picker_hint">The rear screen only shows the music card for music apps on its built-in list. Checked apps will also show the rear music card while playing.</string>
+    <!-- 背屏录屏 -->
+    <string name="rear_record_title">Rear screen recording</string>
+    <string name="rear_record_entry_summary">Record the rear screen with root and save it to the gallery</string>
+    <string name="rear_record_hint">Requires root. While recording, the rear screen is woken every few seconds to keep it on. Recording stops automatically after 3 minutes; leaving this page or sending the app to the background also stops and saves it.</string>
+    <string name="rear_record_state_idle">Ready to record</string>
+    <string name="rear_record_state_recording">Recording</string>
+    <string name="rear_record_idle_summary">Videos are saved to Movies/MiBackscreen</string>
+    <string name="rear_record_starting">Preparing…</string>
+    <string name="rear_record_recording">%1$s / %2$s</string>
+    <string name="rear_record_saving">Saving…</string>
+    <string name="rear_record_start">Start recording</string>
+    <string name="rear_record_stop">Stop and save</string>
+    <string name="rear_record_saved">Saved to gallery: %1$s</string>
+    <string name="rear_record_failed_no_root">Root access unavailable, cannot record the rear screen</string>
+    <string name="rear_record_failed_display">Rear display not found, cannot record</string>
+    <string name="rear_record_failed_start">Could not start recording</string>
+    <string name="rear_record_failed_empty">Nothing was recorded, so nothing was saved (the rear screen may not have turned on)</string>
+    <string name="rear_record_failed_save">Could not save to the gallery</string>
 </resources>

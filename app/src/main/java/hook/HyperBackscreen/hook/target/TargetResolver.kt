@@ -138,7 +138,7 @@ internal object TargetResolver {
         }
 
         memory[target.id]?.let { name ->
-            loadClass(name, classLoader)?.let {
+            loadShapedClass(name, target, classLoader)?.let {
                 record(target.id, name, "内存")
                 return it
             }
@@ -151,7 +151,7 @@ internal object TargetResolver {
             return failClass(target, "cached-missing", null)
         }
         if (cached != null) {
-            loadClass(cached, classLoader)?.let {
+            loadShapedClass(cached, target, classLoader)?.let {
                 memory[target.id] = cached
                 record(target.id, cached, "缓存")
                 return it
@@ -160,10 +160,10 @@ internal object TargetResolver {
             cacheHolder[0]?.remove(target.id)
         }
 
-        val lookup = queryDexKit(target)
+        val lookup = queryDexKit(target, classLoader)
         val hit = lookup.name
         if (hit != null) {
-            val loaded = loadClass(hit, classLoader)
+            val loaded = loadShapedClass(hit, target, classLoader)
             if (loaded != null) {
                 memory[target.id] = hit
                 writeCache(target.id, hit)
@@ -175,7 +175,7 @@ internal object TargetResolver {
 
         if (lookup.allowsFallback) {
             target.fallbackNames.firstOrNull()?.let { name ->
-                loadClass(name, classLoader)?.let {
+                loadShapedClass(name, target, classLoader)?.let {
                     record(target.id, name, "兜底名字")
                     logger?.accept(
                         "Target resolved by fallback name: ${target.id} -> $name (${lookup.reason})"
@@ -415,7 +415,7 @@ internal object TargetResolver {
     @JvmStatic
     fun state(): String = dexKitState
 
-    private fun queryDexKit(target: ClassTarget): Lookup {
+    private fun queryDexKit(target: ClassTarget, classLoader: ClassLoader): Lookup {
         val activeBridge = bridge ?: return Lookup(null, Lookup.Failure.NOT_READY)
         if (target.strings.isEmpty()) return Lookup(null, Lookup.Failure.NO_FEATURE)
         val startedAt = SystemClock.elapsedRealtime()
@@ -424,19 +424,37 @@ internal object TargetResolver {
             if (target.packages.isNotEmpty()) {
                 finder.searchPackages(*target.packages.toTypedArray())
             }
-            finder.matcher(ClassMatcher.create().usingStrings(*target.strings.toTypedArray()))
-            activeBridge.findClass(finder)
+            val matcher = ClassMatcher.create()
+            if (target.exactStrings) {
+                matcher.usingEqStrings(*target.strings.toTypedArray())
+            } else {
+                matcher.usingStrings(*target.strings.toTypedArray())
+            }
+            finder.matcher(matcher)
+            activeBridge.findClass(finder).map { it.name }
         }
         reportQueryCost("class:${target.id}", startedAt)
         return result.fold(
-            onSuccess = { hits ->
+            onSuccess = { names ->
+                // 有形状校验时先按形状过滤：字符串初筛命中多个是常态，形状才是最终判据。
+                val shape = target.shape
+                val hits = if (shape == null) {
+                    names
+                } else {
+                    names.filter { name -> loadClass(name, classLoader)?.let(shape) == true }.also {
+                        if (it.size != names.size) {
+                            logger?.accept(
+                                "Target shape filter: ${target.id} ${names.size} -> ${it.size} $it"
+                            )
+                        }
+                    }
+                }
                 when {
-                    hits.size == 1 -> Lookup(hits[0].name, null)
+                    hits.size == 1 -> Lookup(hits[0], null)
                     hits.isEmpty() -> Lookup(null, Lookup.Failure.NO_MATCH)
                     else -> {
-                        val names = hits.map { it.name }
-                        logger?.accept("Target ambiguous: ${target.id} -> $names")
-                        Lookup(null, Lookup.Failure.AMBIGUOUS, names.joinToString(","))
+                        logger?.accept("Target ambiguous: ${target.id} -> $hits")
+                        Lookup(null, Lookup.Failure.AMBIGUOUS, hits.joinToString(","))
                     }
                 }
             },
@@ -458,6 +476,15 @@ internal object TargetResolver {
     private fun loadClass(name: String, classLoader: ClassLoader): Class<*>? = runCatching {
         Class.forName(name, false, classLoader)
     }.getOrNull()
+
+    /** 加载类并过一遍 [ClassTarget.shape]；形状不符按「没加载到」处理（缓存会被当成过期）。 */
+    private fun loadShapedClass(name: String, target: ClassTarget, classLoader: ClassLoader): Class<*>? {
+        val loaded = loadClass(name, classLoader) ?: return null
+        val shape = target.shape ?: return loaded
+        if (runCatching { shape(loaded) }.getOrDefault(false)) return loaded
+        logger?.accept("Target shape mismatch: ${target.id} -> $name")
+        return null
+    }
 
     private fun record(id: String, value: String, via: String) {
         synchronized(diagnostics) {
