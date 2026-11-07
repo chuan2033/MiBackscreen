@@ -300,7 +300,7 @@
         <item quantity="one">Active for %1$d app</item>
         <item quantity="other">Active for %1$d apps</item>
     </plurals>
-    <string name="double_tap_sleep_picker_hint">While a checked app is in the foreground, double-tapping the lit rear screen will not turn it off. Takes effect when you switch to that app; uncheck all to restore the system default.</string>
+    <string name="double_tap_sleep_picker_hint">While a checked app is shown on the rear screen (the rear launcher \"Rear Screen Center\", the rear camera, an app moved to the rear screen, etc.), double-tapping the rear screen will not turn it off. Check \"Rear Screen Center\" to disable double-tap sleep on the rear launcher. Takes effect the next time that app appears on the rear screen; uncheck all to restore the system default.</string>
     <!-- 背屏音乐控件白名单 -->
     <string name="music_widget_whitelist_title">Rear music widget apps</string>
     <string name="music_widget_whitelist_summary_none">No apps added, using the built-in list</string>
