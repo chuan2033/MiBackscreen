@@ -1,0 +1,124 @@
+{
+  "version": 6,
+  "count": 4,
+  "products": [
+    {
+      "title": "创意时间",
+      "titleResId": "wallpaper_group_creative_time_title",
+      "type": "cmf",
+      "items": [
+        {
+          "resType": "cmf",
+          "resId": "cc8f8283-037f-4608-a0fd-b4c0a9a7eb34",
+          "resName": "渐层",
+          "resDescription":"轻快极致光影，如呼吸般自然，感受静谧时光",
+          "resDesigner": "",
+          "resPreviewPath": "/product/etc/precust_theme/theme/.data/preview/theme/93acd0c6-a10b-4d3b-afc9-ffd39aa6979d/preview_rearscreen_0.png",
+          "resLocalPath": "/product/etc/precust_theme/theme/.data/content/rearscreen/cc8f8283-037f-4608-a0fd-b4c0a9a7eb34.mrc",
+          "rightPath": "/product/etc/precust_theme/theme/.data/rights/theme/5fddf0f3501b63e6b4f5ac5fcbca9d74fc72d781.mra",
+          "metaPath": "/product/etc/precust_theme/theme/.data/meta/rearscreen/cc8f8283-037f-4608-a0fd-b4c0a9a7eb34.mrm",
+          "canDelete": true,
+          "resPreviewUrl": null,
+          "isDownload": false,
+          "downloadUrl": null,
+          "updateTime": 0,
+          "isNFC": false,
+          "editable": true,
+          "cmfInfo": [
+            {
+              "cmfFlag": "LG",
+              "cmfColor": "#4EA666"
+            },
+            {
+              "cmfFlag": "BK",
+              "cmfColor": "#4571D9"
+            },
+            {
+              "cmfFlag": "PU",
+              "cmfColor": "#8F67E0"
+            },
+            {
+              "cmfFlag": "WH",
+              "cmfColor": "#EF7C25"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "自然",
+      "titleResId": "wallpaper_group_nature_title",
+      "type": "nature",
+      "items": [
+        {
+          "resType": "nature",
+          "resId": "e23e7933-0bd7-4d6e-9165-aae505e389cc",
+          "resName": "蝴蝶鲤",
+          "resDescription": "自由游动的蝴蝶鲤，蕴含着对生活顺遂、平安如意的美好期盼",
+          "resDesigner": "",
+          "resPreviewPath": "/product/etc/precust_theme/theme/.data/preview/theme/a5a68b9a-fe1b-40a6-bff9-f8452bcae18e/preview_rearscreen_0.png",
+          "resLocalPath": "/product/etc/precust_theme/theme/.data/content/rearscreen/e23e7933-0bd7-4d6e-9165-aae505e389cc.mrc",
+          "rightPath": "/product/etc/precust_theme/theme/.data/rights/theme/0ecee108ee6a90e34a658e53b48af1dd323bfced.mra",
+          "metaPath": "/product/etc/precust_theme/theme/.data/meta/rearscreen/e23e7933-0bd7-4d6e-9165-aae505e389cc.mrm",
+          "canDelete": true,
+          "resPreviewUrl": null,
+          "isDownload": false,
+          "downloadUrl": null,
+          "updateTime": 0,
+          "isNFC": false,
+          "editable": false
+        }
+      ]
+    },
+    {
+      "title": "大数字",
+      "titleResId": "wallpaper_group_big_numbers_title",
+      "type": "bigNumber",
+      "items": [
+        {
+          "resType": "bigNumber",
+          "resId": "96af4ce9-72b5-451d-aba8-bc3282aeaa34",
+          "resName": "延伸",
+          "resDescription": "数字跟随分钟流逝弹性延伸",
+          "resDesigner": "",
+          "resPreviewPath": "/product/etc/precust_theme/theme/.data/preview/theme/5325deeb-3804-4941-b1d7-117e3946d826/preview_rearscreen_0.png",
+          "resLocalPath": "/product/etc/precust_theme/theme/.data/content/rearscreen/96af4ce9-72b5-451d-aba8-bc3282aeaa34.mrc",
+          "rightPath": "/product/etc/precust_theme/theme/.data/rights/theme/0cb8ffe5fa234251cbc1692cb5a8190dbb4103c3.mra",
+          "metaPath": "/product/etc/precust_theme/theme/.data/meta/rearscreen/96af4ce9-72b5-451d-aba8-bc3282aeaa34.mrm",
+          "canDelete": true,
+          "resPreviewUrl": null,
+          "isDownload": false,
+          "downloadUrl": null,
+          "updateTime": 0,
+          "isNFC": false,
+          "editable": true
+        }
+      ]
+    },
+    {
+      "title": "萌宠",
+      "titleResId": "wallpaper_group_pets_title",
+      "type": "cutePet",
+      "items": [
+        {
+          "resType": "cutePet",
+          "resId": "26f4a446-8125-407d-a255-3dbcd8c12eae",
+          "resName": "小盖",
+          "resDescription":"引以为傲的就是那“时尚”的发型",
+          "resDesigner": "",
+          "resPreviewPath": "/product/etc/precust_theme/theme/.data/preview/theme/ed03f11f-0edd-43d5-977c-d0211ad51013/preview_rearscreen_0.png",
+          "resLocalPath": "/product/etc/precust_theme/theme/.data/content/rearscreen/26f4a446-8125-407d-a255-3dbcd8c12eae.mrc",
+          "rightPath": "/product/etc/precust_theme/theme/.data/rights/theme/0a8cccfbda9983cde540816ef26f5ebdc25cc2df.mra",
+          "metaPath": "/product/etc/precust_theme/theme/.data/meta/rearscreen/26f4a446-8125-407d-a255-3dbcd8c12eae.mrm",
+          "canDelete": true,
+          "resPreviewUrl": null,
+          "isDownload": false,
+          "downloadUrl": null,
+          "updateTime": 0,
+          "isNFC": false,
+          "editable": false
+        }
+      ]
+    }
+  ]
+}
