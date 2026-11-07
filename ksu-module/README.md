@@ -5,7 +5,7 @@ MiBackscreen 附加模块的打包工程，产出 zip 模块包（支持 **Kerne
 位于主仓的 `ksu-module/` 目录下，**源码与工具脚本受 git 管理**；二进制产物与逆向材料（`analysis/`、`archive/`、`out/*.zip`、`out/*.apk`、`out/screenshots/`）被 `.gitignore` 排除，只留在本地，交付走 GitHub Release 附件。下文路径都相对主仓根目录。
 
 模块 id `mibackscreen_18_personalization`（**不改**，改名会断升级链），显示名「MiBackscreen背屏附加资源」。
-版本以 `ksu-module/packaging/mibackscreen_18_personalization/module.prop` 的 `version` / `versionCode` 为准（写这份说明时是 `1.3` / `18`），输出名规则 `MiBackscreen_v<version>.zip`。
+版本以 `ksu-module/packaging/mibackscreen_18_personalization/module.prop` 的 `version` / `versionCode` 为准（当前是 `1.4` / `19`），输出名规则 `MiBackscreen_v<version>.zip`。
 
 ## 目录
 
@@ -55,6 +55,7 @@ adb reboot
 | --- | --- |
 | `build_personalization_module.ps1` | 从指定 ROM 构建最终 zip：复制模块脚本与 webroot 并统一成「UTF-8 无 BOM + LF」，生成资源、`appcard_entries/`，以及 Magisk 安装器 `META-INF/com/google/android/update-binary`（官方 module_installer）/ `updater-script`（`#MAGISK`） |
 | `validate_personalization_module.ps1` | 校验包结构（含 `appinfo_txn.sh`、`META-INF`）、脚本权限、原始字节里无 BOM / CR、JSON、资源引用、ROM 文件哈希，以及 `module.prop` 的 id / version / versionCode（期望值读打包源文件，升版本只改 `module.prop`） |
+| `repack_from_previous.py` | Linux / macOS 可用，不需要 ROM 和 PowerShell：沿用上一版交付包里的 ROM 产物，换上当前脚本重新打包并按上面的规则校验（ROM 哈希改为与上一版逐字节比对）。只适用于 ROM 没变、只改了脚本 / webroot / module.prop 的情况。用法：`python3 ksu-module/tools/repack_from_previous.py --base ksu-module/out/MiBackscreen_v<旧版本>.zip` |
 
 **设备诊断（开发者用）**
 
