@@ -35,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.Job
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -74,6 +75,8 @@ import top.yukonga.miuix.kmp.window.WindowDialog
 @Composable
 internal fun RearScreenApp() {
     val context = LocalContext.current
+    // 取字符串用配置感知的 LocalResources：切语言 / 深色模式后不会拿到旧配置下的文案。
+    val resources = LocalResources.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val feedback = rememberUiFeedback()
@@ -405,7 +408,7 @@ internal fun RearScreenApp() {
             }
             val (result, before, after) = outcome
             if (result == null) {
-                feedback.show(context.getString(R.string.config_restore_failed))
+                feedback.show(resources.getString(R.string.config_restore_failed))
                 return@launch
             }
             // 外观类偏好不在 ModulePreferencesSnapshot 的观察集合里，手动回读一次；
@@ -416,7 +419,7 @@ internal fun RearScreenApp() {
             showFunctionCount = PrefsBridge.readShowFunctionCount(context)
             checkUpdates = PrefsBridge.readCheckUpdates(context)
             feedback.show(
-                context.getString(
+                resources.getString(
                     R.string.config_restore_done,
                     result.keyCount,
                     result.exportedAt ?: "-",
@@ -698,13 +701,13 @@ internal fun RearScreenApp() {
                     withContext(Dispatchers.Main) {
                         feedback.show(
                             when {
-                                result == null -> context.getString(R.string.config_backup_failed)
-                                result.previousExportedAt != null -> context.getString(
+                                result == null -> resources.getString(R.string.config_backup_failed)
+                                result.previousExportedAt != null -> resources.getString(
                                     R.string.config_backup_done_overwrite,
                                     result.keyCount,
                                     result.previousExportedAt,
                                 )
-                                else -> context.getString(
+                                else -> resources.getString(
                                     R.string.config_backup_done,
                                     result.keyCount,
                                     result.path,
@@ -718,7 +721,7 @@ internal fun RearScreenApp() {
                 scope.launch {
                     val info = withContext(Dispatchers.IO) { PreferencesBackup.inspect() }
                     if (info == null) {
-                        feedback.show(context.getString(R.string.config_restore_failed))
+                        feedback.show(resources.getString(R.string.config_restore_failed))
                     } else {
                         pendingRestore = info
                         showRestoreConfirm = true

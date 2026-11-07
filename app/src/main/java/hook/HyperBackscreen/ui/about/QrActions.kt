@@ -1,5 +1,6 @@
 package hook.HyperBackscreen.ui.about
 
+import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
@@ -31,7 +32,10 @@ internal object QrActions {
                 ?: return false
             uri = inserted
             val written = resolver.openOutputStream(inserted)?.use { out ->
-                context.resources.openRawResource(res).use { input -> input.copyTo(out) }
+                // 故意按原始字节读 drawable：保存的是打包进 APK 的原图（PNG），不经过解码再压缩。
+                @SuppressLint("ResourceType")
+                val input = context.resources.openRawResource(res)
+                input.use { it.copyTo(out) }
                 true
             } ?: false
             if (!written) {
