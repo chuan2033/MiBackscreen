@@ -48,6 +48,44 @@ function Read-ZipText {
     }
 }
 
+# 读原始字节：StreamReader 会悄悄吞掉 BOM，查 BOM / CR 必须看字节
+function Read-ZipBytes {
+    param(
+        [System.IO.Compression.ZipArchive]$Archive,
+        [string]$Name
+    )
+    $entry = $Archive.GetEntry($Name)
+    if ($null -eq $entry) {
+        throw "Missing zip entry: $Name"
+    }
+    $stream = $entry.Open()
+    try {
+        $buffer = [System.IO.MemoryStream]::new()
+        try {
+            $stream.CopyTo($buffer)
+            return ,$buffer.ToArray()
+        } finally {
+            $buffer.Dispose()
+        }
+    } finally {
+        $stream.Dispose()
+    }
+}
+
+function Assert-NoBomNoCr {
+    param(
+        [System.IO.Compression.ZipArchive]$Archive,
+        [string]$Name
+    )
+    $bytes = Read-ZipBytes -Archive $Archive -Name $Name
+    if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+        throw "$Name starts with a UTF-8 BOM"
+    }
+    if ([System.Array]::IndexOf($bytes, [byte]13) -ge 0) {
+        throw "$Name contains CR (CRLF line endings)"
+    }
+}
+
 function Get-StreamSha256 {
     param([System.IO.Stream]$Stream)
     $sha = [System.Security.Cryptography.SHA256]::Create()
@@ -87,6 +125,8 @@ try {
     }
 
     $required = @(
+        "META-INF/com/google/android/update-binary",
+        "META-INF/com/google/android/updater-script",
         "module.prop",
         "skip_mount",
         "customize.sh",
@@ -94,6 +134,7 @@ try {
         "service.sh",
         "uninstall.sh",
         "appinfo_utils.sh",
+        "appinfo_txn.sh",
         "lib.sh",
         "status.sh",
         "action.sh",
@@ -121,6 +162,7 @@ try {
         "service.sh",
         "uninstall.sh",
         "appinfo_utils.sh",
+        "appinfo_txn.sh",
         "lib.sh",
         "status.sh",
         "action.sh",
@@ -130,12 +172,10 @@ try {
         "clear-reareye.sh",
         "fix-aiapp.sh"
     )) {
+        Assert-NoBomNoCr -Archive $archive -Name $scriptName
         $text = Read-ZipText -Archive $archive -Name $scriptName
         if (-not $text.StartsWith("#!/system/bin/sh`n")) {
             throw "$scriptName has an invalid shebang or line ending"
-        }
-        if ($text.Contains("`r") -or ([int]$text[0] -eq 0xFEFF)) {
-            throw "$scriptName is not UTF-8 without BOM using LF line endings"
         }
         $entry = $archive.GetEntry($scriptName)
         $mode = ($entry.ExternalAttributes -shr 16) -band 0x1FF
@@ -144,6 +184,30 @@ try {
         }
     }
 
+    # Magisk 安装器：update-binary 必须是官方 module_installer，updater-script 只有 #MAGISK
+    foreach ($metaName in @(
+        "META-INF/com/google/android/update-binary",
+        "META-INF/com/google/android/updater-script"
+    )) {
+        Assert-NoBomNoCr -Archive $archive -Name $metaName
+    }
+    $updateBinary = Read-ZipText -Archive $archive -Name "META-INF/com/google/android/update-binary"
+    if (-not $updateBinary.StartsWith("#!/sbin/sh`n") -or
+            -not $updateBinary.Contains(". /data/adb/magisk/util_functions.sh") -or
+            -not $updateBinary.Contains("install_module")) {
+        throw "update-binary is not the Magisk module_installer script"
+    }
+    $updaterScript = Read-ZipText -Archive $archive -Name "META-INF/com/google/android/updater-script"
+    if ($updaterScript.Trim() -ne "#MAGISK") {
+        throw "updater-script must contain only #MAGISK"
+    }
+
+    foreach ($webName in @("webroot/index.html", "webroot/app.js", "webroot/style.css")) {
+        Assert-NoBomNoCr -Archive $archive -Name $webName
+    }
+
+    # module.prop 带 BOM 时第一行会被解析成 "<BOM>id=..."，管理器认不出模块 id
+    Assert-NoBomNoCr -Archive $archive -Name "module.prop"
     $moduleProp = Read-ZipText -Archive $archive -Name "module.prop"
     # version / versionCode 期望值从打包源文件读取（与构建脚本同源），升版本只改 module.prop.
     # id 是模块身份，保持固定断言.

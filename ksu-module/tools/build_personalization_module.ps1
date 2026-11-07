@@ -29,6 +29,47 @@ $zipPath = Join-Path $OutputRoot "MiBackscreen_v${moduleVersion}.zip"
 $stagePath = Join-Path $StageRoot ("${moduleId}_" + [guid]::NewGuid().ToString("N"))
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 
+# Magisk 系管理器按「刷机包」处理模块 zip，需要标准安装器：
+# update-binary 用 Magisk 官方 scripts/module_installer.sh 的原文，updater-script 只有 #MAGISK。
+# KernelSU 系不读 META-INF，不受影响。module_installer 会用 -x 'META-INF/*' 解包，
+# 这两个文件不会进模块目录。
+$magiskUpdateBinary = @'
+#!/sbin/sh
+
+#################
+# Initialization
+#################
+
+umask 022
+
+# echo before loading util_functions
+ui_print() { echo "$1"; }
+
+require_new_magisk() {
+  ui_print "*******************************"
+  ui_print " Please install Magisk v20.4+! "
+  ui_print "*******************************"
+  exit 1
+}
+
+#########################
+# Load util_functions.sh
+#########################
+
+OUTFD=$2
+ZIPFILE=$3
+
+mount /data 2>/dev/null
+
+[ -f /data/adb/magisk/util_functions.sh ] || require_new_magisk
+. /data/adb/magisk/util_functions.sh
+[ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk
+
+install_module
+exit 0
+'@
+$magiskUpdaterScript = "#MAGISK"
+
 function Require-File {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
@@ -224,9 +265,16 @@ try {
         Copy-Item -LiteralPath $source -Destination (Join-Path $webDest $webFile)
     }
 
-    foreach ($textFile in Get-ChildItem -LiteralPath $stagePath -File) {
+    # 顶层脚本与 webroot 一起规范成「UTF-8 无 BOM + LF」
+    $textFiles = @(Get-ChildItem -LiteralPath $stagePath -File) +
+        @(Get-ChildItem -LiteralPath (Join-Path $stagePath "webroot") -File)
+    foreach ($textFile in $textFiles) {
         Write-Utf8Lf -Path $textFile.FullName -Text (Get-Content -Raw -Encoding UTF8 -LiteralPath $textFile.FullName)
     }
+
+    $metaInfRoot = Join-Path $stagePath "META-INF\com\google\android"
+    Write-Utf8Lf -Path (Join-Path $metaInfRoot "update-binary") -Text $magiskUpdateBinary
+    Write-Utf8Lf -Path (Join-Path $metaInfRoot "updater-script") -Text $magiskUpdaterScript
 
     $templateRoot = Join-Path $stagePath "mibackscreen_resources\media\rearscreen\template"
     Write-Json -Path (Join-Path $templateRoot "normal\rearScreen.json") -Value $normalSupplement
@@ -280,6 +328,7 @@ try {
     if ($appInfoEntries.Count -ne 6) {
         throw "Expected 6 app card entries, found $($appInfoEntries.Count)"
     }
+    # 由构建从 ROM 重新生成，只给校验脚本比对 6 张卡用；运行时不读它（源码目录里不再放这个文件）
     Write-Json -Path (Join-Path $stagePath "appcard_appInfo_patch.json") -Value $appInfoEntries
 
     $topLevelNames = @(Get-ChildItem -LiteralPath $stagePath -Force | ForEach-Object Name)
@@ -306,7 +355,9 @@ try {
                 $file.FullName,
                 $entryName,
                 [System.IO.Compression.CompressionLevel]::Optimal)
-            $mode = if ($entryName.EndsWith('.sh')) { 493 } else { 420 }
+            $isScript = $entryName.EndsWith('.sh') -or
+                $entryName -eq 'META-INF/com/google/android/update-binary'
+            $mode = if ($isScript) { 493 } else { 420 }
             $entry.ExternalAttributes = $mode -shl 16
         }
     } finally {

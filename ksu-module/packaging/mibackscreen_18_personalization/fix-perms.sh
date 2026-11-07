@@ -24,16 +24,16 @@ if [ ! -d "$ROOT" ]; then
     exit 1
 fi
 
+# 异常项 = 其他人不可读的文件 + 其他人不可进入的目录（含 ROOT 本身）。
+# 直接让 find 按权限位筛选再计数，不用 for f in $(find ...)：路径里有空格会被拆开。
+count_perm_issues() {
+    _bad_f=$(find "$ROOT" -type f ! -perm -0004 2>/dev/null | wc -l | tr -d ' ')
+    _bad_d=$(find "$ROOT" -type d ! -perm -0001 2>/dev/null | wc -l | tr -d ' ')
+    echo $(( ${_bad_f:-0} + ${_bad_d:-0} ))
+}
+
 # 统计改前异常数
-before=0
-for f in $(find "$ROOT" -type f 2>/dev/null); do
-    p=$(stat -c %a "$f" 2>/dev/null)
-    case "$p" in *4|*5|*6|*7) ;; *) before=$((before + 1));; esac
-done
-for d in $(find "$ROOT" -type d 2>/dev/null); do
-    p=$(stat -c %a "$d" 2>/dev/null)
-    case "$p" in *1|*3|*5|*7) ;; *) before=$((before + 1));; esac
-done
+before=$(count_perm_issues)
 
 if [ "$before" -eq 0 ]; then
     echo "权限本来就正常，无需修改。"
@@ -50,15 +50,7 @@ find "$ROOT" -type f -exec chmod 0644 {} \; 2>/dev/null
 restorecon -RF "$ROOT" 2>/dev/null
 
 # 统计改后
-after=0
-for f in $(find "$ROOT" -type f 2>/dev/null); do
-    p=$(stat -c %a "$f" 2>/dev/null)
-    case "$p" in *4|*5|*6|*7) ;; *) after=$((after + 1));; esac
-done
-for d in $(find "$ROOT" -type d 2>/dev/null); do
-    p=$(stat -c %a "$d" 2>/dev/null)
-    case "$p" in *1|*3|*5|*7) ;; *) after=$((after + 1));; esac
-done
+after=$(count_perm_issues)
 
 echo "已修正 $((before - after)) 项，剩余异常 $after 项。"
 klog "fix-perms before=$before after=$after"

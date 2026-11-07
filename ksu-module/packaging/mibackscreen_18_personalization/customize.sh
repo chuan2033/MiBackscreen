@@ -47,6 +47,7 @@ rm -rf "/data/adb/modules/meta-overlayfs/mnt/$MODID" 2>/dev/null
 set_perm_recursive "$MODPATH" 0 0 0755 0644
 set_perm "$MODPATH/customize.sh" 0 0 0755
 set_perm "$MODPATH/service.sh" 0 0 0755
+set_perm "$MODPATH/post-fs-data.sh" 0 0 0755
 set_perm "$MODPATH/uninstall.sh" 0 0 0755
 set_perm "$MODPATH/status.sh" 0 0 0755
 set_perm "$MODPATH/action.sh" 0 0 0755
@@ -54,6 +55,7 @@ set_perm "$MODPATH/logpack.sh" 0 0 0755
 set_perm "$MODPATH/fix-perms.sh" 0 0 0755
 set_perm "$MODPATH/fix-regperm.sh" 0 0 0755
 set_perm "$MODPATH/clear-reareye.sh" 0 0 0755
+set_perm "$MODPATH/fix-aiapp.sh" 0 0 0755
 set_perm "$MODPATH/lib.sh" 0 0 0755
 set_perm "$MODPATH/appinfo_utils.sh" 0 0 0644
 set_perm "$MODPATH/appinfo_txn.sh" 0 0 0644
