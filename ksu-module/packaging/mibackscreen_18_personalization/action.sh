@@ -34,13 +34,24 @@ echo
 # 失败也不影响下面的自检输出，诊断信息照常打印。
 # ---------------------------------------------------------------------------
 echo " 正在同步资源与应用卡…"
+echo " （宿主正在写卡片索引时会等它写完再重试，最长可能要几分钟，请勿退出）"
 echo
 # MIBS_NO_GUARD=1：只要一次同步，不等开机守护窗口（那是给开机流程用的）。
-if MIBS_NO_GUARD=1 sh "$MODDIR/service.sh" >/dev/null 2>&1; then
-    echo " 同步完成。"
-else
-    echo " 同步未完全成功（详见下方诊断与日志）。"
-fi
+# service.sh 退出码：0 成功 / 3 另一个同步实例（通常是开机那次的守护窗口）正在运行 / 其它失败。
+MIBS_NO_GUARD=1 sh "$MODDIR/service.sh" >/dev/null 2>&1
+sync_rc=$?
+case "$sync_rc" in
+    0)
+        echo " 同步完成。"
+        ;;
+    3)
+        echo " 开机同步还在进行（开机后约 5 分钟内会持续复查卡片），本次没有重复同步。"
+        echo " 过几分钟再点一次「操作」即可看到最终结果。"
+        ;;
+    *)
+        echo " 同步未完全成功（详见下方诊断与日志）。"
+        ;;
+esac
 echo
 
 sh "$MODDIR/status.sh" --text

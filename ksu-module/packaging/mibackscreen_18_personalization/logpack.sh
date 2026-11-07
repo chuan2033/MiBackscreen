@@ -16,8 +16,14 @@ DL=/sdcard/Download
 [ -d "$DL" ] || DL=/sdcard
 OUT="$DL/mibackscreen-log-$TS"
 
-WORK="$MIBACKSCREEN_TMP/logpack.$$"
-rm -rf "$WORK"; mkdir -p "$WORK" 2>/dev/null || WORK="$MODDIR"
+# 工作目录必须是本次新建的独立目录：结尾会 rm -rf 它。
+# 以前 mkdir 失败时退回 WORK="$MODDIR"，结尾就把整个模块目录删了。
+WORK="$(mktemp -d "$MIBACKSCREEN_TMP/mibackscreen-logpack.XXXXXX" 2>/dev/null)"
+case "$WORK" in
+    "$MIBACKSCREEN_TMP"/mibackscreen-logpack.*) ;;
+    *) echo "FAILED"; exit 1 ;;
+esac
+[ -d "$WORK" ] || { echo "FAILED"; exit 1; }
 
 MODVER=$(sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null)
 
@@ -28,6 +34,8 @@ sh "$MODDIR/status.sh" --text > "$WORK/status.txt" 2>&1
 cp "$MODDIR/module.prop" "$WORK/module.prop" 2>/dev/null
 cp "$MIBACKSCREEN_STATE_ROOT/service.log" "$WORK/service.log" 2>/dev/null
 cp "$MIBACKSCREEN_STATE_ROOT/appcard_owned_ids" "$WORK/appcard_owned_ids" 2>/dev/null
+# appInfo.json 原样打包：排障需要完整的卡片索引。注意其中可能有用户自己生成的
+# AI 卡名称，日志包只由用户手动发出，不会自动上传。
 cp "$MIBACKSCREEN_APPINFO" "$WORK/appInfo.json" 2>/dev/null
 cp "$MIBACKSCREEN_DATA_ROOT/template/normal/rearScreen.json" "$WORK/rearScreen-normal.json" 2>/dev/null
 cp "$MIBACKSCREEN_DATA_ROOT/template/default/rearScreen.json" "$WORK/rearScreen-default.json" 2>/dev/null
@@ -62,7 +70,9 @@ if [ -z "$SAVED" ]; then
     } > "$SAVED" 2>/dev/null
 fi
 
-rm -rf "$WORK" 2>/dev/null
+case "$WORK" in
+    "$MIBACKSCREEN_TMP"/mibackscreen-logpack.*) rm -rf "$WORK" 2>/dev/null ;;
+esac
 
 if [ -f "$SAVED" ]; then
     chmod 0644 "$SAVED" 2>/dev/null

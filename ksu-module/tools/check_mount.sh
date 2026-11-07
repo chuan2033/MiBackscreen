@@ -8,8 +8,11 @@
 #
 # 结果同时打印并落盘 /sdcard/mibackscreen_check.txt。
 #
-# 注意：模块 1.4.0 起已改为 data-root 方案，**不再使用挂载**。
-#       本脚本只做环境/结构快照；失效定位请用 diagnose_rear_presets.sh。
+# 注意：模块已改为 data-root 方案，**不再使用挂载**（实际版本以下方打印的
+#       module.prop 为准）。本脚本只做环境/结构快照；失效定位请用 diagnose_rear_presets.sh。
+#
+# 隐私：会列出 /data/adb/modules 下所有已装模块的目录名，以及过滤后的 logcat
+#       （只保留含 rearscreen / appcard / ai-mate / mibackscreen_18 的行）。
 # ============================================================================
 
 OUT=/sdcard/mibackscreen_check.txt

@@ -75,25 +75,31 @@ count_occ(){ [ -f "$1" ] && grep -a -o -- "$2" "$1" 2>/dev/null | wc -l | tr -d 
 json_num(){ [ -f "$1" ] && grep -a -m1 -o "\"$2\":[ ]*[0-9]*" "$1" 2>/dev/null | tr -dc '0-9'; }
 
 # 资源文件权限是否「应用也读得到」：文件 o+r，路径上每层目录 o+x
+# 文件清单按行读（here-doc，循环在当前 shell 里，计数不会丢）；
+# 不用 for f in $(find ...)：路径里有空格会被拆开。
 perm_issues() {
     _root="$1"; _bad=0; _sample=""
     [ -d "$_root" ] || { echo 0; return; }
-    for f in $(find "$_root" -type f 2>/dev/null); do
+    _files=$(find "$_root" -type f 2>/dev/null)
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
         p=$(stat -c %a "$f" 2>/dev/null)
         case "$p" in
             *4|*5|*6|*7) ;;                       # 末位含读
-            *) _bad=$((_bad + 1)); [ -z "$_sample" ] && _sample="${f#$_root/}";;
+            *) _bad=$((_bad + 1)); [ -z "$_sample" ] && _sample="${f#"$_root"/}";;
         esac
         d=$(dirname "$f")
         while [ "$d" != "$_root" ] && [ "$d" != "/" ]; do
             dp=$(stat -c %a "$d" 2>/dev/null)
             case "$dp" in
                 *1|*3|*5|*7) ;;
-                *) _bad=$((_bad + 1)); [ -z "$_sample" ] && _sample="${d#$_root/}/ (目录)";;
+                *) _bad=$((_bad + 1)); [ -z "$_sample" ] && _sample="${d#"$_root"/}/ (目录)";;
             esac
             d=$(dirname "$d")
         done
-    done
+    done <<EOF
+$_files
+EOF
     echo "$_bad ${_sample:-}"
 }
 

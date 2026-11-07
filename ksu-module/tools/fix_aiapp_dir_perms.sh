@@ -85,6 +85,9 @@ echo
 echo "---------------- 执行修复 ----------------"
 chown -R system_theme:system_theme "$BASE" && echo "[+] 属主 -> system_theme:system_theme"
 # 只给目录开写权限；文件一律 0644，与正常机器的基线保持一致。
+# 子目录也给 0777：手头只有「正常机器顶层目录是 777」这一条基线，没有子目录权限
+# 的样本，也不能确认往子目录里写 / 删的是否只有 system_theme 一个身份。收窄成
+# 「顶层 777、子目录 0775」之前，需要先在正常机器上采到子目录权限，免得故障复发。
 find "$BASE" -type d -exec chmod 0777 {} \; && echo "[+] 目录权限 -> 0777"
 find "$BASE" -type f -exec chmod 0644 {} \; && echo "[+] 文件权限 -> 0644"
 
