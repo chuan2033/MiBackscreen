@@ -327,4 +327,10 @@
     <string name="rear_record_failed_start">Could not start recording</string>
     <string name="rear_record_failed_empty">Nothing was recorded, so nothing was saved (the rear screen may not have turned on)</string>
     <string name="rear_record_failed_save">Could not save to the gallery</string>
+    <string name="rear_double_tap_title">Rear double-tap</string>
+    <string name="rear_double_tap_summary_none">No apps selected, feature off</string>
+    <string name="rear_double_tap_summary_counts">Wake blocked for %1$d · sleep blocked for %2$d</string>
+    <string name="rear_double_tap_wake_section">Rear screen off: block double-tap to wake</string>
+    <string name="rear_double_tap_sleep_section">Rear screen on: block double-tap to sleep</string>
+    <string name="rear_double_tap_choose_apps">Choose apps</string>
 </resources>

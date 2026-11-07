@@ -35,10 +35,9 @@ internal fun FunctionPage(
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFaceEnrollmentCompatChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
-    onAddDisabledAppsClick: () -> Unit,
+    onRearDoubleTapClick: () -> Unit,
     doubleTapSleepDisabledPackages: String,
     musicWidgetWhitelistPackages: String,
-    onDoubleTapSleepAppsClick: () -> Unit,
     onMusicWidgetWhitelistClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit
 ) {
@@ -68,36 +67,14 @@ internal fun FunctionPage(
                     title = stringResource(R.string.config_disable_rear_cover_title),
                     summary = stringResource(R.string.config_disable_rear_cover_summary)
                 )
-                val disabledPackageCount = PackageListCodec.parse(doubleTapWakeDisabledPackages).size
+                // 双击亮屏 / 双击熄屏两份名单合在「背屏双击」页里，这里只留一个入口。
                 ArrowPreference(
-                    title = stringResource(R.string.config_disable_double_tap_wake_title),
-                    // 名单为空时总开关也是关的（写名单时自动推导），这里把空状态说清楚，
-                    // 免得用户以为「点进去什么都不选也在拦」。
-                    summary = if (disabledPackageCount == 0) {
-                        stringResource(R.string.double_tap_wake_summary_none)
-                    } else {
-                        pluralStringResource(
-                            R.plurals.double_tap_wake_summary_count,
-                            disabledPackageCount,
-                            disabledPackageCount
-                        )
-                    },
-                    onClick = onAddDisabledAppsClick
-                )
-                // 与双击亮屏名单并列：这份管背屏亮着时「双击熄屏」，两份名单互不影响。
-                val sleepDisabledCount = PackageListCodec.parse(doubleTapSleepDisabledPackages).size
-                ArrowPreference(
-                    title = stringResource(R.string.double_tap_sleep_title),
-                    summary = if (sleepDisabledCount == 0) {
-                        stringResource(R.string.double_tap_sleep_summary_none)
-                    } else {
-                        pluralStringResource(
-                            R.plurals.double_tap_sleep_summary_count,
-                            sleepDisabledCount,
-                            sleepDisabledCount
-                        )
-                    },
-                    onClick = onDoubleTapSleepAppsClick
+                    title = stringResource(R.string.rear_double_tap_title),
+                    summary = rearDoubleTapEntrySummary(
+                        PackageListCodec.parse(doubleTapWakeDisabledPackages).size,
+                        PackageListCodec.parse(doubleTapSleepDisabledPackages).size,
+                    ),
+                    onClick = onRearDoubleTapClick
                 )
             }
 
