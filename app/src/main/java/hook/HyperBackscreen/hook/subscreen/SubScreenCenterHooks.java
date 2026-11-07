@@ -61,6 +61,7 @@ import hook.HyperBackscreen.hook.target.TargetResolver;
 import hook.HyperBackscreen.hook.ModuleMain;
 import hook.HyperBackscreen.hook.appindex.PanelAppCard;
 import hook.HyperBackscreen.hook.appindex.SubscreenAppIndex;
+import hook.HyperBackscreen.lyric.RearLyricHost;
 
 /**
  * 背屏中心（{@code com.xiaomi.subscreencenter}）进程里的 Hook：长按编辑拦截、应用卡功能开关与
@@ -524,6 +525,7 @@ public final class SubScreenCenterHooks {
                     Constants.SUBSCREEN_LAUNCHER_ACTIVITY_CLASS + "#" + lifecycle, chain -> {
                         SwipePanelHost.release((Activity) chain.getThisObject());
                         BatteryRingHost.release((Activity) chain.getThisObject());
+                        notifyRearLyricLauncher((Activity) chain.getThisObject(), lifecycle);
                         return chain.proceed();
                     });
         }
@@ -532,6 +534,7 @@ public final class SubScreenCenterHooks {
                     Object result = chain.proceed();
                     refreshActiveSubscreenAppInfoCache(classLoader);
                     BatteryRingHost.show((Activity) chain.getThisObject(), module);
+                    notifyRearLyricLauncher((Activity) chain.getThisObject(), "onResume");
                     return result;
                 });
         module.hookMethodIfPresent(
@@ -551,6 +554,27 @@ public final class SubScreenCenterHooks {
                     return chain.proceed();
                 }
         );
+    }
+
+    /** 背屏实时歌词跟着背屏桌面前后台走（暂停时恢复歌手名，回到前台补写）。失败只记日志。 */
+    private void notifyRearLyricLauncher(@NonNull Activity activity, @NonNull String lifecycle) {
+        try {
+            switch (lifecycle) {
+                case "onResume":
+                    RearLyricHost.onLauncherResumed(activity);
+                    break;
+                case "onPause":
+                    RearLyricHost.onLauncherPaused();
+                    break;
+                case "onDestroy":
+                    RearLyricHost.onLauncherDestroyed(activity);
+                    break;
+                default:
+                    break;
+            }
+        } catch (Throwable error) {
+            module.log(Log.DEBUG, Constants.LOG_TAG, "Rear lyric launcher " + lifecycle + " failed: " + error);
+        }
     }
 
     /** 背屏面板挂在宿主 Activity 的窗口上，所以要从点击到的 View 反查 Activity。 */
@@ -794,6 +818,15 @@ public final class SubScreenCenterHooks {
                     Object result = chain.proceed();
                     if (chain.getThisObject() instanceof View panel) {
                         AutoWallpaperRotationHost.onPanelStateChanged(panel);
+                    }
+                    // 同一个方法只能挂一次，歌词的息屏联动也从这里转发（参数是 inAod）。
+                    Object inAod = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                    if (inAod instanceof Boolean) {
+                        try {
+                            RearLyricHost.onAodChanged((Boolean) inAod);
+                        } catch (Throwable error) {
+                            module.log(Log.DEBUG, Constants.LOG_TAG, "Rear lyric AOD sync failed: " + error);
+                        }
                     }
                     return result;
                 });

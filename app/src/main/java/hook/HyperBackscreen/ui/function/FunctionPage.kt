@@ -3,14 +3,25 @@ package hook.HyperBackscreen.ui.function
 import android.os.Build
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import hook.HyperBackscreen.R
 
 import hook.HyperBackscreen.common.PackageListCodec
 import hook.HyperBackscreen.batteryring.BatteryRingGeometry
+import hook.HyperBackscreen.lyric.SuperLyricAvailability
+import hook.HyperBackscreen.ui.components.AnimatedPreferenceVisibility
 import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.components.CollapsibleFunctionGroup
+import hook.HyperBackscreen.ui.components.SettingsInfoRow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
@@ -39,7 +50,9 @@ internal fun FunctionPage(
     doubleTapSleepDisabledPackages: String,
     musicWidgetWhitelistPackages: String,
     onMusicWidgetWhitelistClick: () -> Unit,
-    onRearScreenRecordClick: () -> Unit
+    onRearScreenRecordClick: () -> Unit,
+    rearMedia: RearMediaSwitches = RearMediaSwitches(),
+    onRearMediaChange: (RearMediaSwitch, Boolean) -> Unit = { _, _ -> },
 ) {
     val batteryRingSupported = BatteryRingGeometry.isCalibratedDevice(Build.DEVICE)
     Column {
@@ -121,6 +134,15 @@ internal fun FunctionPage(
                     },
                     onClick = onMusicWidgetWhitelistClick
                 )
+                SwitchPreference(
+                    checked = rearMedia.rearLyric,
+                    onCheckedChange = { onRearMediaChange(RearMediaSwitch.REAR_LYRIC, it) },
+                    title = stringResource(R.string.rear_lyric_title),
+                    summary = stringResource(R.string.rear_lyric_summary)
+                )
+                AnimatedPreferenceVisibility(visible = rearMedia.rearLyric) {
+                    SuperLyricStatusRow(active = rearMedia.rearLyric)
+                }
             }
 
             CollapsibleFunctionGroup(
@@ -146,6 +168,24 @@ internal fun FunctionPage(
                     onCheckedChange = onRemoveWallpaperLimitChange,
                     title = stringResource(R.string.home_remove_wallpaper_limit_title)
                 )
+                SwitchPreference(
+                    checked = rearMedia.videoResume,
+                    onCheckedChange = { onRearMediaChange(RearMediaSwitch.VIDEO_RESUME, it) },
+                    title = stringResource(R.string.rear_video_resume_title),
+                    summary = stringResource(R.string.rear_video_resume_summary)
+                )
+                SwitchPreference(
+                    checked = rearMedia.videoUnlockLimits,
+                    onCheckedChange = { onRearMediaChange(RearMediaSwitch.VIDEO_UNLOCK_LIMITS, it) },
+                    title = stringResource(R.string.rear_video_unlock_limits_title),
+                    summary = stringResource(R.string.rear_video_unlock_limits_summary)
+                )
+                SwitchPreference(
+                    checked = rearMedia.videoKeepAudio,
+                    onCheckedChange = { onRearMediaChange(RearMediaSwitch.VIDEO_KEEP_AUDIO, it) },
+                    title = stringResource(R.string.rear_video_keep_audio_title),
+                    summary = stringResource(R.string.rear_video_keep_audio_summary)
+                )
             }
         }
 
@@ -158,4 +198,33 @@ internal fun FunctionPage(
             )
         }
     }
+}
+
+/** 歌词开关下的 SuperLyric 状态：模块 App 进程里能拿到服务，背屏中心里也一定能拿到。 */
+@Composable
+private fun SuperLyricStatusRow(active: Boolean) {
+    val context = LocalContext.current
+    var status by remember { mutableStateOf<SuperLyricAvailability?>(null) }
+    // 每次打开开关重新检测一次（用户可能刚去 LSPosed 勾完作用域回来）；检测有 Binder 调用，放 IO 线程。
+    LaunchedEffect(active) {
+        if (active) {
+            status = null
+            status = withContext(Dispatchers.IO) {
+                runCatching { SuperLyricAvailability.detect(context.applicationContext) }.getOrNull()
+                    ?: SuperLyricAvailability.SERVICE_UNAVAILABLE
+            }
+        }
+    }
+    SettingsInfoRow(
+        label = stringResource(R.string.rear_lyric_status_label),
+        value = stringResource(
+            when (status) {
+                null -> R.string.rear_lyric_status_checking
+                SuperLyricAvailability.V4 -> R.string.rear_lyric_status_v4
+                SuperLyricAvailability.LEGACY -> R.string.rear_lyric_status_legacy
+                SuperLyricAvailability.SERVICE_UNAVAILABLE -> R.string.rear_lyric_status_unavailable
+                SuperLyricAvailability.NOT_INSTALLED -> R.string.rear_lyric_status_not_installed
+            }
+        )
+    )
 }

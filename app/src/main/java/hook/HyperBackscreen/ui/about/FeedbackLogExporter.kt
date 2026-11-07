@@ -14,6 +14,7 @@ import hook.HyperBackscreen.R
 import hook.HyperBackscreen.bridge.DiagnosticLogStore
 import hook.HyperBackscreen.bridge.PrefsBridge
 import hook.HyperBackscreen.common.Constants
+import hook.HyperBackscreen.lyric.SuperLyricAvailability
 import hook.HyperBackscreen.ui.util.LauncherIconController
 import hook.HyperBackscreen.ui.util.RearDisplayCompatibility
 import hook.HyperBackscreen.ui.util.currentDeviceName
@@ -289,6 +290,11 @@ internal object FeedbackLogExporter {
         appendLine("double_tap_sleep_disabled_packages=${PrefsBridge.readDoubleTapSleepDisabledPackagesForUi(context)}")
         appendLine("music_widget_whitelist_packages=${PrefsBridge.readMusicWidgetWhitelistPackagesForUi(context)}")
         appendLine("theme_settings_shortcut=${PrefsBridge.readThemeSettingsShortcutForUi(context)}")
+        appendLine("rear_video_resume=${PrefsBridge.readRearVideoResumeForUi(context)}")
+        appendLine("rear_video_unlock_limits=${PrefsBridge.readRearVideoUnlockLimitsForUi(context)}")
+        appendLine("rear_video_keep_audio=${PrefsBridge.readRearVideoKeepAudioForUi(context)}")
+        appendLine("enable_rear_lyric=${PrefsBridge.readEnableRearLyricForUi(context)}")
+        appendLine("super_lyric_status=${SuperLyricAvailability.detect(context).name}")
         appendLine("floating_nav_bar=${PrefsBridge.readFloatingNavBar(context)}")
         appendLine("liquid_glass=${PrefsBridge.readLiquidGlass(context)}")
         appendLine("bottom_bar_blur=${PrefsBridge.readBottomBarBlur(context)}")

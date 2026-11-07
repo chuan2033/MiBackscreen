@@ -87,6 +87,18 @@ public final class Constants {
      */
     public static final String KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES = "double_tap_sleep_disabled_packages";
     public static final String KEY_THEME_SETTINGS_SHORTCUT = "theme_settings_shortcut";
+    /**
+     * 背屏视频壁纸续播（背屏中心）：重开播放器时从上次的位置接着播，不再每次亮屏从头开始。
+     * 视频三项都只在宿主进程启动时决定是否安装 Hook（关着就完全不挂），所以改完要重启对应作用域；
+     * Hook 回调里也会现读一次，关掉后不必等重启就停止改写。
+     */
+    public static final String KEY_REAR_VIDEO_RESUME = "rear_video_resume";
+    /** 解除背屏自定义视频的时长 / 帧率 / 分辨率限制（主题商店），HDR / 杜比 / 非 MP4、MOV 仍拒绝。 */
+    public static final String KEY_REAR_VIDEO_UNLOCK_LIMITS = "rear_video_unlock_limits";
+    /** 背屏视频壁纸保留声音：主题商店不再剥音轨，背屏中心按媒体音量出声（不申请音频焦点）。 */
+    public static final String KEY_REAR_VIDEO_KEEP_AUDIO = "rear_video_keep_audio";
+    /** 背屏实时歌词：订阅 SuperLyric，把当前歌词行显示在背屏音乐卡片的歌手行上。 */
+    public static final String KEY_ENABLE_REAR_LYRIC = "enable_rear_lyric";
     public static final String PANEL_PREFERENCE_AUTHORITY = MODULE_PACKAGE + ".PanelPreferences";
     public static final String PANEL_PREFERENCE_METHOD_SET = "set_panel_preference";
     /** 模块 → 宿主同步广播的签名级权限：宿主注册接收器时要求发送方持有，挡住第三方应用。 */
@@ -97,6 +109,9 @@ public final class Constants {
             MODULE_PACKAGE + ".action.SYNC_BATTERY_RING";
     public static final String ACTION_SYNC_AUTO_WALLPAPER =
             MODULE_PACKAGE + ".action.SYNC_AUTO_WALLPAPER";
+    /** 背屏实时歌词开关变化：extra {@link #EXTRA_PREFERENCE_VALUE} 为新值，背屏中心即时注册 / 注销订阅。 */
+    public static final String ACTION_SYNC_REAR_LYRIC =
+            MODULE_PACKAGE + ".action.SYNC_REAR_LYRIC";
     public static final String EXTRA_PREFERENCE_KEY = "preference_key";
     public static final String EXTRA_INTERVAL_MINUTES = "interval_minutes";
     public static final String PANEL_DIAGNOSTIC_METHOD_APPEND = "append_diagnostic";

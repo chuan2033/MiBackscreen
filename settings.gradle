@@ -18,6 +18,11 @@ dependencyResolutionManagement {
         maven { url = 'https://maven.aliyun.com/repository/central' }
         mavenCentral()
         maven { url = 'https://repo.huaweicloud.com/repository/maven/' }
+        // SuperLyricApi（背屏实时歌词订阅）只发布在 JitPack；限定分组，其余依赖不走这个仓库。
+        maven {
+            url = 'https://jitpack.io'
+            content { includeGroup 'com.github.HChenX' }
+        }
     }
 }
 

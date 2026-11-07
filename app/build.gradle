@@ -124,6 +124,8 @@ dependencies {    implementation 'androidx.activity:activity-compose:1.13.0'
     implementation files("libs/interface-${libxposedApiVersion}.jar", "libs/service-${libxposedApiVersion}.jar")
     // 按结构定位宿主混淆成员，替代硬编码混淆名。
     implementation 'org.luckypray:dexkit:2.2.0'
+    // 背屏实时歌词：SuperLyric 3.x（super_lyric）与 4.x（super_lyric.v4）两套 AIDL 都在这个包里，LGPL。
+    implementation 'com.github.HChenX:SuperLyricApi:4.0'
     testImplementation 'org.luckypray:dexkit:2.2.0'
     testImplementation 'junit:junit:4.13.2'
 }

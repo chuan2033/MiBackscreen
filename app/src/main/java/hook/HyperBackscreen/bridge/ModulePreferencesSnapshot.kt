@@ -44,6 +44,10 @@ internal data class ModulePreferencesSnapshot(
     val faceEnrollmentCompat: Boolean = PrefsBridge.DEFAULT_FACE_ENROLLMENT_COMPAT,
     val doubleTapSleepDisabledPackages: String = PrefsBridge.DEFAULT_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES,
     val musicWidgetWhitelistPackages: String = PrefsBridge.DEFAULT_MUSIC_WIDGET_WHITELIST_PACKAGES,
+    val rearVideoResume: Boolean = PrefsBridge.DEFAULT_REAR_VIDEO_RESUME,
+    val rearVideoUnlockLimits: Boolean = PrefsBridge.DEFAULT_REAR_VIDEO_UNLOCK_LIMITS,
+    val rearVideoKeepAudio: Boolean = PrefsBridge.DEFAULT_REAR_VIDEO_KEEP_AUDIO,
+    val enableRearLyric: Boolean = PrefsBridge.DEFAULT_ENABLE_REAR_LYRIC,
 ) {
     companion object {
         private val keys = setOf(
@@ -85,6 +89,10 @@ internal data class ModulePreferencesSnapshot(
             Constants.KEY_REAR_SCREEN_SCHEDULE_END,
             Constants.KEY_REAR_SCREEN_SCHEDULE_MODE,
             Constants.KEY_FACE_ENROLLMENT_COMPAT,
+            Constants.KEY_REAR_VIDEO_RESUME,
+            Constants.KEY_REAR_VIDEO_UNLOCK_LIMITS,
+            Constants.KEY_REAR_VIDEO_KEEP_AUDIO,
+            Constants.KEY_ENABLE_REAR_LYRIC,
         )
 
         /** One in-memory snapshot, with no Binder call or cache write during observation. */
@@ -173,6 +181,13 @@ internal data class ModulePreferencesSnapshot(
                         PrefsBridge.DEFAULT_FIX_REAR_SCREEN_APPLY,
                     ),
                 ),
+                rearVideoResume = boolean(Constants.KEY_REAR_VIDEO_RESUME, PrefsBridge.DEFAULT_REAR_VIDEO_RESUME),
+                rearVideoUnlockLimits = boolean(
+                    Constants.KEY_REAR_VIDEO_UNLOCK_LIMITS,
+                    PrefsBridge.DEFAULT_REAR_VIDEO_UNLOCK_LIMITS,
+                ),
+                rearVideoKeepAudio = boolean(Constants.KEY_REAR_VIDEO_KEEP_AUDIO, PrefsBridge.DEFAULT_REAR_VIDEO_KEEP_AUDIO),
+                enableRearLyric = boolean(Constants.KEY_ENABLE_REAR_LYRIC, PrefsBridge.DEFAULT_ENABLE_REAR_LYRIC),
             )
         }
 

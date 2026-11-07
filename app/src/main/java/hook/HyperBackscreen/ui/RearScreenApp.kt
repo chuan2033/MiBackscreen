@@ -57,6 +57,8 @@ import hook.HyperBackscreen.ui.battery.BatteryColorSlot
 import hook.HyperBackscreen.batteryring.BatteryPercentPosition
 import hook.HyperBackscreen.batteryring.BatteryRingLayout
 import hook.HyperBackscreen.ui.config.PreferencesBackup
+import hook.HyperBackscreen.ui.function.RearMediaSwitch
+import hook.HyperBackscreen.ui.function.RearMediaSwitches
 import hook.HyperBackscreen.ui.util.AppLanguage
 import hook.HyperBackscreen.ui.util.RearDisplayCompatibility
 import hook.HyperBackscreen.ui.util.RearScreenTimeoutSync
@@ -176,6 +178,9 @@ internal fun RearScreenApp() {
     var fixRearScreenApply by remember { mutableStateOf(initialPrefs.fixRearScreenApply) }
     var faceEnrollmentCompat by remember { mutableStateOf(initialPrefs.faceEnrollmentCompat) }
     var keepRearScreenOnInGame by remember { mutableStateOf(initialPrefs.keepRearScreenOnInGame) }
+    var rearMedia by remember { mutableStateOf(rearMediaOf(initialPrefs)) }
+    // 歌词开关是同步提交（Binder）后再发广播，写入期间忽略重复点击。
+    var savingRearLyric by remember { mutableStateOf(false) }
     var floatingNavBar by remember {
         mutableStateOf(PrefsBridge.readFloatingNavBar(context))
     }
@@ -310,6 +315,7 @@ internal fun RearScreenApp() {
                 doubleTapWakeDisabledPackages = values.doubleTapWakeDisabledPackages
                 doubleTapSleepDisabledPackages = values.doubleTapSleepDisabledPackages
                 musicWidgetWhitelistPackages = values.musicWidgetWhitelistPackages
+                rearMedia = rearMediaOf(values)
                 moduleActivated = when {
                     ModuleApp.getService() != null -> ActivationState.ACTIVE
                     // 服务断开（之前已激活）或等待超时后仍没有服务，才算未激活。
@@ -384,6 +390,10 @@ internal fun RearScreenApp() {
         if (after.autoWallpaperIntervalMinutes != before.autoWallpaperIntervalMinutes) {
             sendAutoWallpaperSync(context, AutoWallpaperInterval.fromPref(after.autoWallpaperIntervalMinutes))
         }
+        // 歌词开关不重启背屏中心，和手动切换一样只发同步广播。
+        if (after.enableRearLyric != before.enableRearLyric) {
+            sendRearLyricSync(context, after.enableRearLyric)
+        }
         val scopes = linkedSetOf<String>()
         if (after.enable18ProFeatures != before.enable18ProFeatures) {
             scopes += listOf(
@@ -400,6 +410,11 @@ internal fun RearScreenApp() {
         if (after.enableAppCard != before.enableAppCard) scopes += Constants.TARGET_PACKAGE
         if (after.musicWidgetWhitelistPackages != before.musicWidgetWhitelistPackages) {
             scopes += Constants.TARGET_PACKAGE
+        }
+        if (after.rearVideoResume != before.rearVideoResume) scopes += Constants.TARGET_PACKAGE
+        if (after.rearVideoUnlockLimits != before.rearVideoUnlockLimits) scopes += Constants.THEME_STORE_PACKAGE
+        if (after.rearVideoKeepAudio != before.rearVideoKeepAudio) {
+            scopes += listOf(Constants.TARGET_PACKAGE, Constants.THEME_STORE_PACKAGE)
         }
         // 双击熄屏名单由 system_server 在每次焦点切换时现读，不需要重启任何作用域。
         val installAppCard = after.enableAppCard && !before.enableAppCard
@@ -759,6 +774,43 @@ internal fun RearScreenApp() {
                         showRestoreConfirm = true
                     }
                 }
+            },
+            rearMedia = rearMedia,
+            onRearMediaChange = { switch, newValue ->
+                when (switch) {
+                    // 视频三项只在宿主进程启动时决定装不装 Hook，改完重启对应作用域。
+                    RearMediaSwitch.VIDEO_RESUME -> {
+                        rearMedia = rearMedia.copy(videoResume = newValue)
+                        PrefsBridge.writeRearVideoResumeFromUi(context, newValue)
+                        refreshScopes(Constants.TARGET_PACKAGE)
+                    }
+                    RearMediaSwitch.VIDEO_UNLOCK_LIMITS -> {
+                        rearMedia = rearMedia.copy(videoUnlockLimits = newValue)
+                        PrefsBridge.writeRearVideoUnlockLimitsFromUi(context, newValue)
+                        refreshScopes(Constants.THEME_STORE_PACKAGE)
+                    }
+                    RearMediaSwitch.VIDEO_KEEP_AUDIO -> {
+                        rearMedia = rearMedia.copy(videoKeepAudio = newValue)
+                        PrefsBridge.writeRearVideoKeepAudioFromUi(context, newValue)
+                        refreshScopes(Constants.TARGET_PACKAGE, Constants.THEME_STORE_PACKAGE)
+                    }
+                    // 歌词：提交成功后发签名权限广播，背屏中心即时注册 / 注销订阅，不重启。
+                    RearMediaSwitch.REAR_LYRIC -> if (!savingRearLyric) {
+                        savingRearLyric = true
+                        rearMedia = rearMedia.copy(rearLyric = newValue)
+                        scope.launch {
+                            try {
+                                val saved = withContext(Dispatchers.IO) {
+                                    PrefsBridge.writeEnableRearLyricFromUi(context, newValue)
+                                }
+                                if (saved) sendRearLyricSync(context, newValue)
+                                else feedback.show(savedPending)
+                            } finally {
+                                savingRearLyric = false
+                            }
+                        }
+                    }
+                }
             }
         )
 
@@ -868,6 +920,22 @@ private fun sendBatteryRingSync(context: Context, key: String, value: Boolean) {
             .putExtra(Constants.EXTRA_PREFERENCE_VALUE, value)
     )
 }
+
+/** 通知背屏中心歌词开关已变；接收端要求发送方持有模块签名权限。 */
+private fun sendRearLyricSync(context: Context, enabled: Boolean) {
+    context.sendBroadcast(
+        Intent(Constants.ACTION_SYNC_REAR_LYRIC)
+            .setPackage(Constants.TARGET_PACKAGE)
+            .putExtra(Constants.EXTRA_PREFERENCE_VALUE, enabled)
+    )
+}
+
+private fun rearMediaOf(values: ModulePreferencesSnapshot) = RearMediaSwitches(
+    videoResume = values.rearVideoResume,
+    videoUnlockLimits = values.rearVideoUnlockLimits,
+    videoKeepAudio = values.rearVideoKeepAudio,
+    rearLyric = values.enableRearLyric,
+)
 
 private fun sendAutoWallpaperSync(context: Context, interval: AutoWallpaperInterval) {
     context.sendBroadcast(

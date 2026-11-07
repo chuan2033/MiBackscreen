@@ -20,6 +20,8 @@ internal fun countEnabledFunctions(
     // 两份新名单：非空即视为启用。
     doubleTapSleepFilterActive: Boolean = false,
     musicWidgetWhitelistActive: Boolean = false,
+    // 背屏视频壁纸三项与背屏实时歌词。
+    rearMedia: RearMediaSwitches = RearMediaSwitches(),
 ): Int = listOf(
     disableLongPress,
     removeWallpaperLimit,
@@ -35,6 +37,10 @@ internal fun countEnabledFunctions(
     keepRearScreenOnInGame,
     doubleTapSleepFilterActive,
     musicWidgetWhitelistActive,
+    rearMedia.videoResume,
+    rearMedia.videoUnlockLimits,
+    rearMedia.videoKeepAudio,
+    rearMedia.rearLyric,
 ).count { it }
 
 /**
@@ -62,6 +68,7 @@ internal fun countFunctionGroups(
     removeWallpaperLimit: Boolean,
     doubleTapSleepFilterActive: Boolean = false,
     musicWidgetWhitelistActive: Boolean = false,
+    rearMedia: RearMediaSwitches = RearMediaSwitches(),
 ): FunctionGroupCounts = FunctionGroupCounts(
     system = listOf(disableRearScreenCover, disableDoubleTapWake, doubleTapSleepFilterActive).count { it },
     subscreen = listOf(
@@ -72,6 +79,31 @@ internal fun countFunctionGroups(
         rearScreenOffTimeoutActive,
         keepRearScreenOnInGame,
         musicWidgetWhitelistActive,
+        rearMedia.rearLyric,
     ).count { it },
-    theme = listOf(fixRearScreenApply, faceEnrollmentCompat, removeWallpaperLimit).count { it },
+    // 视频壁纸三项放在「主题壁纸」组里显示（续播的 Hook 在背屏中心，但入口和壁纸设置放在一起）。
+    theme = listOf(
+        fixRearScreenApply,
+        faceEnrollmentCompat,
+        removeWallpaperLimit,
+        rearMedia.videoResume,
+        rearMedia.videoUnlockLimits,
+        rearMedia.videoKeepAudio,
+    ).count { it },
 )
+
+/** 背屏视频壁纸三项与背屏实时歌词的开关值，一起在界面层级间传递。 */
+internal data class RearMediaSwitches(
+    val videoResume: Boolean = false,
+    val videoUnlockLimits: Boolean = false,
+    val videoKeepAudio: Boolean = false,
+    val rearLyric: Boolean = false,
+)
+
+/** [RearMediaSwitches] 里的单项，用于开关回调。 */
+internal enum class RearMediaSwitch {
+    VIDEO_RESUME,
+    VIDEO_UNLOCK_LIMITS,
+    VIDEO_KEEP_AUDIO,
+    REAR_LYRIC,
+}

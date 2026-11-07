@@ -333,4 +333,18 @@
     <string name="rear_double_tap_wake_section">Rear screen off: block double-tap to wake</string>
     <string name="rear_double_tap_sleep_section">Rear screen on: block double-tap to sleep</string>
     <string name="rear_double_tap_choose_apps">Choose apps</string>
+    <string name="rear_video_resume_title">Resume video wallpaper</string>
+    <string name="rear_video_resume_summary">Continue from where it stopped when the rear screen wakes, leaves always-on display or returns from another rear app; switching wallpapers starts over. Some wallpapers are designed to replay on every wake</string>
+    <string name="rear_video_unlock_limits_title">Remove video wallpaper limits</string>
+    <string name="rear_video_unlock_limits_summary">Custom rear videos are no longer trimmed to 6 s or compressed to 30 fps / 1080p, and the trim page is skipped; HDR, Dolby Vision and non-MP4 / MOV files are still rejected. Videos at 1080p or below are recommended</string>
+    <string name="rear_video_keep_audio_title">Keep video wallpaper sound</string>
+    <string name="rear_video_keep_audio_summary">Newly set rear videos keep their audio track and play at media volume without interrupting music. Videos set earlier must be picked again to have sound</string>
+    <string name="rear_lyric_title">Rear screen live lyrics</string>
+    <string name="rear_lyric_summary">While music plays, the artist line on the rear music card shows the current lyric. Requires SuperLyric, enabled in LSPosed for System Framework and your music apps, then a reboot</string>
+    <string name="rear_lyric_status_label" translatable="false">SuperLyric</string>
+    <string name="rear_lyric_status_checking">Checking…</string>
+    <string name="rear_lyric_status_v4">Connected · 4.x</string>
+    <string name="rear_lyric_status_legacy">Connected · 3.x</string>
+    <string name="rear_lyric_status_unavailable">Service inactive</string>
+    <string name="rear_lyric_status_not_installed">Not installed</string>
 </resources>
