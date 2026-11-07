@@ -18,5 +18,6 @@ internal enum class HomeRoute : NavKey {
     // 新路由只追加在末尾（见 HomeRouteTest）。
     DoubleTapSleepAppPicker,
     MusicWhitelistAppPicker,
-    RearScreenRecord
+    RearScreenRecord,
+    RearDoubleTap
 }

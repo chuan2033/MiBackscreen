@@ -322,4 +322,10 @@
     <string name="rear_record_failed_start">录屏启动失败</string>
     <string name="rear_record_failed_empty">没有录到画面，未保存（背屏可能没有亮起）</string>
     <string name="rear_record_failed_save">保存到相册失败</string>
+    <string name="rear_double_tap_title">背屏双击</string>
+    <string name="rear_double_tap_summary_none">未选择应用，功能未启用</string>
+    <string name="rear_double_tap_summary_counts">亮屏拦截 %1$d 个应用 · 熄屏拦截 %2$d 个应用</string>
+    <string name="rear_double_tap_wake_section">背屏熄着时：禁止双击亮屏</string>
+    <string name="rear_double_tap_sleep_section">背屏亮着时：禁止双击熄屏</string>
+    <string name="rear_double_tap_choose_apps">选择应用</string>
 </resources>

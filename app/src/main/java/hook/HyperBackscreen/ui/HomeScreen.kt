@@ -87,6 +87,7 @@ import hook.HyperBackscreen.ui.recorder.RearScreenRecordPage
 import hook.HyperBackscreen.common.PackageListCodec
 import hook.HyperBackscreen.ui.config.ConfigPage
 import hook.HyperBackscreen.ui.function.FunctionPage
+import hook.HyperBackscreen.ui.function.RearDoubleTapPage
 import hook.HyperBackscreen.ui.function.RearScreenTimingPage
 import hook.HyperBackscreen.ui.home.HomePage
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -439,7 +440,9 @@ internal fun HomeScreen(
                     HomeRoute.AppPicker -> AppPickerPage(
                         selectedPackages = doubleTapWakeDisabledPackages,
                         onSelectedPackagesChange = onDoubleTapWakeDisabledPackagesChange,
-                        onBack = { navigateBackFrom(page) }
+                        onBack = { navigateBackFrom(page) },
+                        titleRes = R.string.config_disable_double_tap_wake_title,
+                        hintRes = R.string.app_picker_double_tap_hint
                     )
                     HomeRoute.BatteryColor -> BatteryColorPage(
                         enableBatteryRing = enableBatteryRing,
@@ -474,6 +477,13 @@ internal fun HomeScreen(
                         onBack = { navigateBackFrom(page) }
                     )
                     HomeRoute.VersionHistory -> VersionHistoryPage(onBack = { navigateBackFrom(page) })
+                    HomeRoute.RearDoubleTap -> RearDoubleTapPage(
+                        doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
+                        doubleTapSleepDisabledPackages = doubleTapSleepDisabledPackages,
+                        onWakeAppsClick = { openDetail(page, HomeRoute.AppPicker) },
+                        onSleepAppsClick = { openDetail(page, HomeRoute.DoubleTapSleepAppPicker) },
+                        onBack = { navigateBackFrom(page) }
+                    )
                     HomeRoute.DoubleTapSleepAppPicker -> AppPickerPage(
                         selectedPackages = doubleTapSleepDisabledPackages,
                         onSelectedPackagesChange = onDoubleTapSleepDisabledPackagesChange,
@@ -527,8 +537,7 @@ internal fun HomeScreen(
                         onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                         onLauncherIconHiddenChange = onLauncherIconHiddenChange,
                         onSettingsClick = { openDetail(page, HomeRoute.Settings) },
-                        onAddDisabledAppsClick = { openDetail(page, HomeRoute.AppPicker) },
-                        onDoubleTapSleepAppsClick = { openDetail(page, HomeRoute.DoubleTapSleepAppPicker) },
+                        onRearDoubleTapClick = { openDetail(page, HomeRoute.RearDoubleTap) },
                         onMusicWidgetWhitelistClick = { openDetail(page, HomeRoute.MusicWhitelistAppPicker) },
                         onRearScreenRecordClick = { openDetail(page, HomeRoute.RearScreenRecord) },
                         onLicenseClick = { openDetail(page, HomeRoute.License) },
@@ -644,8 +653,7 @@ private fun MainTabPage(
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFaceEnrollmentCompatChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
-    onAddDisabledAppsClick: () -> Unit,
-    onDoubleTapSleepAppsClick: () -> Unit,
+    onRearDoubleTapClick: () -> Unit,
     onMusicWidgetWhitelistClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit,
     onBatteryColorClick: () -> Unit,
@@ -746,8 +754,7 @@ private fun MainTabPage(
                             onFixRearScreenApplyChange = onFixRearScreenApplyChange,
                             onFaceEnrollmentCompatChange = onFaceEnrollmentCompatChange,
                             onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
-                            onAddDisabledAppsClick = onAddDisabledAppsClick,
-                            onDoubleTapSleepAppsClick = onDoubleTapSleepAppsClick,
+                            onRearDoubleTapClick = onRearDoubleTapClick,
                             onMusicWidgetWhitelistClick = onMusicWidgetWhitelistClick,
                             onRearScreenRecordClick = onRearScreenRecordClick,
                             onBatteryColorClick = onBatteryColorClick,
@@ -812,8 +819,7 @@ private fun MainContent(
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
     onSettingsClick: () -> Unit,
-    onAddDisabledAppsClick: () -> Unit,
-    onDoubleTapSleepAppsClick: () -> Unit,
+    onRearDoubleTapClick: () -> Unit,
     onMusicWidgetWhitelistClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit,
     onLicenseClick: () -> Unit,
@@ -919,8 +925,7 @@ private fun MainContent(
                 onFixRearScreenApplyChange = onFixRearScreenApplyChange,
                 onFaceEnrollmentCompatChange = onFaceEnrollmentCompatChange,
                 onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
-                onAddDisabledAppsClick = onAddDisabledAppsClick,
-                onDoubleTapSleepAppsClick = onDoubleTapSleepAppsClick,
+                onRearDoubleTapClick = onRearDoubleTapClick,
                 onMusicWidgetWhitelistClick = onMusicWidgetWhitelistClick,
                 onRearScreenRecordClick = onRearScreenRecordClick,
                 onBatteryColorClick = onBatteryColorClick,
