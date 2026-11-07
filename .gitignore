@@ -1,40 +1,44 @@
+# ---- 构建与 IDE ----
 .gradle/
-.idea/
 .kotlin/
-.miuix-temp/
-.workbuddy/
-local.properties
-captures/
+.idea/
 *.iml
+**/build/
+**/.cxx/
+captures/
+local.properties
 *.log
+
+# ---- 产物与签名 ----
 *.apk
 *.ap_
 *.aab
 *.jks
 *.keystore
-**/build/
-**/.cxx/
+
+# ---- 本地临时目录 ----
 .tmp/
 .tmp-modules_config.db
 .tmp-miuix-src/
+.miuix-temp/
+.workbuddy/
+.claude/
 
-# 内部文档
+# 附加资源模块迁入 ksu-module/ 之前的本地旧目录（含 ROM 资源与二进制，不进库）
+/MiBackscreen-dist/
+
+# ---- 内部文档（只在本地维护）----
 AGENTS.md
 HANDOFF.md
 handoff.md
-MiBackscreen 交接文档.md
 MiBackscreen.md
-UI规范.md
-MIUIX_0.9.4_AND_LIQUID_GLASS_REVIEW.md
-UI_AUDIT.md
 MiBackscreen 交接文档.md
+UI规范.md
+UI_AUDIT.md
+MIUIX_0.9.4_AND_LIQUID_GLASS_REVIEW.md
 docs/DEVICE_TEST_MATRIX.md
 docs/feedback13-validation-2026-09-28.md
 docs/miuix-nav-migration.md
 docs/validation-2026-09-27.md
-tools/face-enrollment-validation/FaceEnrollmentDeviceTest.java
-tools/face-enrollment-validation/README.md
-tools/feedback-validation/AndroidManifest.xml
-tools/feedback-validation/FeedbackValidation.kt
-tools/feedback-validation/README.md
-tools/feedback-validation/isolated.init.gradle
+tools/face-enrollment-validation/
+tools/feedback-validation/

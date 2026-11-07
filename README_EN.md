@@ -86,11 +86,45 @@ Use JDK 21, Android SDK 37 and Build Tools 37.0.0. The wrapper pins Gradle 9.6.0
 .\gradlew.bat :app:assembleRelease --offline --console=plain
 ```
 
+On Linux / macOS use `./gradlew` instead of `.\gradlew.bat` with the same arguments.
+
 Without cached dependencies or the wrapper distribution, remove `--offline` and prepare dependencies online. Debug output: `app/build/outputs/apk/debug/app-debug.apk`.
 
 Release enables R8 and resource shrinking. Signed output is `app/build/outputs/apk/release/app-release.apk`; without signing it is `app-release-unsigned.apk`. Signing reads `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_PASSWORD` and optional `RELEASE_KEY_ALIAS` (default: `hyperbackscreen`) from `local.properties` or matching environment variables. Relative key paths resolve from `app/`; absent an explicit path, the build checks `app/release-key.jks`. An explicitly configured key with incomplete settings fails the build. Available signing credentials also sign Debug without enabling minification; otherwise Debug uses its default certificate. Updating an installed app requires the same signing certificate.
 
 After a successful build, validate hook behavior on the target device and host versions.
+
+## Repository layout
+
+```
+app/                         LSPosed module (app + hooks in one APK)
+  src/main/java/hook/HyperBackscreen/
+    app/                     Application: binds the Xposed service, reconciles preferences
+    bridge/                  Preference bridge (app ↔ scopes), providers, diagnostic log
+    common/                  Constants and pure logic shared by app and hooks
+    model/                   Preference value types (sleep timer, wallpaper rotation, schedule)
+    hook/                    Hook entry ModuleMain (dispatch only)
+      system/                system_server: sleep timer, double-tap wake, schedule, gaming keep-on
+      subscreen/             Rear Screen Center: long press, app-card limit, panel entry, rotation
+      appindex/              appInfo.json app-card index I/O, cross-process lock, module card
+      theme/                 Theme Manager: download/device adaptation, settings entry, apply repair
+      assistant/             Personal Assistant: rear-screen app-card store
+      target/                DexKit structural lookup (obfuscated names change per host build)
+      util/                  Reflection and file helpers
+    panel/                   Quick panel injected into Rear Screen Center (native views)
+    batteryring/             Rear battery ring: geometry, layout, colors and injected view
+    ui/                      Module app Compose UI, one package per page
+  src/debug/                 Debug-only host probe
+  src/test/                  Unit tests mirroring the main packages
+ksu-module/                  Rear-screen add-on resource module (KernelSU / Magisk)
+  packaging/                 Module scripts and WebUI
+  tools/                     Build, validation and device diagnostic scripts
+docs/release-notes/          Release notes
+```
+
+## Add-on resource module
+
+`ksu-module/` is the companion KernelSU / Magisk module that syncs 18 Pro Max rear-screen personalization and app-card resources to the device. Resources are extracted from a ROM at build time; the repository only keeps scripts. Folders containing Xiaomi files (`analysis/`, `archive/`, `out/*.zip`) stay local, and the packaged zip ships as a Release attachment. See [ksu-module/README.md](ksu-module/README.md) for building and validation.
 
 ## License and acknowledgements
 

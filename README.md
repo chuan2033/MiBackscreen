@@ -74,7 +74,41 @@ JDK 21、Android SDK 37、Build Tools 37.0.0、Gradle 9.6.0（Wrapper）。配�
 .\gradlew.bat :app:assembleRelease --offline --console=plain
 ```
 
+Linux / macOS 用 `./gradlew` 代替 `.\gradlew.bat`，参数相同。
+
 无依赖缓存时去掉 `--offline`。Release 签名从 `local.properties` 或环境变量读 `RELEASE_STORE_FILE` / `RELEASE_STORE_PASSWORD` / `RELEASE_KEY_PASSWORD`（可选 `RELEASE_KEY_ALIAS`，默认 `hyperbackscreen`），未配置则输出未签名包。覆盖安装须同证书。
+
+## 项目结构
+
+```
+app/                         LSPosed 模块（App + Hook，同一个 APK）
+  src/main/java/hook/HyperBackscreen/
+    app/                     Application：绑定 Xposed 服务、启动时对齐偏好
+    bridge/                  偏好桥接（App ↔ 各作用域）、Provider、诊断日志
+    common/                  常量与纯逻辑，App 和 Hook 共用
+    model/                   偏好取值类型（息屏时间、换壁纸间隔 / 顺序、定时关屏）
+    hook/                    Hook 入口 ModuleMain（只做分发）
+      system/                system_server：息屏时间、双击唤醒、定时关屏、游戏保持亮
+      subscreen/             背屏中心：长按、应用卡上限、快捷面板入口、自动换壁纸
+      appindex/              appInfo.json 应用卡索引读写与跨进程锁、模块应用卡资源
+      theme/                 主题商店：下载与设备适配、设置页入口、应用流程资源修复
+      assistant/             智能助理：负一屏应用卡商店
+      target/                DexKit 结构定位（混淆名随宿主版本变化）
+      util/                  反射与文件工具
+    panel/                   注入背屏中心的快捷面板（原生 View）
+    batteryring/             背屏电量环：几何 / 布局 / 配色与注入的 View
+    ui/                      模块 App 的 Compose 界面（按页面分包）
+  src/debug/                 仅 Debug 包含的宿主探针
+  src/test/                  单元测试，包结构与 main 对应
+ksu-module/                  背屏附加资源模块（KernelSU / Magisk）
+  packaging/                 模块脚本与 WebUI
+  tools/                     构建、校验与设备诊断脚本
+docs/release-notes/          各版本发行说明
+```
+
+## 附加资源模块
+
+`ksu-module/` 是配套的 KernelSU / Magisk 模块，把 18 Pro Max 的背屏个性化与应用卡资源同步到本机。资源从 ROM 里提取、构建时才打包，仓库只保存脚本；`analysis/`、`archive/`、`out/*.zip` 等含小米文件的目录只留在本地，交付包作为 Release 附件发布。构建与校验方法见 [ksu-module/README.md](ksu-module/README.md)。
 
 ## 许可证
 
