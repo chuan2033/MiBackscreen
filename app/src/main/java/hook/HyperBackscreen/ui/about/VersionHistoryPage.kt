@@ -1,5 +1,10 @@
 package hook.HyperBackscreen.ui.about
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -10,7 +15,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.DetailPageScaffold
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
@@ -170,16 +174,29 @@ private fun ReleaseCard(info: UpdateInfo) {
             val preview = remember(info) { AnnotatedString(notesPreview(info.notes)) }
             val codeBackground = currentAppColors.codeBackground
             val full = remember(info, codeBackground) { releaseNotes(info, codeBackground) }
-            Text(
-                text = if (expanded) full else preview,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .animateContentSize(tween(durationMillis = 260, easing = FastOutSlowInEasing)),
-                color = MiuixTheme.colorScheme.onSurface.copy(alpha = if (expanded) 0.85f else 0.7f),
-                style = MiuixTheme.textStyles.body2,
-                maxLines = if (expanded) Int.MAX_VALUE else 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            // 摘要与全文交叉淡入淡出，高度同时平滑过渡：新文字随卡片长高逐渐显出来，
+            // 不再是先整段换成全文、再把被裁掉的部分撑开。
+            AnimatedContent(
+                targetState = expanded,
+                modifier = Modifier.fillMaxWidth(),
+                transitionSpec = {
+                    (fadeIn(tween(ExpandFadeInMillis, delayMillis = ExpandFadeOutMillis / 2)) togetherWith
+                        fadeOut(tween(ExpandFadeOutMillis))) using
+                        SizeTransform(clip = true) { _, _ ->
+                            tween(ExpandSizeMillis, easing = FastOutSlowInEasing)
+                        }
+                },
+                label = "releaseNotesExpand"
+            ) { showFull ->
+                Text(
+                    text = if (showFull) full else preview,
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = if (showFull) 0.85f else 0.7f),
+                    style = MiuixTheme.textStyles.body2,
+                    maxLines = if (showFull) Int.MAX_VALUE else 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -276,3 +293,8 @@ private fun formatReleaseDate(iso: String): String {
         iso.take(10)
     }
 }
+
+/** 版本卡片展开 / 收起：高度过渡与文字淡出、淡入的时长。 */
+private const val ExpandSizeMillis = 280
+private const val ExpandFadeOutMillis = 120
+private const val ExpandFadeInMillis = 220

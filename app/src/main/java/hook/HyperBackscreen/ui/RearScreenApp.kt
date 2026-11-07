@@ -1,5 +1,7 @@
 package hook.HyperBackscreen.ui
 
+import hook.HyperBackscreen.ui.home.ActivationState
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.DialogButtonRow
@@ -190,8 +192,18 @@ internal fun RearScreenApp() {
     var launcherIconHidden by remember {
         mutableStateOf(LauncherIconController.isHidden(context))
     }
+    // 服务绑定前是「检测中」；绑定成功即激活。等了 [ActivationBindTimeoutMillis] 仍未绑定才判未激活，
+    // 避免冷启动首帧把已激活的模块先显示成红色「未激活」。
     var moduleActivated by remember {
-        mutableStateOf(ModuleApp.getService() != null)
+        mutableStateOf(
+            if (ModuleApp.getService() != null) ActivationState.ACTIVE else ActivationState.CHECKING
+        )
+    }
+    var activationTimedOut by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(ActivationBindTimeoutMillis)
+        activationTimedOut = true
+        if (ModuleApp.getService() == null) moduleActivated = ActivationState.INACTIVE
     }
     var showRearDisplayWarning by remember { mutableStateOf(false) }
     // 恢复配置会覆盖当前设置：先读出备份概要让用户确认，确认后才真正写入。
@@ -241,6 +253,7 @@ internal fun RearScreenApp() {
                         Constants.KEY_BATTERY_PERCENT_TEXT_WEIGHT to values.batteryPercentTextWeight,
                         Constants.KEY_BATTERY_RING_TRACK to values.batteryRingTrack,
                         Constants.KEY_BATTERY_RING_STYLE to values.batteryRingStyle,
+                        Constants.KEY_BATTERY_LOW_THRESHOLD to values.batteryLowThreshold,
                     )::get
                 )
                 autoWallpaperInterval = AutoWallpaperInterval.fromPref(values.autoWallpaperIntervalMinutes)
@@ -263,7 +276,12 @@ internal fun RearScreenApp() {
                 disableRearScreenCover = values.disableRearScreenCover
                 disableDoubleTapWake = values.disableDoubleTapWake
                 doubleTapWakeDisabledPackages = values.doubleTapWakeDisabledPackages
-                moduleActivated = ModuleApp.getService() != null
+                moduleActivated = when {
+                    ModuleApp.getService() != null -> ActivationState.ACTIVE
+                    // 服务断开（之前已激活）或等待超时后仍没有服务，才算未激活。
+                    moduleActivated == ActivationState.ACTIVE || activationTimedOut -> ActivationState.INACTIVE
+                    else -> ActivationState.CHECKING
+                }
             }
         }
         val subscription = ModulePreferencesSnapshot.observe(preferences, listener)
@@ -692,3 +710,6 @@ private fun executeScopeCommand(command: Array<String>): Boolean {
         false
     }
 }
+
+/** 等 Xposed 服务绑定的最长时间；正常情况下几百毫秒内就绑定好了。 */
+private const val ActivationBindTimeoutMillis = 2500L

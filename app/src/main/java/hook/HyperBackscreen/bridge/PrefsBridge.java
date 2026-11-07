@@ -60,6 +60,8 @@ public final class PrefsBridge {
     public static final String DEFAULT_BATTERY_RING_TRACK = "0";
     /** 线条样式，默认连体轮廓（contour）；另一个取值是上下双环（twin）。 */
     public static final String DEFAULT_BATTERY_RING_STYLE = "contour";
+    /** 低电量阈值（百分比），默认 20 与系统电池图标换色点一致。 */
+    public static final String DEFAULT_BATTERY_LOW_THRESHOLD = "20";
     public static final String DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES = "0";
     /** 定时切换的挑图方式，默认顺序循环。 */
     public static final String DEFAULT_AUTO_WALLPAPER_ORDER =
@@ -137,6 +139,7 @@ public final class PrefsBridge {
                 DEFAULT_BATTERY_PERCENT_TEXT_WEIGHT);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_RING_TRACK, DEFAULT_BATTERY_RING_TRACK);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_RING_STYLE, DEFAULT_BATTERY_RING_STYLE);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_LOW_THRESHOLD, DEFAULT_BATTERY_LOW_THRESHOLD);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES, DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_AUTO_WALLPAPER_ORDER, DEFAULT_AUTO_WALLPAPER_ORDER);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_REAR_SCREEN_OFF_TIMEOUT, DEFAULT_REAR_SCREEN_OFF_TIMEOUT);
@@ -503,6 +506,8 @@ public final class PrefsBridge {
                 return DEFAULT_BATTERY_RING_TRACK;
             case Constants.KEY_BATTERY_RING_STYLE:
                 return DEFAULT_BATTERY_RING_STYLE;
+            case Constants.KEY_BATTERY_LOW_THRESHOLD:
+                return DEFAULT_BATTERY_LOW_THRESHOLD;
             case Constants.KEY_BATTERY_PERCENT_OFFSET_Y:
                 return DEFAULT_BATTERY_PERCENT_OFFSET_Y;
             default:
@@ -1324,6 +1329,7 @@ public final class PrefsBridge {
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_TEXT_SIZE);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_RING_TRACK);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_RING_STYLE);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_LOW_THRESHOLD);
             flushUiStringPreference(
                     localPrefs,
                     remotePrefs,
@@ -1440,6 +1446,11 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_BATTERY_RING_STYLE,
                     DEFAULT_BATTERY_RING_STYLE);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_LOW_THRESHOLD,
+                    DEFAULT_BATTERY_LOW_THRESHOLD);
             syncStringKey(
                     localPrefs,
                     remotePrefs,

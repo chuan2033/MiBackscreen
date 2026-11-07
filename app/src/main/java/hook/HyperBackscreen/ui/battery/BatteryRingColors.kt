@@ -14,14 +14,14 @@ internal data class BatteryColorOverrides(
     /** 该状态对应的覆盖色；null 表示跟随系统。 */
     fun overrideFor(state: BatteryRingState): Int? = when {
         state.charging -> parseBatteryColor(charging)
-        state.percent < BatteryRingState.LOW_PERCENT_THRESHOLD -> parseBatteryColor(low)
+        state.isLow -> parseBatteryColor(low)
         else -> parseBatteryColor(idle)
     }
 
     /** 该状态对应的原始覆盖值，供设置页回显。 */
     fun rawFor(state: BatteryRingState): String = when {
         state.charging -> charging
-        state.percent < BatteryRingState.LOW_PERCENT_THRESHOLD -> low
+        state.isLow -> low
         else -> idle
     }
 

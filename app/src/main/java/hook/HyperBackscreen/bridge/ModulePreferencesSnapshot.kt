@@ -31,6 +31,7 @@ internal data class ModulePreferencesSnapshot(
     val batteryPercentTextWeight: String = PrefsBridge.DEFAULT_BATTERY_PERCENT_TEXT_WEIGHT,
     val batteryRingTrack: String = PrefsBridge.DEFAULT_BATTERY_RING_TRACK,
     val batteryRingStyle: String = PrefsBridge.DEFAULT_BATTERY_RING_STYLE,
+    val batteryLowThreshold: String = PrefsBridge.DEFAULT_BATTERY_LOW_THRESHOLD,
     val autoWallpaperIntervalMinutes: String = PrefsBridge.DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES,
     val autoWallpaperOrder: String = PrefsBridge.DEFAULT_AUTO_WALLPAPER_ORDER,
     val rearScreenOffTimeout: String = PrefsBridge.DEFAULT_REAR_SCREEN_OFF_TIMEOUT,
@@ -68,6 +69,7 @@ internal data class ModulePreferencesSnapshot(
             Constants.KEY_BATTERY_PERCENT_TEXT_WEIGHT,
             Constants.KEY_BATTERY_RING_TRACK,
             Constants.KEY_BATTERY_RING_STYLE,
+            Constants.KEY_BATTERY_LOW_THRESHOLD,
             Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES,
             Constants.KEY_REAR_SCREEN_OFF_TIMEOUT,
             Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME,
@@ -127,6 +129,8 @@ internal data class ModulePreferencesSnapshot(
                     ?: PrefsBridge.DEFAULT_BATTERY_RING_TRACK,
                 batteryRingStyle = value(Constants.KEY_BATTERY_RING_STYLE) as? String
                     ?: PrefsBridge.DEFAULT_BATTERY_RING_STYLE,
+                batteryLowThreshold = value(Constants.KEY_BATTERY_LOW_THRESHOLD) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_LOW_THRESHOLD,
                 autoWallpaperIntervalMinutes = value(Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES) as? String
                     ?: PrefsBridge.DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES,
                 autoWallpaperOrder = value(Constants.KEY_AUTO_WALLPAPER_ORDER) as? String

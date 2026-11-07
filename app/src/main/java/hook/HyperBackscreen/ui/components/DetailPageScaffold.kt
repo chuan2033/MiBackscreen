@@ -1,6 +1,7 @@
 package hook.HyperBackscreen.ui.components
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -54,6 +55,11 @@ internal fun DetailPageScaffold(
     modifier: Modifier = Modifier,
     topSpacing: Dp = HomeUiTokens.DetailListTopSpacing,
     actions: @Composable RowScope.() -> Unit = {},
+    /**
+     * 固定在顶栏下方、不随列表滚动的区域（例如电量页的背屏预览）。
+     * 列表在它下面单独滚动，所以调下面的参数时预览始终可见。
+     */
+    pinnedHeader: (@Composable () -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
     val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
@@ -88,15 +94,22 @@ internal fun DetailPageScaffold(
             }
         }
     ) { paddingValues ->
-        Box(modifier = Modifier.layerBackdrop(backdrop)) {
+        Column(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
+            if (pinnedHeader != null) {
+                Spacer(Modifier.height(paddingValues.calculateTopPadding()))
+                Box(modifier = Modifier.padding(horizontal = 12.dp)) { pinnedHeader() }
+            }
             LazyColumn(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .weight(1f)
                     .scrollEndHaptic()
                     .overScrollVertical()
                     .nestedScroll(scrollBehavior.nestedScrollConnection)
                     .padding(horizontal = 12.dp),
-                contentPadding = PaddingValues(top = paddingValues.calculateTopPadding())
+                contentPadding = PaddingValues(
+                    top = if (pinnedHeader != null) 0.dp else paddingValues.calculateTopPadding()
+                )
             ) {
                 if (topSpacing > 0.dp) {
                     item(key = "detail_top_spacer") { Spacer(Modifier.height(topSpacing)) }

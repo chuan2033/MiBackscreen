@@ -44,8 +44,7 @@ internal fun FunctionPage(
             SwitchPreference(
                 checked = enable18ProFeatures,
                 onCheckedChange = onEnable18ProFeaturesChange,
-                title = stringResource(R.string.home_enable_18_pro_features_title),
-                summary = stringResource(R.string.scope_restart_hint_18pro)
+                title = stringResource(R.string.home_enable_18_pro_features_title)
             )
         }
 
@@ -104,8 +103,7 @@ internal fun FunctionPage(
                 SwitchPreference(
                     checked = removeAppCardLimit,
                     onCheckedChange = onRemoveAppCardLimitChange,
-                    title = stringResource(R.string.home_remove_app_card_limit_title),
-                    summary = stringResource(R.string.scope_restart_hint_backscreen)
+                    title = stringResource(R.string.home_remove_app_card_limit_title)
                 )
                 // 息屏档位、两个定时开关、游戏时保持常亮都收进二级页，这里只留入口。
                 ArrowPreference(
@@ -124,21 +122,18 @@ internal fun FunctionPage(
                     checked = fixRearScreenApply,
                     onCheckedChange = onFixRearScreenApplyChange,
                     title = stringResource(R.string.home_fix_apply_title),
-                    summary = stringResource(R.string.home_fix_apply_summary) + "\n" +
-                        stringResource(R.string.scope_restart_hint_backscreen_theme)
+                    summary = stringResource(R.string.home_fix_apply_summary)
                 )
                 SwitchPreference(
                     checked = faceEnrollmentCompat,
                     onCheckedChange = onFaceEnrollmentCompatChange,
                     title = stringResource(R.string.face_enrollment_compat_title),
-                    summary = stringResource(R.string.face_enrollment_compat_summary) + "\n" +
-                        stringResource(R.string.scope_restart_hint_theme)
+                    summary = stringResource(R.string.face_enrollment_compat_summary)
                 )
                 SwitchPreference(
                     checked = removeWallpaperLimit,
                     onCheckedChange = onRemoveWallpaperLimitChange,
-                    title = stringResource(R.string.home_remove_wallpaper_limit_title),
-                    summary = stringResource(R.string.scope_restart_hint_theme)
+                    title = stringResource(R.string.home_remove_wallpaper_limit_title)
                 )
             }
         }

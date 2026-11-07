@@ -5,7 +5,7 @@ import hook.HyperBackscreen.common.Constants
 /**
  * 背屏电量显示的位置 / 尺寸微调。
  *
- * 六项都以字符串随偏好保存（沿用颜色、位置那条字符串通道，不需要额外的数值读写），
+ * 各项都以字符串随偏好保存（沿用颜色、位置那条字符串通道，不需要额外的数值读写），
  * 键名见 [Constants] 里的 `KEY_BATTERY_*` 系列。[entries] 是唯一的落盘口径、[of] 是唯一的
  * 读取口径，两边共用同一份键清单，加项时不会漏掉一边。
  * 和颜色一样**在进入背屏桌面挂载时读一次**，改完重新进入背屏桌面即生效。
@@ -27,6 +27,8 @@ internal data class BatteryRingLayout(
     val ringTrackVisible: Boolean,
     /** 线条样式：连体轮廓 / 上下双环。 */
     val ringStyle: BatteryRingStyle,
+    /** 低电量阈值（百分比）：低于它且未充电时用「低电量」颜色。 */
+    val lowThresholdPercent: Int = DEFAULT_LOW_THRESHOLD,
 ) {
     /**
      * 逐项落盘的键值对，[of] 的反向操作。
@@ -42,6 +44,7 @@ internal data class BatteryRingLayout(
         Constants.KEY_BATTERY_PERCENT_TEXT_WEIGHT to encode(percentTextWeight),
         Constants.KEY_BATTERY_RING_TRACK to encode(ringTrackVisible),
         Constants.KEY_BATTERY_RING_STYLE to ringStyle.prefValue,
+        Constants.KEY_BATTERY_LOW_THRESHOLD to encode(lowThresholdPercent),
     )
 
     companion object {
@@ -80,6 +83,11 @@ internal data class BatteryRingLayout(
         /** 与旧版本固定 BOLD 一致，升级后观感不变。 */
         const val DEFAULT_PERCENT_TEXT_WEIGHT = 700
         const val DEFAULT_RING_TRACK = false
+
+        /** 低电量阈值的可调区间与默认值；默认 20 与系统电池图标换色点一致。 */
+        const val LOW_THRESHOLD_MIN = 5
+        const val LOW_THRESHOLD_MAX = 50
+        const val DEFAULT_LOW_THRESHOLD = BatteryRingState.LOW_PERCENT_THRESHOLD
 
         private const val TRACK_ON = "1"
         private const val TRACK_OFF = "0"
@@ -145,6 +153,7 @@ internal data class BatteryRingLayout(
             percentTextWeight = DEFAULT_PERCENT_TEXT_WEIGHT,
             ringTrackVisible = DEFAULT_RING_TRACK,
             ringStyle = BatteryRingStyle.DEFAULT,
+            lowThresholdPercent = DEFAULT_LOW_THRESHOLD,
         )
 
         /**
@@ -193,6 +202,12 @@ internal data class BatteryRingLayout(
                 // 旧版本没有这个键，读到的空值落在默认的连体轮廓上，升级后观感不变。
                 ringStyle = BatteryRingStyle.fromPref(
                     read(Constants.KEY_BATTERY_RING_STYLE)),
+                // 旧版本没有这个键，空值落在 20，和之前写死的阈值一致。
+                lowThresholdPercent = clamp(
+                    read(Constants.KEY_BATTERY_LOW_THRESHOLD),
+                    LOW_THRESHOLD_MIN,
+                    LOW_THRESHOLD_MAX,
+                    DEFAULT_LOW_THRESHOLD),
             )
         }
 

@@ -17,6 +17,7 @@ import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
+import android.view.animation.LinearInterpolator
 import hook.HyperBackscreen.BuildConfig
 import hook.HyperBackscreen.bridge.PrefsBridge
 import hook.HyperBackscreen.common.Constants
@@ -194,6 +195,15 @@ private class BatteryRingView(
     private var displayedPercent = 0f
     private var animator: ValueAnimator? = null
     private var registered = false
+    /** 充电流光：只在充电且背屏可见时跑，停充 / 熄屏 / 卸载即停。 */
+    private var sweepAnimator: ValueAnimator? = null
+    private var sweepPhase = 0f
+    private val sweepPath = Path()
+    private val sweepPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
     var preview: BatteryRingState? = null
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) { update(intent) }
@@ -218,6 +228,7 @@ private class BatteryRingView(
     override fun onDetachedFromWindow() {
         animator?.cancel()
         animator = null
+        stopSweep()
         if (registered) runCatching { context.unregisterReceiver(receiver) }
         registered = false
         super.onDetachedFromWindow()
@@ -229,6 +240,7 @@ private class BatteryRingView(
             animator?.cancel()
             displayedPercent = state?.percent?.toFloat() ?: 0f
         }
+        updateSweep()
     }
 
     fun refresh() {
@@ -242,10 +254,12 @@ private class BatteryRingView(
             intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1),
             intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1),
             intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0,
+            layout.lowThresholdPercent,
         )
         if (next == state) return
         val previous = state
         state = next
+        updateSweep()
         animator?.cancel()
         if (next == null) {
             invalidate()
@@ -263,6 +277,38 @@ private class BatteryRingView(
             }
         }
         invalidate()
+    }
+
+    private fun updateSweep() {
+        val shouldRun = state?.charging == true && isAttachedToWindow && windowVisibility == VISIBLE
+        if (shouldRun && sweepAnimator == null) {
+            sweepAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = CHARGE_SWEEP_DURATION_MS
+                repeatCount = ValueAnimator.INFINITE
+                interpolator = LinearInterpolator()
+                addUpdateListener { sweepPhase = it.animatedValue as Float; invalidate() }
+                start()
+            }
+        } else if (!shouldRun) {
+            stopSweep()
+        }
+    }
+
+    private fun stopSweep() {
+        sweepAnimator?.cancel()
+        sweepAnimator = null
+        invalidate()
+    }
+
+    private fun drawSweep(canvas: Canvas, color: Int) {
+        val stops = if (displayedPercent >= 100f) ringLengths else ringProgressStops(displayedPercent, ringLengths)
+        val pieces = chargeSweepSegments(sweepPhase, stops)
+        if (pieces.isEmpty()) return
+        sweepPath.reset()
+        pieces.forEach { (index, from, to) -> ringMeasures[index].getSegment(from, to, sweepPath, true) }
+        sweepPaint.color = chargeSweepColor(color)
+        sweepPaint.strokeWidth = layout.ringStrokeWidth.toFloat()
+        canvas.drawPath(sweepPath, sweepPaint)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -301,6 +347,7 @@ private class BatteryRingView(
                 }
                 canvas.drawPath(progress, paint)
             }
+            if (current.charging && sweepAnimator != null) drawSweep(canvas, color)
         }
         geometry.percentTextAnchor(
             percentPosition,

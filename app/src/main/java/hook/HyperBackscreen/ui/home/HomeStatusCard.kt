@@ -1,5 +1,18 @@
 package hook.HyperBackscreen.ui.home
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import hook.HyperBackscreen.ui.theme.currentAppColors
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import androidx.compose.foundation.Canvas
@@ -48,18 +61,51 @@ private val GlyphOffsetY = 30.dp
 private val CardCornerRadius = HomeUiTokens.CornerCard
 
 private val DotSize = 7.dp
+private const val ScopeFadeMillis = 220
+private const val StatusColorMillis = 300
+private const val StatusMarkMillis = 360
+
+/**
+ * 模块激活状态。Xposed 服务是异步绑定的：绑定完成前不知道是否激活，此时显示「检测中」，
+ * 而不是先按「未激活」画一帧红卡再跳成绿卡。
+ */
+internal enum class ActivationState { CHECKING, ACTIVE, INACTIVE }
 
 @Composable
 internal fun HomeStatusCard(
-    activated: Boolean,
+    activation: ActivationState,
     scopeStatus: List<ScopeStatusItem>? = null,
     onClick: (() -> Unit)? = null
 ) {
-    // 颜色统一来自 AppColors：绿卡在 Monet 下自动改跟主题色。
+    val activated = activation == ActivationState.ACTIVE
+    // 颜色统一来自 AppColors：绿卡在 Monet 下自动改跟主题色。检测中用中性卡片色。
     val colors = currentAppColors
-    val containerColor = if (activated) colors.statusActiveContainer else MiuixTheme.colorScheme.errorContainer
-    val contentColor = if (activated) colors.onStatusActiveContainer else MiuixTheme.colorScheme.onErrorContainer
-    val glyphColor = if (activated) colors.statusActiveGlyph else MiuixTheme.colorScheme.error
+    val scheme = MiuixTheme.colorScheme
+    val targetContainer = when (activation) {
+        ActivationState.ACTIVE -> colors.statusActiveContainer
+        ActivationState.INACTIVE -> scheme.errorContainer
+        ActivationState.CHECKING -> scheme.surfaceContainer
+    }
+    val targetContent = when (activation) {
+        ActivationState.ACTIVE -> colors.onStatusActiveContainer
+        ActivationState.INACTIVE -> scheme.onErrorContainer
+        ActivationState.CHECKING -> scheme.onSurfaceContainer
+    }
+    val targetGlyph = when (activation) {
+        ActivationState.ACTIVE -> colors.statusActiveGlyph
+        ActivationState.INACTIVE -> scheme.error
+        ActivationState.CHECKING -> scheme.onSurfaceVariantSummary.copy(alpha = 0.25f)
+    }
+    // 状态确定后颜色渐变过去，不是瞬间换色。
+    val containerColor by animateColorAsState(targetContainer, tween(StatusColorMillis), label = "statusContainer")
+    val contentColor by animateColorAsState(targetContent, tween(StatusColorMillis), label = "statusContent")
+    val glyphColor by animateColorAsState(targetGlyph, tween(StatusColorMillis), label = "statusGlyph")
+    // 对勾 / 叉号在状态确定时一笔画出来；检测中只有圆圈。
+    val markProgress by animateFloatAsState(
+        targetValue = if (activation == ActivationState.CHECKING) 0f else 1f,
+        animationSpec = tween(StatusMarkMillis, delayMillis = StatusColorMillis / 3, easing = FastOutSlowInEasing),
+        label = "statusMark"
+    )
 
     Card(
         modifier = Modifier
@@ -88,7 +134,8 @@ internal fun HomeStatusCard(
                     .offset(x = GlyphOffsetX, y = GlyphOffsetY)
             ) {
                 StatusGlyph(
-                    activated = activated,
+                    activated = activation != ActivationState.INACTIVE,
+                    markProgress = markProgress,
                     color = glyphColor,
                     modifier = Modifier.size(GlyphSize)
                 )
@@ -104,32 +151,59 @@ internal fun HomeStatusCard(
                     modifier = Modifier.padding(end = 56.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = stringResource(
-                            if (activated) R.string.home_status_activated else R.string.home_status_inactive
-                        ),
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    if (activated && scopeStatus != null) {
-                        ScopeStatusRow(
-                            items = scopeStatus,
-                            contentColor = contentColor,
-                            modifier = Modifier.padding(start = 12.dp)
+                    Crossfade(
+                        targetState = activation,
+                        animationSpec = tween(StatusColorMillis),
+                        label = "statusTitle"
+                    ) { state ->
+                        Text(
+                            text = stringResource(
+                                when (state) {
+                                    ActivationState.ACTIVE -> R.string.home_status_activated
+                                    ActivationState.INACTIVE -> R.string.home_status_inactive
+                                    ActivationState.CHECKING -> R.string.home_status_checking
+                                }
+                            ),
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Medium
                         )
                     }
+                    // 作用域状态是异步读到的：淡入出现，不在读到的那一帧突然蹦出来。
+                    // 退场时继续用上一次的数据画完淡出，避免内容先消失再淡出。
+                    var lastStatus by remember { mutableStateOf(scopeStatus) }
+                    if (scopeStatus != null) lastStatus = scopeStatus
+                    AnimatedVisibility(
+                        visible = activated && scopeStatus != null,
+                        enter = fadeIn(tween(ScopeFadeMillis)),
+                        exit = fadeOut(tween(ScopeFadeMillis))
+                    ) {
+                        lastStatus?.let { items ->
+                            ScopeStatusRow(
+                                items = items,
+                                contentColor = contentColor,
+                                modifier = Modifier.padding(start = 12.dp)
+                            )
+                        }
+                    }
                 }
-                Text(
-                    text = if (activated) {
-                        stringResource(R.string.common_version, BuildConfig.VERSION_NAME)
-                    } else {
-                        stringResource(R.string.home_status_inactive_summary)
-                    },
-                    modifier = Modifier.padding(top = 3.dp),
-                    fontSize = 15.sp,
-                    color = contentColor.copy(alpha = 0.78f),
-                    maxLines = 2
-                )
+                Crossfade(
+                    targetState = activation,
+                    animationSpec = tween(StatusColorMillis),
+                    label = "statusSummary"
+                ) { state ->
+                    Text(
+                        text = when (state) {
+                            ActivationState.ACTIVE ->
+                                stringResource(R.string.common_version, BuildConfig.VERSION_NAME)
+                            ActivationState.INACTIVE -> stringResource(R.string.home_status_inactive_summary)
+                            ActivationState.CHECKING -> stringResource(R.string.home_status_checking_summary)
+                        },
+                        modifier = Modifier.padding(top = 3.dp),
+                        fontSize = 15.sp,
+                        color = contentColor.copy(alpha = 0.78f),
+                        maxLines = 2
+                    )
+                }
             }
         }
     }
@@ -138,9 +212,12 @@ internal fun HomeStatusCard(
 @Composable
 private fun StatusGlyph(
     activated: Boolean,
+    markProgress: Float,
     color: Color,
     modifier: Modifier = Modifier
 ) {
+    val mark = remember { Path() }
+    val measure = remember { PathMeasure() }
     Canvas(modifier = modifier) {
         val stroke = size.minDimension * 0.075f
         drawCircle(
@@ -148,33 +225,42 @@ private fun StatusGlyph(
             radius = size.minDimension / 2f - stroke / 2f,
             style = Stroke(width = stroke)
         )
+        if (markProgress <= 0f) return@Canvas
+        val style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
         if (activated) {
             val check = Path().apply {
                 moveTo(size.width * 0.30f, size.height * 0.52f)
                 lineTo(size.width * 0.44f, size.height * 0.66f)
                 lineTo(size.width * 0.71f, size.height * 0.35f)
             }
-            drawPath(
-                path = check,
-                color = color,
-                style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
-            )
+            measure.setPath(check, false)
+            mark.reset()
+            measure.getSegment(0f, measure.length * markProgress, mark, true)
+            drawPath(path = mark, color = color, style = style)
         } else {
             val inset = size.minDimension * 0.31f
+            // 叉号两笔依次画出：前半段画第一笔，后半段画第二笔。
+            val first = (markProgress * 2f).coerceIn(0f, 1f)
+            val second = (markProgress * 2f - 1f).coerceIn(0f, 1f)
             drawLine(
                 color = color,
                 start = Offset(inset, inset),
-                end = Offset(size.width - inset, size.height - inset),
+                end = Offset(inset + (size.width - 2 * inset) * first, inset + (size.height - 2 * inset) * first),
                 strokeWidth = stroke,
                 cap = StrokeCap.Round
             )
-            drawLine(
-                color = color,
-                start = Offset(size.width - inset, inset),
-                end = Offset(inset, size.height - inset),
-                strokeWidth = stroke,
-                cap = StrokeCap.Round
-            )
+            if (second > 0f) {
+                drawLine(
+                    color = color,
+                    start = Offset(size.width - inset, inset),
+                    end = Offset(
+                        size.width - inset - (size.width - 2 * inset) * second,
+                        inset + (size.height - 2 * inset) * second
+                    ),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round
+                )
+            }
         }
     }
 }

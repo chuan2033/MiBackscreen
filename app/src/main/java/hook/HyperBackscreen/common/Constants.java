@@ -36,6 +36,8 @@ public final class Constants {
     public static final String KEY_BATTERY_RING_TRACK = "battery_ring_track";
     // 电量线条样式：contour = 绕模组一整圈的连体轮廓，twin = 上下两个独立圆环。
     public static final String KEY_BATTERY_RING_STYLE = "battery_ring_style";
+    /** 低于这个百分比（且未充电）时背屏电量用「低电量」颜色。 */
+    public static final String KEY_BATTERY_LOW_THRESHOLD = "battery_low_threshold";
     public static final String KEY_AUTO_WALLPAPER_INTERVAL_MINUTES =
             "auto_wallpaper_interval_minutes";
     // 定时切换的挑图方式：sequential = 按列表顺序循环，random = 每次随机且不与当前重复。

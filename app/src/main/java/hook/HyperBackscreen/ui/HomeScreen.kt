@@ -1,5 +1,8 @@
 package hook.HyperBackscreen.ui
 
+import hook.HyperBackscreen.ui.home.ActivationState
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.asPaddingValues
@@ -249,7 +252,7 @@ internal fun HomeScreen(
     disableDoubleTapWake: Boolean,
     doubleTapWakeDisabledPackages: String,
     launcherIconHidden: Boolean,
-    moduleActivated: Boolean,
+    moduleActivated: ActivationState,
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
     onRemoveAppCardLimitChange: (Boolean) -> Unit,
@@ -563,7 +566,7 @@ private fun MainTabPage(
     onEnable18ProFeaturesChange: (Boolean) -> Unit,
     tab: HomeNavigationPolicy.Tab,
     listState: LazyListState,
-    moduleActivated: Boolean,
+    moduleActivated: ActivationState,
     disableLongPress: Boolean,
     removeWallpaperLimit: Boolean,
     removeAppCardLimit: Boolean,
@@ -724,7 +727,7 @@ private fun MainContent(
     disableRearScreenCover: Boolean,
     doubleTapWakeDisabledPackages: String,
     launcherIconHidden: Boolean,
-    moduleActivated: Boolean,
+    moduleActivated: ActivationState,
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
     onRemoveAppCardLimitChange: (Boolean) -> Unit,
@@ -964,6 +967,16 @@ private fun MainContent(
         // 勾选「系统框架」执行的是重启手机而不是停止进程，选中时确认按钮要把后果写明。
         val anySelected = restartScopeItems.any { checkedItems[it.packageName] == true }
         val rebootSelected = checkedItems[Constants.SYSTEM_PACKAGE] == true
+        val rebootButtonColor by animateColorAsState(
+            targetValue = if (rebootSelected) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
+            animationSpec = tween(200),
+            label = "restartConfirmColor"
+        )
+        val rebootButtonContent by animateColorAsState(
+            targetValue = if (rebootSelected) MiuixTheme.colorScheme.onError else MiuixTheme.colorScheme.onPrimary,
+            animationSpec = tween(200),
+            label = "restartConfirmContent"
+        )
         restartScopeItems.forEach { item ->
             CheckboxPreference(
                 title = stringResource(item.labelRes),
@@ -991,15 +1004,11 @@ private fun MainContent(
                 if (rebootSelected) R.string.restart_device_confirm else R.string.common_confirm
             ),
             primaryEnabled = anySelected,
-            // 勾了「系统框架」会直接重启手机：主按钮换成错误色，和普通「确定」区分开。
-            primaryColors = if (rebootSelected) {
-                ButtonDefaults.buttonColorsPrimary(
-                    color = MiuixTheme.colorScheme.error,
-                    contentColor = MiuixTheme.colorScheme.onError
-                )
-            } else {
-                ButtonDefaults.buttonColorsPrimary()
-            },
+            // 勾了「系统框架」会直接重启手机：主按钮渐变成错误色，和普通「确定」区分开。
+            primaryColors = ButtonDefaults.buttonColorsPrimary(
+                color = rebootButtonColor,
+                contentColor = rebootButtonContent
+            ),
             onPrimary = {
                 showRestartDialog = false
                 val selected = restartScopeItems.filter { checkedItems[it.packageName] == true }

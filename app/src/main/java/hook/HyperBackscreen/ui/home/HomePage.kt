@@ -1,5 +1,12 @@
 package hook.HyperBackscreen.ui.home
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.DialogButtonRow
@@ -64,7 +71,7 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 @Composable
 internal fun HomePage(
-    moduleActivated: Boolean,
+    moduleActivated: ActivationState,
     onDonateClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -120,7 +127,14 @@ internal fun HomePage(
         }
     }
 
-    if (rootGranted == false) {
+    // Root 检测是异步的：提示条展开 + 淡入，不再在检测完成那一帧把整页猛地往下推。
+    AnimatedVisibility(
+        visible = rootGranted == false,
+        enter = expandVertically(tween(260, easing = FastOutSlowInEasing), expandFrom = Alignment.Top) +
+            fadeIn(tween(260, easing = FastOutSlowInEasing)),
+        exit = shrinkVertically(tween(180, easing = FastOutSlowInEasing), shrinkTowards = Alignment.Top) +
+            fadeOut(tween(180, easing = FastOutSlowInEasing))
+    ) {
         // errorContainer 底色：提醒但不刺眼；右侧给一个就地重试，授权完不用切页面再回来。
         Row(
             modifier = Modifier
@@ -157,9 +171,9 @@ internal fun HomePage(
     }
 
     HomeStatusCard(
-        activated = moduleActivated,
+        activation = moduleActivated,
         scopeStatus = scopeStatus,
-        onClick = if (moduleActivated && scopeStatus != null) {
+        onClick = if (moduleActivated == ActivationState.ACTIVE && scopeStatus != null) {
             { showScopeDialog = true }
         } else {
             null

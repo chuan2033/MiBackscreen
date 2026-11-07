@@ -1,12 +1,19 @@
 package hook.HyperBackscreen.ui.config
 
+import top.yukonga.miuix.kmp.window.WindowListPopup
+import top.yukonga.miuix.kmp.basic.ListPopupColumn
+import top.yukonga.miuix.kmp.basic.DropdownImpl
+import top.yukonga.miuix.kmp.basic.PopupPositionProvider
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.More
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.DetailPageScaffold
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import android.content.pm.ApplicationInfo
 import androidx.annotation.StringRes
-import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
@@ -129,9 +136,53 @@ internal fun AppPickerPage(
         loading = false
     }
 
+    var showFilterMenu by remember { mutableStateOf(false) }
+    val filterLabels = AppFilter.entries.map { entry ->
+        if (entry == AppFilter.SELECTED && selectedSet.isNotEmpty()) {
+            stringResource(entry.labelRes) + " (" + selectedSet.size + ")"
+        } else {
+            stringResource(entry.labelRes)
+        }
+    }
+
     DetailPageScaffold(
         title = stringResource(R.string.app_picker_title),
         onBack = onBack,
+        // 筛选收进右上角「更多」菜单：列表顶部不再常驻一排分段按钮。
+        actions = {
+            Box {
+                IconButton(
+                    onClick = { showFilterMenu = true },
+                    holdDownState = showFilterMenu
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.More,
+                        contentDescription = stringResource(R.string.app_picker_filter_menu),
+                        tint = MiuixTheme.colorScheme.onBackground
+                    )
+                }
+                WindowListPopup(
+                    show = showFilterMenu,
+                    alignment = PopupPositionProvider.Align.End,
+                    onDismissRequest = { showFilterMenu = false }
+                ) {
+                    ListPopupColumn {
+                        filterLabels.forEachIndexed { index, label ->
+                            DropdownImpl(
+                                text = label,
+                                optionSize = filterLabels.size,
+                                isSelected = filter.ordinal == index,
+                                index = index,
+                                onSelectedIndexChange = { selectedIndex ->
+                                    AppFilter.entries.getOrNull(selectedIndex)?.let { filter = it }
+                                    showFilterMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        },
     ) {
         // 「名单非空即启用、清空即关闭」是隐式规则，在入口页把它说清楚。
         item(key = "picker_hint") {
@@ -153,18 +204,19 @@ internal fun AppPickerPage(
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(12.dp))
-            TabRowWithContour(
-                tabs = AppFilter.entries.map { entry ->
-                    if (entry == AppFilter.SELECTED && selectedSet.isNotEmpty()) {
-                        stringResource(entry.labelRes) + " " + selectedSet.size
-                    } else {
-                        stringResource(entry.labelRes)
-                    }
-                },
-                selectedTabIndex = filter.ordinal,
-                onTabSelected = { index -> AppFilter.entries.getOrNull(index)?.let { filter = it } }
-            )
-            Spacer(Modifier.height(12.dp))
+            // 筛选在右上角菜单里，这里写明当前看的是哪一类、有多少个。
+            if (!loading) {
+                Text(
+                    text = stringResource(
+                        R.string.app_picker_showing,
+                        stringResource(filter.labelRes),
+                        filteredApps.size
+                    ),
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                )
+            }
         }
 
         if (loading) {
@@ -193,10 +245,14 @@ internal fun AppPickerPage(
                 }
             }
             if (filteredApps.isEmpty() && (query.isNotBlank() || apps.isNotEmpty())) {
-                item { MessageCard(text = stringResource(R.string.app_picker_empty)) }
+                item(key = "empty") { MessageCard(text = stringResource(R.string.app_picker_empty)) }
             }
             items(filteredApps, key = { it.packageName }) { app ->
-                CardBlock(pressFeedbackType = PressFeedbackType.None) {
+                // 换筛选时条目淡入淡出、留下的条目平滑挪位，而不是整列瞬间替换。
+                CardBlock(
+                    modifier = Modifier.animateItem(),
+                    pressFeedbackType = PressFeedbackType.None
+                ) {
                     CheckboxPreference(
                         title = app.label,
                         summary = app.packageName,

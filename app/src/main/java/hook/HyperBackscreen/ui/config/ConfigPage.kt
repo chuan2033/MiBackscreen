@@ -50,15 +50,13 @@ internal fun ConfigPage(
             ),
             selectedIndex = if (themeSettingsShortcut) 1 else 0,
             title = stringResource(R.string.config_module_entry_title),
-            summary = stringResource(R.string.scope_restart_hint_theme),
             onSelectedIndexChange = { index ->
                 onThemeSettingsShortcutChange(index == 1)
             }
         )
         ArrowPreference(
             title = stringResource(R.string.config_enable_app_card_title),
-            summary = stringResource(R.string.config_enable_app_card_summary) + "\n" +
-                stringResource(R.string.scope_restart_hint_backscreen),
+            summary = stringResource(R.string.config_enable_app_card_summary),
             onClick = { onEnableAppCardChange(true) }
         )
         SwitchPreference(

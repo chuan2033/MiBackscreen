@@ -225,3 +225,49 @@ internal fun ringProgressStops(percent: Float, lengths: List<Float>): List<Float
         take
     }
 }
+
+/**
+ * 充电流光：一小段高亮沿着「已充部分」从起笔处跑到末端，循环播放。
+ *
+ * [phase] 是 0~1 的循环进度；末尾留出一段空档（光段跑出末端后停一下再从头开始），
+ * 节奏不至于太急。返回需要高亮的片段：(轨道下标, 起点, 终点)，坐标与 `PathMeasure` 一致。
+ * 背屏绘制和设置页预览共用这一份计算，两边看到的流光完全一样。
+ */
+internal fun chargeSweepSegments(phase: Float, stops: List<Float>): List<Triple<Int, Float, Float>> {
+    val total = stops.sum()
+    if (total <= 0f) return emptyList()
+    val segment = (total * CHARGE_SWEEP_SEGMENT_RATIO).coerceAtMost(CHARGE_SWEEP_SEGMENT_MAX)
+    // 光段从完全在起点之前进入，到完全越过末端，再加一段空档。
+    val travel = total + segment
+    val head = phase.coerceIn(0f, 1f) * travel * (1f + CHARGE_SWEEP_REST_RATIO)
+    val start = (head - segment).coerceAtLeast(0f)
+    val end = head.coerceAtMost(total)
+    if (end <= start) return emptyList()
+    val pieces = mutableListOf<Triple<Int, Float, Float>>()
+    var offset = 0f
+    stops.forEachIndexed { index, stop ->
+        val from = (start - offset).coerceIn(0f, stop)
+        val to = (end - offset).coerceIn(0f, stop)
+        if (to > from) pieces += Triple(index, from, to)
+        offset += stop
+    }
+    return pieces
+}
+
+/** 充电流光一圈的时长。 */
+internal const val CHARGE_SWEEP_DURATION_MS = 2200L
+/** 光段长度占已充部分的比例，以及上限（背屏像素）。 */
+private const val CHARGE_SWEEP_SEGMENT_RATIO = 0.18f
+private const val CHARGE_SWEEP_SEGMENT_MAX = 140f
+/** 一圈末尾的空档，占行程的比例。 */
+private const val CHARGE_SWEEP_REST_RATIO = 0.25f
+
+/** 流光颜色：在线条色基础上往白色提亮，保留原色相。 */
+internal fun chargeSweepColor(argb: Int): Int {
+    val a = argb ushr 24
+    fun lift(c: Int) = c + ((255 - c) * 0.6f).toInt()
+    val r = lift(argb shr 16 and 0xFF)
+    val g = lift(argb shr 8 and 0xFF)
+    val b = lift(argb and 0xFF)
+    return (a shl 24) or (r shl 16) or (g shl 8) or b
+}

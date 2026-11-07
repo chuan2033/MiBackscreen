@@ -1,5 +1,11 @@
 package hook.HyperBackscreen.ui.battery
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.DialogButtonRow
@@ -146,19 +152,26 @@ internal fun BatteryColorPage(
     // 所以拖预览电量到 20% 以下就自动切到「低电量」色，点状态标签则把预览跳到该状态的代表电量。
     var previewPercent by remember { mutableIntStateOf(BatteryColorSlot.IDLE.previewPercent) }
     var previewCharging by remember { mutableStateOf(false) }
-    val selected = when {
-        previewCharging -> BatteryColorSlot.CHARGING
-        previewPercent < BatteryRingState.LOW_PERCENT_THRESHOLD -> BatteryColorSlot.LOW
-        else -> BatteryColorSlot.IDLE
-    }
-    fun previewSlot(slot: BatteryColorSlot) {
-        previewPercent = slot.previewPercent
-        previewCharging = slot == BatteryColorSlot.CHARGING
-    }
     // 拖动时只改草稿让预览跟手，松手才落偏好：滑杆每帧回调，逐帧写偏好会连带触发
     // 偏好监听 → 重组，等于自己给自己喂事件。
     var draft by remember { mutableStateOf(layout) }
     LaunchedEffect(layout) { draft = layout }
+    // 低电量判据用用户设置的阈值（草稿值，拖阈值滑杆时预览即时跟着变色）。
+    val lowThreshold = draft.lowThresholdPercent
+    val selected = when {
+        previewCharging -> BatteryColorSlot.CHARGING
+        previewPercent < lowThreshold -> BatteryColorSlot.LOW
+        else -> BatteryColorSlot.IDLE
+    }
+    fun previewSlot(slot: BatteryColorSlot) {
+        // 低电量的代表电量要落在当前阈值之下，否则阈值调低后点「低电量」反而显示成未充电色。
+        previewPercent = if (slot == BatteryColorSlot.LOW) {
+            minOf(slot.previewPercent, lowThreshold - 1).coerceAtLeast(1)
+        } else {
+            slot.previewPercent
+        }
+        previewCharging = slot == BatteryColorSlot.CHARGING
+    }
     // 点滑杆的标题行弹出的精确输入（滑杆用来快速试，弹窗用来把数值定死）。
     // 状态放在页面级：两个折叠里的滑杆共用同一个弹窗，不各挂一份实例。
     var inputField by remember { mutableStateOf<BatteryLayoutField?>(null) }
@@ -201,6 +214,23 @@ internal fun BatteryColorPage(
     DetailPageScaffold(
         title = stringResource(R.string.function_battery_color_title),
         onBack = onBack,
+        // 预览固定在顶栏下方：展开色盘、拖滑杆时都能直接看到背屏效果。
+        pinnedHeader = rearScreenGeometry?.let { geometry ->
+            {
+                BatteryRearScreenPreview(
+                    geometry = geometry,
+                    percent = previewPercent,
+                    charging = previewCharging,
+                    color = resolveSlotColor(selected, rawFor(selected)),
+                    percentPosition = percentPosition,
+                    layout = draft,
+                    wallpaper = wallpaper,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+                )
+            }
+        },
     ) {
         // 几何只在校准机型上成立，其他机型背屏不绘制，这里也不给可调的假预览。
         if (!rearScreenSupported) {
@@ -216,25 +246,9 @@ internal fun BatteryColorPage(
             }
             return@DetailPageScaffold
         }
-        item(key = "rear_screen_preview") {
-            BatteryRearScreenPreview(
-                geometry = rearScreenGeometry,
-                percent = previewPercent,
-                color = resolveSlotColor(selected, rawFor(selected)),
-                percentPosition = percentPosition,
-                layout = draft,
-                wallpaper = wallpaper,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, end = 4.dp, bottom = 8.dp)
-            )
-        }
         item(key = "preview_controls") {
-            // 只影响预览，不写任何偏好：用来检查低电量配色、双环在 50% 处的衔接等。
-            CardBlock(
-                modifier = Modifier.padding(top = 12.dp),
-                pressFeedbackType = PressFeedbackType.None
-            ) {
+            // 只影响预览，不写任何偏好：用来检查低电量配色、双环在 50% 处的衔接、充电流光等。
+            CardBlock(pressFeedbackType = PressFeedbackType.None) {
                 SliderPreference(
                     value = previewPercent.toFloat(),
                     onValueChange = { previewPercent = it.roundToInt().coerceIn(0, 100) },
@@ -249,7 +263,8 @@ internal fun BatteryColorPage(
                 )
             }
         }
-        item(key = "color_content") {
+        // 三个折叠分组各占一张卡：展开其中一个（尤其是很长的色盘）时，其它分组不会被一起撑长。
+        item(key = "ring_card") {
             CardBlock(pressFeedbackType = PressFeedbackType.None) {
                 // 电量环折叠：这圈线显不显示、有没有底轨、多大多粗。颜色单独在下面一格。
                 CollapsibleFunctionGroup(
@@ -300,7 +315,9 @@ internal fun BatteryColorPage(
                         }
                     )
                 }
-
+            }
+        }
+        item(key = "percent_card") {
                 // 数字电量：显隐拆成独立开关，位置用分段控件（与其它几处同一种），
                 // 数字自己的位置微调一并收进这个折叠，免得散在另一张卡片上。
                 val percentShown = percentPosition != BatteryPercentPosition.OFF
@@ -311,6 +328,7 @@ internal fun BatteryColorPage(
                     onPercentPositionChange(position)
                 }
 
+            CardBlock(pressFeedbackType = PressFeedbackType.None) {
                 CollapsibleFunctionGroup(
                     title = stringResource(R.string.battery_percent_position_title)
                 ) {
@@ -360,7 +378,10 @@ internal fun BatteryColorPage(
                         }
                     }
                 }
-
+            }
+        }
+        item(key = "color_card") {
+            CardBlock(pressFeedbackType = PressFeedbackType.None) {
                 // 颜色自定义排在最下面：色盘展开后很长，夹在中间会把「数字电量」
                 // 顶到屏幕外，想调数字位置得先划过整块调色区。放末尾就不挡事。
                 // 「选哪个状态」本身就是「给谁上色」，跟调色盘是一件事，所以状态
@@ -383,6 +404,19 @@ internal fun BatteryColorPage(
                             top = BatteryColorTabRowVerticalMargin,
                             bottom = BatteryColorTabRowVerticalMargin
                         )
+                    )
+                    // 低电量从多少开始算：和「低电量」颜色是一件事，放在颜色这一格。
+                    BatteryLayoutFieldGroup(
+                        fields = BatteryColorFields,
+                        draft = draft,
+                        percentPosition = percentPosition,
+                        onDraftChange = { draft = it },
+                        onCommit = onLayoutCommit,
+                        onEditRequest = { field ->
+                            inputField = field
+                            inputVisible = true
+                        },
+                        showReset = false
                     )
                     BatteryColorEditor(
                         slot = selected,
@@ -463,7 +497,8 @@ private enum class BatteryLayoutField(
     PERCENT_X(R.string.battery_percent_offset_x_title, BatteryLayoutUnit.OFFSET),
     PERCENT_Y(R.string.battery_percent_offset_y_title, BatteryLayoutUnit.OFFSET),
     PERCENT_TEXT_SIZE(R.string.battery_percent_text_size_title, BatteryLayoutUnit.PIXEL),
-    PERCENT_TEXT_WEIGHT(R.string.battery_percent_text_weight_title, BatteryLayoutUnit.WEIGHT);
+    PERCENT_TEXT_WEIGHT(R.string.battery_percent_text_weight_title, BatteryLayoutUnit.WEIGHT),
+    LOW_THRESHOLD(R.string.battery_low_threshold_title, BatteryLayoutUnit.PERCENT);
 
     fun read(layout: BatteryRingLayout): Int = when (this) {
         RING_TRACK -> if (layout.ringTrackVisible) 1 else 0
@@ -473,6 +508,7 @@ private enum class BatteryLayoutField(
         PERCENT_Y -> layout.percentOffsetYPercent
         PERCENT_TEXT_SIZE -> layout.percentTextSize
         PERCENT_TEXT_WEIGHT -> layout.percentTextWeight
+        LOW_THRESHOLD -> layout.lowThresholdPercent
     }
 
     fun write(layout: BatteryRingLayout, value: Int): BatteryRingLayout = when (this) {
@@ -484,6 +520,7 @@ private enum class BatteryLayoutField(
         PERCENT_TEXT_SIZE -> layout.copy(percentTextSize = value)
         PERCENT_TEXT_WEIGHT ->
             layout.copy(percentTextWeight = BatteryRingLayout.quantizeWeight(value))
+        LOW_THRESHOLD -> layout.copy(lowThresholdPercent = value)
     }
 
     /**
@@ -499,6 +536,7 @@ private enum class BatteryLayoutField(
             BatteryRingLayout.PERCENT_TEXT_SIZE_MIN..BatteryRingLayout.PERCENT_TEXT_SIZE_MAX
         PERCENT_TEXT_WEIGHT ->
             BatteryRingLayout.PERCENT_TEXT_WEIGHT_MIN..BatteryRingLayout.PERCENT_TEXT_WEIGHT_MAX
+        LOW_THRESHOLD -> BatteryRingLayout.LOW_THRESHOLD_MIN..BatteryRingLayout.LOW_THRESHOLD_MAX
         // 开关不用区间，给个占位值让调用方不必特判。
         RING_TRACK -> 0..1
     }
@@ -526,6 +564,9 @@ private val BatteryRingFields = listOf(
     BatteryLayoutField.RING_STROKE
 )
 
+/** 「颜色自定义」里的可调项：低电量阈值。 */
+private val BatteryColorFields = listOf(BatteryLayoutField.LOW_THRESHOLD)
+
 /** 「数字电量」折叠里的可调项：数字相对摄像头模组的偏移、字号与字重。 */
 private val BatteryPercentFields = listOf(
     BatteryLayoutField.PERCENT_X,
@@ -550,6 +591,8 @@ private fun BatteryLayoutFieldGroup(
     onEditRequest: (BatteryLayoutField) -> Unit,
     /** 不在 [fields] 里的字段（例如线条样式），也要跟着「恢复默认」一起还原。 */
     resetExtra: (BatteryRingLayout) -> BatteryRingLayout = { it },
+    /** 只有一项时不单独放「恢复默认」：点标题行的精确输入弹窗里就有。 */
+    showReset: Boolean = true,
 ) {
     fields.forEach { field ->
         if (field.toggle) {
@@ -579,6 +622,7 @@ private fun BatteryLayoutFieldGroup(
             onClick = { onEditRequest(field) }
         )
     }
+    if (!showReset) return
     val feedback = LocalUiFeedback.current
     val resetDone = stringResource(R.string.battery_layout_reset_done)
     val undoLabel = stringResource(R.string.common_undo)
@@ -672,6 +716,7 @@ private fun resolveSlotColor(slot: BatteryColorSlot, raw: String): Color {
 private fun BatteryRearScreenPreview(
     geometry: BatteryRingGeometry.Profile,
     percent: Int,
+    charging: Boolean,
     color: Color,
     percentPosition: BatteryPercentPosition,
     layout: BatteryRingLayout,
@@ -689,6 +734,21 @@ private fun BatteryRearScreenPreview(
     }
     val ringLengths = remember(ringMeasures) { ringMeasures.map { it.length } }
     val progress = remember { Path() }
+    val sweep = remember { Path() }
+    // 只在预览「充电中」时跑流光动画，平时不占绘制。
+    val sweepPhase = if (charging) {
+        rememberInfiniteTransition(label = "chargeSweep").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                tween(CHARGE_SWEEP_DURATION_MS.toInt(), easing = LinearEasing),
+                RepeatMode.Restart
+            ),
+            label = "chargeSweepPhase"
+        )
+    } else {
+        null
+    }
     val context = LocalContext.current
     val lensMain = remember(geometry) { decodeDrawable(context, mainLensRes(geometry)) }
     val lensSecondary = remember(geometry) { decodeDrawable(context, secondaryLensRes(geometry)) }
@@ -804,6 +864,18 @@ private fun BatteryRearScreenPreview(
                 color = color,
                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
             )
+            // 充电时与背屏同一套流光：一小段提亮的线沿已充部分跑过去。
+            if (sweepPhase != null) {
+                sweep.reset()
+                chargeSweepSegments(sweepPhase.value, stops).forEach { (index, from, to) ->
+                    ringMeasures[index].getSegment(from, to, sweep, true)
+                }
+                drawPath(
+                    path = sweep,
+                    color = Color(chargeSweepColor(color.toArgb())),
+                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                )
+            }
             geometry.percentTextAnchor(
                 percentPosition,
                 layout.percentOffsetXPercent,

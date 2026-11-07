@@ -11,6 +11,7 @@ import android.graphics.Typeface
 import android.graphics.Canvas
 import android.graphics.Bitmap
 import android.content.Intent
+import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.Context
@@ -73,6 +74,8 @@ object SwipePanelHost {
     private const val TILE_VALUE_TEXT_SP = 12f
     private const val TILE_PRESSED_SCALE = 0.96f
     private const val STATUS_VISIBLE_MS = 3000L
+    /** 卡片开 / 关、换档时颜色与文字的过渡时长。 */
+    private const val TILE_TRANSITION_MS = 150L
     /** 上滑关闭：拖动距离折算成缩放进度的分母（相对面板高度）。 */
     private const val DISMISS_DRAG_RANGE = 0.36f
     /** 松手速度超过这个值（向上）时，即使距离不够也直接关闭。 */
@@ -199,7 +202,8 @@ object SwipePanelHost {
         val background = card.background as? GradientDrawable ?: return
         ValueAnimator.ofFloat(from, to).apply {
             this.duration = duration
-            interpolator = DecelerateInterpolator()
+            // 与面板放大用同一条曲线，圆角和尺寸同时到位，不会圆角先变好、面板还在长。
+            interpolator = cardInterpolator
             addUpdateListener {
                 background.cornerRadius = it.animatedValue as Float
                 background.invalidateSelf()
@@ -936,17 +940,21 @@ object SwipePanelHost {
             addView(value, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
 
+        val look = TileLook(background, title, value)
         when (spec) {
             is ToggleTileSpec -> {
                 var checked = spec.read()
-                fun render() {
-                    background.setColor(if (checked) palette.tileOn else palette.tile)
-                    title.setTextColor(if (checked) palette.onTileOn else palette.onTile)
-                    value.setTextColor(if (checked) palette.summaryOn else palette.summary)
-                    value.text = if (checked) spec.onText else spec.offText
-                    tile.contentDescription = spec.title + ", " + value.text
+                fun render(animate: Boolean = true) {
+                    look.apply(
+                        background = if (checked) palette.tileOn else palette.tile,
+                        titleColor = if (checked) palette.onTileOn else palette.onTile,
+                        valueColor = if (checked) palette.summaryOn else palette.summary,
+                        text = if (checked) spec.onText else spec.offText,
+                        animate = animate,
+                    )
+                    tile.contentDescription = spec.title + ", " + (if (checked) spec.onText else spec.offText)
                 }
-                render()
+                render(animate = false)
                 tile.accessibilityDelegate = checkableDelegate { checked }
                 if (host != null) {
                     bindTileClick(tile, host) { done ->
@@ -969,14 +977,18 @@ object SwipePanelHost {
 
             is CycleTileSpec -> {
                 var current = spec.read()
-                fun render() {
-                    background.setColor(palette.tile)
-                    title.setTextColor(palette.onTile)
-                    value.setTextColor(palette.accent)
-                    value.text = spec.options.firstOrNull { it.first == current }?.second ?: current
-                    tile.contentDescription = spec.title + ", " + value.text
+                fun render(animate: Boolean = true) {
+                    val label = spec.options.firstOrNull { it.first == current }?.second ?: current
+                    look.apply(
+                        background = palette.tile,
+                        titleColor = palette.onTile,
+                        valueColor = palette.accent,
+                        text = label,
+                        animate = animate,
+                    )
+                    tile.contentDescription = spec.title + ", " + label
                 }
-                render()
+                render(animate = false)
                 tile.accessibilityDelegate = buttonDelegate()
                 if (host != null) {
                     bindTileClick(tile, host) { done ->
@@ -1000,6 +1012,65 @@ object SwipePanelHost {
             }
         }
         return tile
+    }
+
+    /**
+     * 卡片外观的过渡：底色和文字色在 [TILE_TRANSITION_MS] 内渐变，状态文字先淡出、换字、再淡入，
+     * 不再是开 / 关瞬间跳色。首次渲染不做动画。
+     */
+    private class TileLook(
+        private val background: GradientDrawable,
+        private val title: TextView,
+        private val value: TextView,
+    ) {
+        private var backgroundColor = 0
+        private var titleColor = 0
+        private var valueColor = 0
+        private var colorAnimator: ValueAnimator? = null
+        private val evaluator = ArgbEvaluator()
+
+        fun apply(background: Int, titleColor: Int, valueColor: Int, text: CharSequence, animate: Boolean) {
+            colorAnimator?.cancel()
+            if (!animate) {
+                set(background, titleColor, valueColor)
+                value.animate().cancel()
+                value.alpha = 1f
+                value.text = text
+                return
+            }
+            val fromBackground = backgroundColor
+            val fromTitle = this.titleColor
+            val fromValue = valueColor
+            colorAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = TILE_TRANSITION_MS
+                interpolator = DecelerateInterpolator()
+                addUpdateListener {
+                    val t = it.animatedFraction
+                    set(
+                        evaluator.evaluate(t, fromBackground, background) as Int,
+                        evaluator.evaluate(t, fromTitle, titleColor) as Int,
+                        evaluator.evaluate(t, fromValue, valueColor) as Int,
+                    )
+                }
+                start()
+            }
+            if (value.text.toString() != text.toString()) {
+                value.animate().cancel()
+                value.animate().alpha(0f).setDuration(TILE_TRANSITION_MS / 2).withEndAction {
+                    value.text = text
+                    value.animate().alpha(1f).setDuration(TILE_TRANSITION_MS / 2).start()
+                }.start()
+            }
+        }
+
+        private fun set(background: Int, titleColor: Int, valueColor: Int) {
+            backgroundColor = background
+            this.titleColor = titleColor
+            this.valueColor = valueColor
+            this.background.setColor(background)
+            title.setTextColor(titleColor)
+            value.setTextColor(valueColor)
+        }
     }
 
     /** 点击：按压缩放反馈 + 震动；保存期间整张卡片置灰、不接受重复点击。 */
