@@ -381,6 +381,7 @@ object SwipePanelHost {
 
     private fun animateLauncherStyleDismiss(card: View, root: FrameLayout, releaseVelocity: Float = 0f) {
         val target = launcherAnimationTarget(root, card)
+        if (target !== card) launcherTargetDirty = true
         target.animate().cancel()
         target.pivotX = target.width / 2f
         target.pivotY = target.height / 2f
@@ -456,6 +457,13 @@ object SwipePanelHost {
 
     private val launcherVelocity = RawVelocity()
 
+    /** 正在往 View 树补发 CANCEL：这期间 [handleLauncherGesture] 一律放行。 */
+    @Volatile
+    private var dispatchingSyntheticCancel = false
+
+    /** 宿主的 launcher_container 当前是否带着我们设置的缩放 / 透明度（需要我们负责复位）。 */
+    private var launcherTargetDirty = false
+
     private fun launcherAnimationTarget(root: FrameLayout, card: View): View {
         val hostId = hostLauncherContainerId(root)
         var current = root.parent
@@ -469,6 +477,7 @@ object SwipePanelHost {
     private fun applyLauncherDismissProgress(card: View, distance: Float) {
         val root = container
         val target = if (root != null) launcherAnimationTarget(root, card) else card
+        if (target !== card) launcherTargetDirty = true
         val height = target.height.takeIf { it > 0 }?.toFloat()
             ?: target.resources.displayMetrics.heightPixels.toFloat()
         val progress = (distance / (height * DISMISS_DRAG_RANGE)).coerceIn(0f, 1f)
@@ -493,10 +502,12 @@ object SwipePanelHost {
             .alpha(1f)
             .setDuration(150L)
             .setInterpolator(DecelerateInterpolator())
+            .withEndAction { if (target !== card) launcherTargetDirty = false }
             .start()
     }
 
     private fun resetDismissTarget(target: View) {
+        launcherTargetDirty = false
         target.animate().cancel()
         target.translationX = 0f
         target.translationY = 0f
@@ -546,6 +557,8 @@ object SwipePanelHost {
 
     @JvmStatic
     fun handleLauncherGesture(event: MotionEvent?): Boolean {
+        // 自己补发的 CANCEL 不参与判定，否则会把刚开始的上滑清掉。
+        if (dispatchingSyntheticCancel) return false
         val card = panel ?: return false
         if (event == null || !isShowing()) return false
 
@@ -625,15 +638,29 @@ object SwipePanelHost {
         return launcherGestureDraggingUp
     }
 
+    /**
+     * 给 View 树补发一个 CANCEL。
+     *
+     * 必须走 Window.superDispatchTouchEvent：decorView.dispatchTouchEvent 会先回调
+     * Activity.dispatchTouchEvent，正好又进了我们挂在那里的 Hook，[handleLauncherGesture]
+     * 收到这个 CANCEL 就把刚开始的上滑状态清掉了（表现为面板从底部上滑关不掉）。
+     * 补发期间同时打开 [dispatchingSyntheticCancel]，宿主自己的上滑手势 Hook 收到它也直接放行。
+     */
     private fun cancelViewTreeTouch(source: MotionEvent) {
-        val target: View = hostActivity.get()?.window?.decorView ?: container ?: return
         val cancel = MotionEvent.obtain(source)
         cancel.action = MotionEvent.ACTION_CANCEL
+        dispatchingSyntheticCancel = true
         try {
-            target.dispatchTouchEvent(cancel)
+            val window = hostActivity.get()?.window
+            if (window != null) {
+                window.superDispatchTouchEvent(cancel)
+            } else {
+                container?.dispatchTouchEvent(cancel)
+            }
         } catch (t: Throwable) {
             Log.w(TAG, "cancel dispatch failed", t)
         } finally {
+            dispatchingSyntheticCancel = false
             cancel.recycle()
         }
     }
@@ -1239,11 +1266,14 @@ object SwipePanelHost {
         panel?.parent?.requestDisallowInterceptTouchEvent(false)
         // 拖到一半被移除（宿主收起列表、Activity 暂停）时，宿主容器还停在拖动中的缩放 / 透明度上；
         // 动画对象是宿主自己的 launcher_container，必须在脱离之前复位。
-        if (container === expectedRoot) {
+        // 只在我们确实改过宿主容器（拖到一半 / 关闭动画中）时才复位；
+        // 否则这里可能正赶上宿主自己在给同一个容器做动画，cancel 掉会让宿主状态卡在半路。
+        if (container === expectedRoot && launcherTargetDirty) {
             panel?.let { card ->
                 val target = launcherAnimationTarget(expectedRoot, card)
                 if (target !== card) resetDismissTarget(target)
             }
+            launcherTargetDirty = false
         }
         clearGestureExclusion(expectedRoot.rootView)
         parent?.removeView(expectedRoot)
