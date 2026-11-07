@@ -903,7 +903,25 @@ object SwipePanelHost {
                 setTypeface(typeface, Typeface.BOLD)
                 setTextColor(palette.title)
                 maxLines = 1
-            })
+                // 第一行右格放了「投放」卡片后左格变窄：放不下时按可用宽度把字号缩小（最小 10sp），不截断。
+                addOnLayoutChangeListener { view, left, _, right, _, _, _, _, _ ->
+                    val label = view as TextView
+                    val available = (right - left - label.paddingLeft - label.paddingRight).toFloat()
+                    if (available <= 0f) return@addOnLayoutChangeListener
+                    val metrics = label.resources.displayMetrics
+                    fun px(sp: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, sp, metrics)
+                    var sp = HEADER_TEXT_SP
+                    val probe = android.text.TextPaint(label.paint)
+                    while (sp > 10f) {
+                        probe.textSize = px(sp)
+                        if (probe.measureText(MODULE_TITLE) <= available) break
+                        sp -= 0.5f
+                    }
+                    if (kotlin.math.abs(label.textSize - px(sp)) > 0.5f) {
+                        label.post { label.textSize = sp }
+                    }
+                }
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
