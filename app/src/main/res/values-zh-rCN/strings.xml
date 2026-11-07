@@ -37,7 +37,6 @@
     <string name="battery_color_state_idle">未充电</string>
     <string name="battery_color_state_charging">充电中</string>
     <string name="battery_color_state_low">低电量</string>
-    <string name="battery_color_follow_system">跟随系统</string>
     <string name="battery_color_state_title">电量环</string>
     <string name="battery_color_custom_title">颜色自定义</string>
     <string name="battery_color_rgba_label">RGBA</string>
@@ -158,7 +157,6 @@
     <string name="about_update_check_now">检查更新</string>
     <string name="about_update_settings_title">更新设置</string>
     <string name="about_update_version_title">版本</string>
-    <string name="about_update_current_version">当前版本</string>
     <string name="about_version_history">版本历史</string>
     <string name="about_version_history_loading">正在加载</string>
     <string name="about_version_history_empty">暂无版本记录</string>
@@ -167,15 +165,9 @@
     <string name="update_available_title">检测到新版本</string>
     <string name="update_download">下载</string>
     <string name="update_cancel">取消</string>
-    <string name="tools_check_update">正在检查更新</string>
-    <string name="tools_update_none">当前已是最新版本</string>
     <string name="config_disable_rear_cover_title">禁用背屏保护提示</string>
     <string name="config_disable_rear_cover_summary">屏蔽背屏保护弹窗提醒</string>
     <string name="config_disable_double_tap_wake_title">双击亮屏黑名单</string>
-    <plurals name="config_disabled_apps_count">
-        <item quantity="other">已添加 %1$d 个应用</item>
-    </plurals>
-    <string name="config_disabled_apps_count_none">未添加应用，不拦截任何应用</string>
     <string name="app_picker_title">双击亮屏黑名单</string>
     <string name="app_picker_search_hint">搜索应用</string>
     <string name="app_picker_loading">正在读取应用...</string>
@@ -183,7 +175,6 @@
 
     <!-- About Page -->
     <string name="about_developer_title">开发者</string>
-    <string name="about_module_url_title">模块地址</string>
     <string name="about_credits_title">引用</string>
     <string name="about_miuix_summary">本项目使用 Miuix UI 组件构建</string>
     <string name="about_miuix_lib">miuix-kotlin-multiplatform (Apache-2.0)</string>
@@ -203,21 +194,20 @@
     <string name="license_title">开源许可</string>
 
     <!-- Swipe-up Panel -->
-    <string name="panel_title">背屏快捷面板</string>
     <string name="panel_restart_required">请重启背屏作用域</string>
-    <string name="panel_disable_long_press_title">禁用背屏长按切换壁纸</string>
-    <string name="panel_disable_long_press_on">背屏长按切换壁纸已禁用</string>
-    <string name="panel_disable_long_press_off">背屏长按切换壁纸保持默认</string>
-    <string name="panel_remove_limit_title">移除背屏壁纸数量限制</string>
-    <string name="panel_remove_limit_on">当前已移除15张上限</string>
-    <string name="panel_remove_limit_off">当前保持默认15张上限</string>
-    <string name="panel_battery_ring_title">背屏电量显示</string>
-    <string name="panel_battery_ring_on">当前已在背屏显示电量</string>
-    <string name="panel_battery_ring_off">当前不显示背屏电量</string>
-    <string name="panel_remove_app_card_limit_title">移除应用卡数量限制</string>
-    <string name="panel_remove_app_card_limit_on">当前已移除15个应用卡上限</string>
-    <string name="panel_remove_app_card_limit_off">当前保持默认15个应用卡上限</string>
     <string name="panel_save_failed">保存失败，请在主应用中修改</string>
+    <string name="panel_tile_long_press">长按换壁纸</string>
+    <string name="panel_tile_long_press_on">已禁用</string>
+    <string name="panel_tile_long_press_off">原厂行为</string>
+    <string name="panel_tile_wallpaper_limit">壁纸数量上限</string>
+    <string name="panel_tile_wallpaper_limit_on">已移除</string>
+    <string name="panel_tile_wallpaper_limit_off">最多 15 张</string>
+    <string name="panel_tile_battery">背屏电量</string>
+    <string name="panel_tile_battery_on">显示</string>
+    <string name="panel_tile_battery_off">隐藏</string>
+    <string name="panel_tile_ring_style">电量环样式</string>
+    <string name="panel_tile_off_timeout">息屏时间</string>
+    <string name="panel_tile_auto_wallpaper">定时换壁纸</string>
 
     <!-- Restart Scope Dialog -->
     <string name="restart_title">重启作用域</string>
@@ -228,6 +218,55 @@
     <string name="restart_backscreen">背屏</string>
     <string name="restart_theme_manager">主题壁纸</string>
     <string name="restart_personal_assistant">智能助理</string>
+    <string name="restart_system_summary">勾选后将直接重启手机</string>
+    <string name="restart_device_confirm">重启手机</string>
+    <string name="about_update_view">查看更新</string>
+    <string name="scope_restart_hint_theme">切换后会自动重启主题壁纸</string>
+    <string name="scope_restart_hint_backscreen">切换后会自动重启背屏</string>
+    <string name="scope_restart_hint_backscreen_theme">切换后会自动重启背屏与主题壁纸</string>
+    <string name="scope_restart_hint_18pro">切换后会自动重启背屏、主题壁纸与智能助理</string>
+    <string name="home_root_recheck">重新检测</string>
+    <string name="home_root_checking">检测中…</string>
+    <string name="scope_short_system">系统</string>
+    <string name="scope_short_backscreen">背屏</string>
+    <string name="scope_short_theme">主题</string>
+    <string name="scope_short_personal_assistant">助理</string>
+    <string name="scope_state_active">已注入</string>
+    <string name="scope_state_stale">旧版本，需重启作用域</string>
+    <string name="scope_state_failed">加载失败</string>
+    <string name="scope_state_idle">未运行</string>
+    <string name="scope_state_not_in_scope">未在 LSPosed 中勾选</string>
+    <string name="scope_status_title">作用域状态</string>
+    <string name="scope_status_summary">由 LSPosed 报告的模块加载情况</string>
+    <plurals name="function_group_enabled_count">
+        <item quantity="other">已开启 %1$d 项</item>
+    </plurals>
+    <string name="double_tap_wake_summary_none">未选择应用，功能未启用</string>
+    <plurals name="double_tap_wake_summary_count">
+        <item quantity="other">已对 %1$d 个应用生效</item>
+    </plurals>
+    <string name="app_picker_double_tap_hint">勾选的应用在前台运行时，背屏双击不会唤醒。勾选任意一个应用即自动启用此功能，全部取消即关闭。</string>
+    <string name="config_restore_confirm_title">恢复配置？</string>
+    <string name="config_restore_confirm_summary">备份时间 %1$s，共 %2$d 项（模块版本 %3$s）。恢复后将覆盖当前配置。</string>
+    <string name="config_restore_confirm_action">恢复</string>
+    <string name="config_bottom_bar_blur_summary_glass">开启时为玻璃折射效果，关闭后使用纯色底</string>
+    <string name="about_module_title">模块</string>
+    <string name="scope_state_stale_system">旧版本，需重启手机</string>
+    <string name="common_undo">撤销</string>
+    <string name="common_expanded">已展开</string>
+    <string name="common_collapsed">已收起</string>
+    <string name="battery_preview_percent_title">预览电量</string>
+    <string name="battery_preview_charging_title">预览充电状态</string>
+    <string name="battery_layout_reset_done">已恢复默认</string>
+    <string name="battery_layout_reset_to">恢复默认值（%1$s）</string>
+    <string name="keep_rear_screen_on_in_game_unavailable">仅在「背屏息屏时间」为「跟随系统」时可用</string>
+    <string name="log_copy_path">复制路径</string>
+    <string name="log_path_copied">已复制</string>
+    <string name="about_version_history_current">当前</string>
+    <string name="app_picker_filter_user">用户</string>
+    <string name="app_picker_filter_system">系统</string>
+    <string name="app_picker_filter_selected">已选</string>
+    <string name="app_picker_filter_all">全部</string>
     <string name="restart_success">停止指令已发送，请重新打开相关应用</string>
     <string name="restart_failed">停止应用失败（可能未获取 root 权限）</string>
     <string name="common_retry">重试</string>
@@ -246,5 +285,4 @@
     <string name="log_failed_retry">日志生成失败，点击重试</string>
     <string name="log_regenerate">重新生成</string>
     <string name="settings_save_failed">设置保存失败</string>
-    <string name="settings_saving">正在保存…</string>
 </resources>

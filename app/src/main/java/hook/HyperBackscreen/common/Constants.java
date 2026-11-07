@@ -73,6 +73,8 @@ public final class Constants {
     public static final String KEY_THEME_SETTINGS_SHORTCUT = "theme_settings_shortcut";
     public static final String PANEL_PREFERENCE_AUTHORITY = MODULE_PACKAGE + ".PanelPreferences";
     public static final String PANEL_PREFERENCE_METHOD_SET = "set_panel_preference";
+    /** 背屏面板写字符串偏好（息屏档位、换壁纸间隔、电量环样式），键与取值都有白名单。 */
+    public static final String PANEL_PREFERENCE_METHOD_SET_STRING = "set_panel_string_preference";
     public static final String ACTION_SYNC_BATTERY_RING =
             MODULE_PACKAGE + ".action.SYNC_BATTERY_RING";
     public static final String ACTION_SYNC_AUTO_WALLPAPER =

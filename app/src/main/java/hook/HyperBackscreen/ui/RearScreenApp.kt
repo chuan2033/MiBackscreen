@@ -1,5 +1,10 @@
 package hook.HyperBackscreen.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import hook.HyperBackscreen.ui.components.DialogButtonRow
+import hook.HyperBackscreen.ui.theme.LocalAppColors
+import hook.HyperBackscreen.ui.theme.appColors
 import android.graphics.Color
 import android.content.Context
 import android.content.Intent
@@ -12,18 +17,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
@@ -48,14 +48,11 @@ import hook.HyperBackscreen.ui.config.PreferencesBackup
 import hook.HyperBackscreen.ui.util.AppLanguage
 import hook.HyperBackscreen.ui.util.RearDisplayCompatibility
 import hook.HyperBackscreen.ui.util.RearScreenTimeoutSync
-import hook.HyperBackscreen.ui.util.ThemeMode
 import hook.HyperBackscreen.ui.util.ThemePrefs
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
@@ -197,6 +194,9 @@ internal fun RearScreenApp() {
         mutableStateOf(ModuleApp.getService() != null)
     }
     var showRearDisplayWarning by remember { mutableStateOf(false) }
+    // 恢复配置会覆盖当前设置：先读出备份概要让用户确认，确认后才真正写入。
+    var pendingRestore by remember { mutableStateOf<PreferencesBackup.BackupInfo?>(null) }
+    var showRestoreConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         val hidden = withContext(Dispatchers.IO) {
@@ -315,8 +315,42 @@ internal fun RearScreenApp() {
         lightColorScheme()
     }
 
+    fun performRestore() {
+        scope.launch(Dispatchers.IO) {
+            val result = PreferencesBackup.restore(context)
+            withContext(Dispatchers.Main) {
+                if (result == null) {
+                    feedback.show(context.getString(R.string.config_restore_failed))
+                } else {
+                    // 外观类偏好不在 ModulePreferencesSnapshot 的观察集合里，手动回读一次；
+                    // 背屏电量等参数在挂载时读取，提示用户重进背屏桌面。
+                    floatingNavBar = PrefsBridge.readFloatingNavBar(context)
+                    liquidGlass = PrefsBridge.readLiquidGlass(context)
+                    bottomBarBlur = PrefsBridge.readBottomBarBlur(context)
+                    showFunctionCount = PrefsBridge.readShowFunctionCount(context)
+                    checkUpdates = PrefsBridge.readCheckUpdates(context)
+                    themeSettingsShortcut =
+                        PrefsBridge.readThemeSettingsShortcutForUi(context)
+                    feedback.show(
+                        context.getString(
+                            R.string.config_restore_done,
+                            result.keyCount,
+                            result.exportedAt ?: "-",
+                        )
+                    )
+                }
+            }
+        }
+    }
+
     MiuixTheme(colors = appColors) {
-      CompositionLocalProvider(LocalUiFeedback provides feedback) {
+      val projectColors = remember(appColors, themeMode.usesDynamicColors) {
+          appColors(appColors, themeMode.usesDynamicColors)
+      }
+      CompositionLocalProvider(
+          LocalUiFeedback provides feedback,
+          LocalAppColors provides projectColors
+      ) {
         HomeScreen(
             enableBatteryRing = enableBatteryRing,
             onEnableBatteryRingChange = { value ->
@@ -572,29 +606,13 @@ internal fun RearScreenApp() {
                 }
             },
             onRestorePreferences = {
-                scope.launch(Dispatchers.IO) {
-                    val result = PreferencesBackup.restore(context)
-                    withContext(Dispatchers.Main) {
-                        if (result == null) {
-                            feedback.show(context.getString(R.string.config_restore_failed))
-                        } else {
-                            // 外观类偏好不在 ModulePreferencesSnapshot 的观察集合里，手动回读一次；
-                            // 背屏电量等参数在挂载时读取，提示用户重进背屏桌面。
-                            floatingNavBar = PrefsBridge.readFloatingNavBar(context)
-                            liquidGlass = PrefsBridge.readLiquidGlass(context)
-                            bottomBarBlur = PrefsBridge.readBottomBarBlur(context)
-                            showFunctionCount = PrefsBridge.readShowFunctionCount(context)
-                            checkUpdates = PrefsBridge.readCheckUpdates(context)
-                            themeSettingsShortcut =
-                                PrefsBridge.readThemeSettingsShortcutForUi(context)
-                            feedback.show(
-                                context.getString(
-                                    R.string.config_restore_done,
-                                    result.keyCount,
-                                    result.exportedAt ?: "-",
-                                )
-                            )
-                        }
+                scope.launch {
+                    val info = withContext(Dispatchers.IO) { PreferencesBackup.inspect() }
+                    if (info == null) {
+                        feedback.show(context.getString(R.string.config_restore_failed))
+                    } else {
+                        pendingRestore = info
+                        showRestoreConfirm = true
                     }
                 }
             }
@@ -627,20 +645,36 @@ internal fun RearScreenApp() {
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     style = MiuixTheme.textStyles.body2
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    Button(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
-                        onClick = { showRearDisplayWarning = false },
-                        colors = ButtonDefaults.buttonColorsPrimary(),
-                        content = { Text(stringResource(R.string.common_confirm)) }
-                    )
-                }
+                DialogButtonRow(
+                    primaryText = stringResource(R.string.common_confirm),
+                    onPrimary = { showRearDisplayWarning = false }
+                )
             }
+        }
+
+        WindowDialog(
+            show = showRestoreConfirm,
+            title = stringResource(R.string.config_restore_confirm_title),
+            summary = pendingRestore?.let { info ->
+                stringResource(
+                    R.string.config_restore_confirm_summary,
+                    info.exportedAt ?: "-",
+                    info.keyCount,
+                    info.appVersion ?: "-",
+                )
+            },
+            onDismissRequest = { showRestoreConfirm = false },
+            onDismissFinished = { pendingRestore = null }
+        ) {
+            DialogButtonRow(
+                secondaryText = stringResource(R.string.common_cancel),
+                onSecondary = { showRestoreConfirm = false },
+                primaryText = stringResource(R.string.config_restore_confirm_action),
+                onPrimary = {
+                    showRestoreConfirm = false
+                    performRestore()
+                }
+            )
         }
     }
 }

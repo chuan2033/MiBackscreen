@@ -238,6 +238,28 @@ public final class PrefsBridge {
         sRemoteBooleanOverrides.put(key, value);
     }
 
+    /**
+     * 宿主进程里刚由面板写成功的字符串值。RemotePreferences 的变更回传有延迟，
+     * 面板与电量环在这段时间内先读这里，避免显示 / 绘制旧值。
+     */
+    private static final ConcurrentHashMap<String, String> sRemoteStringOverrides =
+            new ConcurrentHashMap<>();
+
+    public static void setRemoteStringOverride(@NonNull String key, @NonNull String value) {
+        sRemoteStringOverrides.put(key, value);
+    }
+
+    /** 宿主进程（背屏面板）读字符串偏好：优先刚写成功的覆盖值。 */
+    @NonNull
+    public static String readStringForRemote(@NonNull String key, @NonNull String def) {
+        String override = sRemoteStringOverrides.get(key);
+        if (override != null) return override;
+        SharedPreferences prefs = remotePrefsFromModule();
+        if (prefs == null) return def;
+        String value = prefs.getString(key, def);
+        return value == null ? def : value;
+    }
+
     private static boolean readRemoteBooleanWithOverride(@NonNull String key, boolean def) {
         Boolean override = sRemoteBooleanOverrides.get(key);
         if (override != null) return override;
@@ -1090,11 +1112,19 @@ public final class PrefsBridge {
     /** 电量位置 / 线条缩放（快捷面板 / 宿主进程内的模块缓存）。 */
     @NonNull
     public static String readBatteryLayoutForRemote(@NonNull String key) {
-        String def = batteryLayoutDefault(key);
-        SharedPreferences prefs = remotePrefsFromModule();
-        if (prefs == null) return def;
-        String value = prefs.getString(key, def);
-        return value == null ? def : value;
+        return readStringForRemote(key, batteryLayoutDefault(key));
+    }
+
+    @NonNull
+    public static String readRearScreenOffTimeoutForRemote() {
+        return normalizeRearScreenOffTimeout(
+                readStringForRemote(Constants.KEY_REAR_SCREEN_OFF_TIMEOUT, DEFAULT_REAR_SCREEN_OFF_TIMEOUT));
+    }
+
+    @NonNull
+    public static String readAutoWallpaperIntervalForRemote() {
+        return AutoWallpaperRotationPolicy.normalizePreferenceValue(readStringForRemote(
+                Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES, DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES));
     }
 
     public static boolean requestEnableBatteryRingWrite(@NonNull Context context, boolean enabled) {
@@ -1130,6 +1160,83 @@ public final class PrefsBridge {
             return accepted;
         } catch (Throwable e) {
             Log.w(TAG, "Failed to request panel preference write for " + key, e);
+            return false;
+        }
+    }
+
+    /** 面板请求写字符串偏好；成功后在宿主进程记一份覆盖值。 */
+    public static boolean requestPanelStringWrite(@NonNull Context context,
+                                                  @NonNull String key,
+                                                  @NonNull String value) {
+        try {
+            Bundle extras = new Bundle();
+            extras.putString(Constants.EXTRA_PREFERENCE_VALUE, value);
+            Bundle result = context.getContentResolver().call(
+                    Uri.parse("content://" + Constants.PANEL_PREFERENCE_AUTHORITY),
+                    Constants.PANEL_PREFERENCE_METHOD_SET_STRING,
+                    key,
+                    extras);
+            boolean accepted = result != null
+                    && result.getBoolean(Constants.EXTRA_PREFERENCE_ACCEPTED, false);
+            if (accepted) {
+                setRemoteStringOverride(key, value);
+            }
+            return accepted;
+        } catch (Throwable e) {
+            Log.w(TAG, "Failed to request panel string write for " + key, e);
+            return false;
+        }
+    }
+
+    /**
+     * 面板可写的字符串键与合法取值。取值必须与界面上的枚举完全一致：面板来自宿主进程，
+     * 不能让它把任意字符串写进模块偏好。返回规范化后的值，非法时返回 null。
+     */
+    @Nullable
+    static String normalizePanelStringValue(@Nullable String key, @Nullable String value) {
+        if (key == null || value == null) return null;
+        switch (key) {
+            case Constants.KEY_REAR_SCREEN_OFF_TIMEOUT: {
+                String normalized = normalizeRearScreenOffTimeout(value);
+                for (hook.HyperBackscreen.ui.RearScreenOffTimeout entry
+                        : hook.HyperBackscreen.ui.RearScreenOffTimeout.getEntries()) {
+                    if (entry.getPrefValue().equals(normalized)) return normalized;
+                }
+                return null;
+            }
+            case Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES: {
+                for (hook.HyperBackscreen.ui.AutoWallpaperInterval entry
+                        : hook.HyperBackscreen.ui.AutoWallpaperInterval.getEntries()) {
+                    if (entry.getPrefValue().equals(value)) return value;
+                }
+                return null;
+            }
+            case Constants.KEY_BATTERY_RING_STYLE: {
+                for (hook.HyperBackscreen.ui.battery.BatteryRingStyle entry
+                        : hook.HyperBackscreen.ui.battery.BatteryRingStyle.getEntries()) {
+                    if (entry.getPrefValue().equals(value)) return value;
+                }
+                return null;
+            }
+            default:
+                return null;
+        }
+    }
+
+    static boolean applyPanelStringPreference(@NonNull Context context,
+                                              @NonNull String key,
+                                              @NonNull String value) {
+        String normalized = normalizePanelStringValue(key, value);
+        if (normalized == null) return false;
+        XposedService service = ModuleApp.awaitReadyService();
+        if (service == null) return false;
+        try {
+            SharedPreferences prefs = service.getRemotePreferences(Constants.PREF_GROUP);
+            if (!prefs.edit().putString(key, normalized).commit()) return false;
+            local(context).edit().putString(key, normalized).remove(PENDING_UI_PREFIX + key).apply();
+            return true;
+        } catch (Throwable error) {
+            Log.w(TAG, "Failed to apply panel string preference " + key, error);
             return false;
         }
     }

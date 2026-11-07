@@ -1,11 +1,20 @@
 package hook.HyperBackscreen.ui.home
 
+import hook.HyperBackscreen.ui.theme.currentAppColors
+import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -18,8 +27,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,36 +45,21 @@ private val CardHeight = 118.dp
 private val GlyphSize = 116.dp
 private val GlyphOffsetX = 26.dp
 private val GlyphOffsetY = 30.dp
-private val CardCornerRadius = 16.dp
+private val CardCornerRadius = HomeUiTokens.CornerCard
 
-// miuix 的颜色令牌里没有绿色系，绿卡只能写死；浅色用浅绿底配亮绿勾，深色用深绿底。
-private val WorkingContainerLight = Color(0xFFDFFAE4)
-private val WorkingContainerDark = Color(0xFF1A3825)
-private val WorkingGlyph = Color(0xFF36D167)
+private val DotSize = 7.dp
 
 @Composable
 internal fun HomeStatusCard(
     activated: Boolean,
-    usesDynamicColors: Boolean
+    scopeStatus: List<ScopeStatusItem>? = null,
+    onClick: (() -> Unit)? = null
 ) {
-    val dark = MiuixTheme.colorScheme.surface.luminance() < 0.5f
-    // Monet 下固定绿跟主题色系打架，改跟主题走；只有非动态取色才用写死的那套绿。
-    val containerColor = when {
-        !activated -> MiuixTheme.colorScheme.errorContainer
-        usesDynamicColors -> MiuixTheme.colorScheme.secondaryContainer
-        dark -> WorkingContainerDark
-        else -> WorkingContainerLight
-    }
-    val contentColor = when {
-        !activated -> MiuixTheme.colorScheme.onErrorContainer
-        usesDynamicColors -> MiuixTheme.colorScheme.onSecondaryContainer
-        else -> MiuixTheme.colorScheme.onSurfaceContainer
-    }
-    val glyphColor = when {
-        !activated -> MiuixTheme.colorScheme.error
-        usesDynamicColors -> MiuixTheme.colorScheme.primary
-        else -> WorkingGlyph
-    }
+    // 颜色统一来自 AppColors：绿卡在 Monet 下自动改跟主题色。
+    val colors = currentAppColors
+    val containerColor = if (activated) colors.statusActiveContainer else MiuixTheme.colorScheme.errorContainer
+    val contentColor = if (activated) colors.onStatusActiveContainer else MiuixTheme.colorScheme.onErrorContainer
+    val glyphColor = if (activated) colors.statusActiveGlyph else MiuixTheme.colorScheme.error
 
     Card(
         modifier = Modifier
@@ -77,15 +72,15 @@ internal fun HomeStatusCard(
             contentColor = contentColor
         ),
         pressFeedbackType = PressFeedbackType.None,
-        showIndication = false,
+        showIndication = onClick != null,
         holdDownState = false,
-        onClick = null,
+        onClick = onClick,
         onLongPress = null
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(CardHeight)
+                .heightIn(min = CardHeight)
         ) {
             Box(
                 modifier = Modifier
@@ -101,15 +96,29 @@ internal fun HomeStatusCard(
             Column(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(start = 16.dp, top = 14.dp, end = 16.dp)
+                    .padding(start = 16.dp, top = 14.dp, end = 16.dp, bottom = 14.dp)
             ) {
-                Text(
-                    text = stringResource(
-                        if (activated) R.string.home_status_activated else R.string.home_status_inactive
-                    ),
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                // 作用域圆点和「已激活」放在同一行：一眼看到激活状态和各作用域是否需要重启。
+                // 右侧留出对勾图形的位置，太窄时圆点自动折到下一行。
+                Row(
+                    modifier = Modifier.padding(end = 56.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(
+                            if (activated) R.string.home_status_activated else R.string.home_status_inactive
+                        ),
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    if (activated && scopeStatus != null) {
+                        ScopeStatusRow(
+                            items = scopeStatus,
+                            contentColor = contentColor,
+                            modifier = Modifier.padding(start = 12.dp)
+                        )
+                    }
+                }
                 Text(
                     text = if (activated) {
                         stringResource(R.string.common_version, BuildConfig.VERSION_NAME)
@@ -167,5 +176,55 @@ private fun StatusGlyph(
                 cap = StrokeCap.Round
             )
         }
+    }
+}
+
+/**
+ * 各作用域的注入状态：一个色点 + 简称。
+ * 蓝 = 已注入当前版本；红 = 需要重启（更新后还是旧版本）或加载失败；灰 = 未运行；空心 = 没勾选作用域。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ScopeStatusRow(
+    items: List<ScopeStatusItem>,
+    contentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        items.forEach { item ->
+            val label = stringResource(item.shortLabelRes)
+            val description = stringResource(item.labelRes) + ": " + stringResource(item.descriptionRes)
+            Row(
+                modifier = Modifier.semantics { contentDescription = description },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                ScopeDot(item.state, contentColor)
+                Text(
+                    text = label,
+                    fontSize = 12.sp,
+                    color = contentColor.copy(alpha = 0.78f),
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScopeDot(state: ScopeState, contentColor: Color) {
+    val base = Modifier.size(DotSize)
+    val colors = currentAppColors
+    when (state) {
+        ScopeState.ACTIVE -> Box(base.background(colors.scopeActive, CircleShape))
+        // 需要重启和加载失败都要用户处理，统一用红点；具体原因点卡片看。
+        ScopeState.STALE, ScopeState.FAILED -> Box(base.background(colors.scopeNeedsRestart, CircleShape))
+        ScopeState.IDLE -> Box(base.background(contentColor.copy(alpha = 0.3f), CircleShape))
+        // 没勾选作用域画空心圈，和「勾了但没运行」的实心灰点区分开。
+        ScopeState.NOT_IN_SCOPE -> Box(base.border(1.2.dp, contentColor.copy(alpha = 0.45f), CircleShape))
     }
 }

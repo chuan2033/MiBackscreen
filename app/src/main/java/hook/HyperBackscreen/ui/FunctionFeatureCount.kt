@@ -31,3 +31,39 @@ internal fun countEnabledFunctions(
     faceEnrollmentCompat,
     keepRearScreenOnInGame,
 ).count { it }
+
+/**
+ * 功能页三个折叠分组各自开着几项，显示在分组标题行右侧，折叠时也能看出哪组有东西开着。
+ * 归属与 FunctionPage 的分组一致；18 Pro 总开关不在任何分组里，不计入。
+ */
+internal data class FunctionGroupCounts(
+    val system: Int = 0,
+    val subscreen: Int = 0,
+    val theme: Int = 0,
+)
+
+internal fun countFunctionGroups(
+    disableRearScreenCover: Boolean,
+    disableDoubleTapWake: Boolean,
+    enableBatteryRing: Boolean,
+    batteryRingSupported: Boolean,
+    disableLongPress: Boolean,
+    removeAppCardLimit: Boolean,
+    autoWallpaperEnabled: Boolean,
+    rearScreenOffTimeoutActive: Boolean,
+    keepRearScreenOnInGame: Boolean,
+    fixRearScreenApply: Boolean,
+    faceEnrollmentCompat: Boolean,
+    removeWallpaperLimit: Boolean,
+): FunctionGroupCounts = FunctionGroupCounts(
+    system = listOf(disableRearScreenCover, disableDoubleTapWake).count { it },
+    subscreen = listOf(
+        enableBatteryRing && batteryRingSupported,
+        disableLongPress,
+        removeAppCardLimit,
+        autoWallpaperEnabled,
+        rearScreenOffTimeoutActive,
+        keepRearScreenOnInGame,
+    ).count { it },
+    theme = listOf(fixRearScreenApply, faceEnrollmentCompat, removeWallpaperLimit).count { it },
+)

@@ -1,6 +1,20 @@
 package hook.HyperBackscreen.ui.about
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import hook.HyperBackscreen.ui.components.DetailPageScaffold
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
+import hook.HyperBackscreen.BuildConfig
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -12,127 +26,76 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
-import hook.HyperBackscreen.ui.components.BlurredBar
 import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.updater.UpdateChecker
 import hook.HyperBackscreen.ui.updater.UpdateInfo
 import hook.HyperBackscreen.ui.updater.updateNotes
+import hook.HyperBackscreen.ui.theme.currentAppColors
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
-import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
-import top.yukonga.miuix.kmp.icon.extended.ExpandLess
-import top.yukonga.miuix.kmp.icon.extended.ExpandMore
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
-import top.yukonga.miuix.kmp.utils.overScrollVertical
-import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
 /** 「版本历史」二级页：按发布时间倒序列出每个正式版的更新说明。 */
 @Composable
 internal fun VersionHistoryPage(onBack: () -> Unit) {
     var releases by remember { mutableStateOf<List<UpdateInfo>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    val loadingDescription = stringResource(R.string.about_version_history_loading)
     LaunchedEffect(Unit) {
         releases = UpdateChecker.history()
         loading = false
     }
 
-    val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
-    val surfaceColor = MiuixTheme.colorScheme.surface
-    val backdrop = rememberLayerBackdrop {
-        drawRect(surfaceColor)
-        drawContent()
-    }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = MiuixTheme.colorScheme.surface,
-        topBar = {
-            BlurredBar(backdrop) {
-                TopAppBar(
-                    title = stringResource(R.string.about_version_history),
-                    largeTitle = stringResource(R.string.about_version_history),
-                    color = Color.Transparent,
-                    scrollBehavior = scrollBehavior,
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = MiuixIcons.Back,
-                                contentDescription = stringResource(R.string.common_back),
-                                tint = MiuixTheme.colorScheme.onBackground
-                            )
+    DetailPageScaffold(
+        title = stringResource(R.string.about_version_history),
+        onBack = onBack,
+    ) {
+        when {
+            loading -> items(4) {
+                ReleaseSkeletonCard(
+                    // 只在第一张骨架卡上挂描述，读屏念一次「正在加载」，不重复四遍。
+                    modifier = if (it == 0) {
+                        Modifier.semantics {
+                            contentDescription = loadingDescription
+                            liveRegion = LiveRegionMode.Polite
                         }
+                    } else {
+                        Modifier.clearAndSetSemantics {}
                     }
                 )
+                Spacer(Modifier.height(6.dp))
             }
-        }
-    ) { paddingValues ->
-        Box(modifier = Modifier.layerBackdrop(backdrop)) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .scrollEndHaptic()
-                    .overScrollVertical()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .padding(horizontal = 12.dp),
-                contentPadding = PaddingValues(
-                    top = paddingValues.calculateTopPadding()
-                )
-            ) {
-                item { Spacer(Modifier.height(12.dp)) }
-                when {
-                    loading -> items(4) {
-                        ReleaseSkeletonCard()
-                        Spacer(Modifier.height(6.dp))
-                    }
-                    releases.isEmpty() -> item {
-                        StatusText(stringResource(R.string.about_version_history_empty))
-                    }
-                    else -> items(releases.size) { index ->
-                        ReleaseCard(releases[index])
-                        Spacer(Modifier.height(6.dp))
-                    }
-                }
-                item { Spacer(Modifier.height(24.dp)) }
+            releases.isEmpty() -> item {
+                StatusText(stringResource(R.string.about_version_history_empty))
+            }
+            else -> items(releases.size) { index ->
+                ReleaseCard(releases[index])
+                Spacer(Modifier.height(6.dp))
             }
         }
     }
@@ -153,20 +116,48 @@ private fun StatusText(text: String) {
 @Composable
 private fun ReleaseCard(info: UpdateInfo) {
     var expanded by remember { mutableStateOf(false) }
+    val expandedState = stringResource(R.string.common_expanded)
+    val collapsedState = stringResource(R.string.common_collapsed)
     CardBlock(pressFeedbackType = PressFeedbackType.None) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { expanded = !expanded }
+                // 整张卡可点：读屏会念出「按钮，已收起，双击展开」，而不只是一段没有角色的文字。
+                .clickable(
+                    onClickLabel = stringResource(
+                        if (expanded) R.string.about_version_history_collapse
+                        else R.string.about_version_history_expand
+                    ),
+                    role = Role.Button
+                ) { expanded = !expanded }
+                .semantics {
+                    stateDescription = if (expanded) expandedState else collapsedState
+                }
                 .padding(horizontal = 16.dp, vertical = 16.dp)
         ) {
-            Row(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
                     text = "v" + info.versionName,
                     color = MiuixTheme.colorScheme.onSurface,
-                    style = MiuixTheme.textStyles.title4,
-                    modifier = Modifier.weight(1f)
+                    style = MiuixTheme.textStyles.title4
                 )
+                // 标出当前安装的版本，翻历史时能知道自己落后了几个版本。
+                if (info.versionName == BuildConfig.VERSION_NAME) {
+                    Text(
+                        text = stringResource(R.string.about_version_history_current),
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(MiuixTheme.colorScheme.primary.copy(alpha = 0.12f))
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                        color = MiuixTheme.colorScheme.primary,
+                        fontSize = 11.sp
+                    )
+                }
+                Spacer(Modifier.weight(1f))
                 Text(
                     text = formatReleaseDate(info.publishedAt),
                     color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.55f),
@@ -174,21 +165,21 @@ private fun ReleaseCard(info: UpdateInfo) {
                 )
             }
             Spacer(Modifier.height(8.dp))
-            AnimatedVisibility(visible = !expanded) {
-                Text(
-                    text = notesPreview(info.notes),
-                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    style = MiuixTheme.textStyles.body2,
-                    maxLines = 2
-                )
-            }
-            AnimatedVisibility(visible = expanded) {
-                Text(
-                    text = releaseNotes(info),
-                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                    style = MiuixTheme.textStyles.body2
-                )
-            }
+            // 同一个 Text 只换内容和行数，高度由 animateContentSize 平滑过渡，
+            // 不再是两个 AnimatedVisibility 一出一进导致卡片高度先缩后涨。
+            val preview = remember(info) { AnnotatedString(notesPreview(info.notes)) }
+            val codeBackground = currentAppColors.codeBackground
+            val full = remember(info, codeBackground) { releaseNotes(info, codeBackground) }
+            Text(
+                text = if (expanded) full else preview,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize(tween(durationMillis = 260, easing = FastOutSlowInEasing)),
+                color = MiuixTheme.colorScheme.onSurface.copy(alpha = if (expanded) 0.85f else 0.7f),
+                style = MiuixTheme.textStyles.body2,
+                maxLines = if (expanded) Int.MAX_VALUE else 2,
+                overflow = TextOverflow.Ellipsis
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -227,8 +218,8 @@ private fun notesPreview(markdown: String): String {
 
 /** 加载占位卡片：四条流光灰条，布局对齐真实的版本卡片。 */
 @Composable
-private fun ReleaseSkeletonCard() {
-    CardBlock(pressFeedbackType = PressFeedbackType.None) {
+private fun ReleaseSkeletonCard(modifier: Modifier = Modifier) {
+    CardBlock(modifier = modifier, pressFeedbackType = PressFeedbackType.None) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -259,7 +250,7 @@ private fun ShimmerBar(widthFraction: Float, height: Dp) {
             .clip(RoundedCornerShape(height / 2))
             .background(
                 Brush.linearGradient(
-                    colors = ShimmerColors,
+                    colors = shimmerColors,
                     start = Offset(progress * 600f, 0f),
                     end = Offset(progress * 600f + 300f, 0f)
                 )
@@ -267,13 +258,14 @@ private fun ShimmerBar(widthFraction: Float, height: Dp) {
     )
 }
 
-private val ShimmerColors = listOf(
-    Color(0xFFE4E4E7),
-    Color(0xFFF4F4F6),
-    Color(0xFFE4E4E7)
-)
+private val shimmerColors: List<Color>
+    @Composable get() {
+        val colors = currentAppColors
+        return listOf(colors.shimmerBase, colors.shimmerHighlight, colors.shimmerBase)
+    }
 
-private fun releaseNotes(info: UpdateInfo): AnnotatedString = updateNotes(info.notes)
+private fun releaseNotes(info: UpdateInfo, codeBackground: Color): AnnotatedString =
+    updateNotes(info.notes, codeBackground)
 
 private fun formatReleaseDate(iso: String): String {
     if (iso.isEmpty()) return ""

@@ -1,21 +1,21 @@
 package hook.HyperBackscreen.ui.function
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import hook.HyperBackscreen.ui.components.DialogButtonRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
 import top.yukonga.miuix.kmp.basic.NumberPicker
-import top.yukonga.miuix.kmp.basic.TextButton
 
 /**
  * 「定时关闭背屏」的时间选择：小时 + 分钟两列，整分钟可选。
@@ -51,22 +51,12 @@ internal fun RearScreenScheduleTimeDialog(
                 modifier = Modifier.weight(1f)
             )
         }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            TextButton(
-                text = stringResource(R.string.common_cancel),
-                onClick = onCancel,
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(
-                text = stringResource(R.string.common_confirm),
-                onClick = { onApply(hour * 60 + minute) },
-                modifier = Modifier.weight(1f)
-            )
-        }
+        DialogButtonRow(
+            modifier = Modifier.padding(top = 12.dp),
+            secondaryText = stringResource(R.string.common_cancel),
+            onSecondary = onCancel,
+            primaryText = stringResource(R.string.common_confirm),
+            onPrimary = { onApply(hour * 60 + minute) }
+        )
     }
 }

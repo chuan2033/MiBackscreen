@@ -1,9 +1,8 @@
 package hook.HyperBackscreen.ui.updater
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
+import hook.HyperBackscreen.ui.components.DialogButtonRow
+import hook.HyperBackscreen.ui.theme.currentAppColors
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -25,10 +24,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import hook.HyperBackscreen.R
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 
@@ -46,7 +42,8 @@ fun UpdateDialog(
         onDismissRequest = onDismiss
     ) {
         update?.let { info ->
-            val body = remember(info) { updateBody(info) }
+            val codeBackground = currentAppColors.codeBackground
+            val body = remember(info, codeBackground) { updateBody(info, codeBackground) }
             Text(
                 text = body,
                 modifier = Modifier
@@ -64,36 +61,24 @@ fun UpdateDialog(
                 color = MiuixTheme.colorScheme.error,
             )
         }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            TextButton(
-                text = stringResource(R.string.update_cancel),
-                modifier = Modifier.weight(1f).height(48.dp),
-                onClick = onDismiss
-            )
-            Button(
-                modifier = Modifier.weight(1f).height(48.dp),
-                onClick = onDownload,
-                colors = ButtonDefaults.buttonColorsPrimary(),
-                content = { Text(stringResource(if (downloadFailed) R.string.common_retry else R.string.update_download)) }
-            )
-        }
+        DialogButtonRow(
+            modifier = Modifier.padding(top = 12.dp),
+            secondaryText = stringResource(R.string.update_cancel),
+            onSecondary = onDismiss,
+            primaryText = stringResource(if (downloadFailed) R.string.common_retry else R.string.update_download),
+            onPrimary = onDownload
+        )
     }
 }
 
 /** 版本号加粗，正文按 Markdown 的常用子集渲染（标题/加粗/行内代码/列表）。 */
-private fun updateBody(info: UpdateInfo): AnnotatedString = buildAnnotatedString {
+private fun updateBody(info: UpdateInfo, codeBackground: Color): AnnotatedString = buildAnnotatedString {
     withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 17.sp)) {
         append("v")
         append(info.versionName)
     }
     append("\n\n")
-    append(updateNotes(info.notes))
+    append(updateNotes(info.notes, codeBackground))
 }
 
 private val HEADING = Regex("^(#{1,6})\\s+(.*)$")
@@ -115,7 +100,7 @@ private fun listParagraphStyle() = ParagraphStyle(
 private val SpacerLine = ParagraphStyle(lineHeight = 8.sp)
 
 /** 逐行转换 Markdown：标题、列表、引用、分隔线、表格与行内样式。 */
-internal fun updateNotes(markdown: String): AnnotatedString = buildAnnotatedString {
+internal fun updateNotes(markdown: String, codeBackground: Color): AnnotatedString = buildAnnotatedString {
     var first = true
     var lastWasBlank = false
     markdown.lineSequence().forEach { raw ->
@@ -139,26 +124,26 @@ internal fun updateNotes(markdown: String): AnnotatedString = buildAnnotatedStri
                 when {
                     heading != null -> withStyle(ParagraphStyle(lineHeight = 26.sp)) {
                         withStyle(headingStyle(heading.groupValues[1].length)) {
-                            appendInline(heading.groupValues[2])
+                            appendInline(heading.groupValues[2], codeBackground)
                         }
                     }
                     bullet != null -> withStyle(listParagraphStyle()) {
                         append("•  ")
-                        appendInline(bullet.groupValues[1])
+                        appendInline(bullet.groupValues[1], codeBackground)
                     }
                     ordered != null -> withStyle(listParagraphStyle()) {
                         append(ordered.groupValues[1])
                         append(".  ")
-                        appendInline(ordered.groupValues[2])
+                        appendInline(ordered.groupValues[2], codeBackground)
                     }
                     quote != null -> withStyle(listParagraphStyle()) {
                         append("│ ")
-                        appendInline(quote.groupValues[1])
+                        appendInline(quote.groupValues[1], codeBackground)
                     }
                     TABLE_ROW.matches(line) -> withStyle(listParagraphStyle()) {
-                        appendInline(line.trim('|').replace("|", "   "))
+                        appendInline(line.trim('|').replace("|", "   "), codeBackground)
                     }
-                    else -> withStyle(ParagraphStyle(lineHeight = 21.sp)) { appendInline(line) }
+                    else -> withStyle(ParagraphStyle(lineHeight = 21.sp)) { appendInline(line, codeBackground) }
                 }
             }
         }
@@ -175,7 +160,7 @@ private fun headingStyle(level: Int) = SpanStyle(
 )
 
 /** 行内样式：**加粗**、`代码`、*斜体*；其余原样。 */
-private fun AnnotatedString.Builder.appendInline(text: String) {
+private fun AnnotatedString.Builder.appendInline(text: String, codeBackground: Color) {
     var cursor = 0
     for (match in INLINE.findAll(text)) {
         if (match.range.first > cursor) append(text.substring(cursor, match.range.first))
@@ -187,8 +172,8 @@ private fun AnnotatedString.Builder.appendInline(text: String) {
             code.isNotEmpty() -> withStyle(
                 SpanStyle(
                     fontFamily = FontFamily.Monospace,
-                    // 半透明灰在深浅色下都能形成代码底色，不依赖主题色。
-                    background = Color.Gray.copy(alpha = 0.22f)
+                    // 底色来自 AppColors（onSurface 派生），深浅色和 Monet 下都协调。
+                    background = codeBackground
                 )
             ) { append(code) }
             italic.isNotEmpty() -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(italic) }

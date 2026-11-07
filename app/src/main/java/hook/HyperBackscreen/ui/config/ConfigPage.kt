@@ -50,13 +50,15 @@ internal fun ConfigPage(
             ),
             selectedIndex = if (themeSettingsShortcut) 1 else 0,
             title = stringResource(R.string.config_module_entry_title),
+            summary = stringResource(R.string.scope_restart_hint_theme),
             onSelectedIndexChange = { index ->
                 onThemeSettingsShortcutChange(index == 1)
             }
         )
         ArrowPreference(
             title = stringResource(R.string.config_enable_app_card_title),
-            summary = stringResource(R.string.config_enable_app_card_summary),
+            summary = stringResource(R.string.config_enable_app_card_summary) + "\n" +
+                stringResource(R.string.scope_restart_hint_backscreen),
             onClick = { onEnableAppCardChange(true) }
         )
         SwitchPreference(
@@ -118,7 +120,11 @@ internal fun ConfigPage(
             checked = bottomBarBlur,
             onCheckedChange = onBottomBarBlurChange,
             title = stringResource(R.string.config_bottom_bar_blur_title),
-            summary = stringResource(R.string.config_bottom_bar_blur_summary)
+            // 液态玻璃底栏里这个开关管的是玻璃折射本身，关掉就是纯色底，摘要要说清楚。
+            summary = stringResource(
+                if (floatingNavBar && liquidGlass) R.string.config_bottom_bar_blur_summary_glass
+                else R.string.config_bottom_bar_blur_summary
+            )
         )
         SwitchPreference(
             checked = showFunctionCount,

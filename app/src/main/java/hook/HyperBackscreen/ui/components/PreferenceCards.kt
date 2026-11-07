@@ -1,11 +1,11 @@
 package hook.HyperBackscreen.ui.components
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
@@ -24,13 +24,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.runtime.remember
+import android.content.Context
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
@@ -122,10 +123,23 @@ internal fun ColumnScope.CollapsibleFunctionGroup(
     title: String,
     @DrawableRes iconRes: Int? = null,
     initiallyExpanded: Boolean = false,
+    /** 分组内已开启的项数；大于 0 时显示在箭头左侧，折叠时也能看出这组有东西开着。 */
+    enabledCount: Int? = null,
+    /** 给了 key 就把展开状态写进本地 UI 偏好，下次打开 App 保持上次的展开 / 收起。 */
+    persistKey: String? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val context = LocalContext.current
+    val uiPrefs = remember(context) {
+        context.getSharedPreferences(GROUP_EXPANDED_PREFS, Context.MODE_PRIVATE)
+    }
     // 用标题做 key，否则同页多个分组会共用同一个 saveable 状态（展开一个就全展开）。
-    var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
+    var expanded by rememberSaveable(title) {
+        mutableStateOf(
+            persistKey?.let { uiPrefs.getBoolean(GROUP_EXPANDED_KEY_PREFIX + it, initiallyExpanded) }
+                ?: initiallyExpanded
+        )
+    }
     val startAction: (@Composable () -> Unit)? = if (iconRes != null) {
         {
             Image(
@@ -142,6 +156,14 @@ internal fun ColumnScope.CollapsibleFunctionGroup(
         title = title,
         startAction = startAction,
         endActions = {
+            if (enabledCount != null && enabledCount > 0) {
+                Text(
+                    text = pluralStringResource(R.plurals.function_group_enabled_count, enabledCount, enabledCount),
+                    modifier = Modifier.padding(end = 8.dp),
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantActions
+                )
+            }
             Crossfade(
                 targetState = expanded,
                 animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
@@ -154,7 +176,12 @@ internal fun ColumnScope.CollapsibleFunctionGroup(
                 )
             }
         },
-        onClick = { expanded = !expanded }
+        onClick = {
+            expanded = !expanded
+            persistKey?.let {
+                uiPrefs.edit().putBoolean(GROUP_EXPANDED_KEY_PREFIX + it, expanded).apply()
+            }
+        }
     )
     AnimatedPreferenceVisibility(visible = expanded) {
         content()
@@ -209,3 +236,7 @@ internal fun AboutArrowPreference(
         }
     )
 }
+
+/** 与颜色模式共用的本地 UI 偏好文件；只存界面状态，不进模块远程偏好、也不进配置备份。 */
+private const val GROUP_EXPANDED_PREFS = "app_ui_prefs"
+private const val GROUP_EXPANDED_KEY_PREFIX = "group_expanded_"

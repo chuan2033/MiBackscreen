@@ -4,7 +4,6 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
 import android.util.Log;
@@ -21,8 +20,8 @@ import java.util.function.Supplier;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import hook.HyperBackscreen.R;
 import hook.HyperBackscreen.common.Constants;
+import hook.HyperBackscreen.ui.SwipePanelHost;
 
 /**
  * 背屏上滑面板里的 MiBackscreen 官方应用卡。
@@ -64,9 +63,9 @@ public final class PanelAppCard {
         if (context == null) return false;
         return exportOfficialImage(context, Constants.MODULE_PANEL_CARD_ICON, false, () -> renderSquare(context))
                 && exportOfficialImage(context, Constants.MODULE_PANEL_CARD_PREVIEW_LIGHT,
-                true, () -> renderPreview(context, Constants.SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_LIGHT_BACKGROUND))
+                true, () -> renderPreview(context, false))
                 && exportOfficialImage(context, Constants.MODULE_PANEL_CARD_PREVIEW_DARK,
-                true, () -> renderPreview(context, Constants.SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_DARK_BACKGROUND))
+                true, () -> renderPreview(context, true))
                 && exportTextFile(Constants.MODULE_PANEL_CARD_DESCRIPTION, buildDescriptionXml(context), true)
                 && exportTextFile(Constants.MODULE_PANEL_CARD_META, buildMetaJson(context), true)
                 && exportRearScreenPackage(context);
@@ -311,18 +310,23 @@ public final class PanelAppCard {
         return bitmap;
     }
 
-    /** 预览图位：官方是整块背屏 976×596，明暗各一张，图标居中。 */
+    /**
+     * 应用卡缩略图：按真实面板排版现画（语言、深浅色、各开关的当前状态都与面板一致），
+     * 明暗各一张；面板画不出来时退回到「底色 + 居中图标」。
+     */
     @Nullable
-    private static Bitmap renderPreview(@NonNull Context context, int background) {
-        Bitmap preview = modulePanelPreview(context);
-        if (preview != null) return preview;
-        Drawable icon = modulePanelIcon(context);
-        if (icon == null) return null;
+    private static Bitmap renderPreview(@NonNull Context context, boolean dark) {
         int width = Constants.SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_WIDTH;
         int height = Constants.SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_HEIGHT;
+        Bitmap panel = SwipePanelHost.renderPreview(context, dark, width, height);
+        if (panel != null) return panel;
+        Drawable icon = modulePanelIcon(context);
+        if (icon == null) return null;
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
-        canvas.drawColor(background);
+        canvas.drawColor(dark
+                ? Constants.SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_DARK_BACKGROUND
+                : Constants.SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_LIGHT_BACKGROUND);
         int size = Math.round(height * Constants.SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_ICON_RATIO);
         int left = (width - size) / 2;
         int top = (height - size) / 2;
@@ -331,16 +335,18 @@ public final class PanelAppCard {
         return bitmap;
     }
 
-    /** 应用卡缩略图取自模块内置的背屏预览资源。 */
-    @Nullable
-    private static Bitmap modulePanelPreview(@NonNull Context context) {
-        try {
-            Context moduleContext = context.createPackageContext(Constants.MODULE_PACKAGE, 0);
-            return BitmapFactory.decodeResource(moduleContext.getResources(), R.drawable.panel_card_preview);
-        } catch (Throwable e) {
-            Log.w(Constants.LOG_TAG, "Module panel preview unavailable", e);
-            return null;
-        }
+    /**
+     * 面板里改了设置之后重画两张缩略图，让「我的应用卡」里的预览跟上真实状态。
+     * 只在卡片资源已经导出过（即用户添加过这张卡）时才重画；需在后台线程调用。
+     */
+    public static void refreshPreviews() {
+        Context context = hostContext();
+        if (context == null) return;
+        if (!new java.io.File(Constants.MODULE_PANEL_CARD_PREVIEW_LIGHT).isFile()) return;
+        exportOfficialImage(context, Constants.MODULE_PANEL_CARD_PREVIEW_LIGHT, true,
+                () -> renderPreview(context, false));
+        exportOfficialImage(context, Constants.MODULE_PANEL_CARD_PREVIEW_DARK, true,
+                () -> renderPreview(context, true));
     }
 
     /** 面板图标取自模块 APK 自己的资源，宿主资源里没有这张图。 */

@@ -380,7 +380,8 @@ internal fun FloatingBottomBar(
                 }
                 Text(
                     text = item.label,
-                    fontSize = 10.sp,
+                    // 11sp：10sp 在悬浮底栏上偏小，11sp 仍能在 56dp 高的胶囊里放下图标 + 文字。
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

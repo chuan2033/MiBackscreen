@@ -1,20 +1,15 @@
 package hook.HyperBackscreen.ui.function
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import hook.HyperBackscreen.ui.components.DetailPageScaffold
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.TabRowWithContour
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
@@ -24,25 +19,11 @@ import hook.HyperBackscreen.ui.RearScreenOffTimeout
 import hook.HyperBackscreen.ui.RearScreenScheduleMode
 import hook.HyperBackscreen.ui.RearScreenSchedulePrefs
 import hook.HyperBackscreen.ui.components.AnimatedPreferenceVisibility
-import hook.HyperBackscreen.ui.components.BlurredBar
 import hook.HyperBackscreen.ui.components.CardBlock
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
-import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
-import top.yukonga.miuix.kmp.utils.overScrollVertical
-import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.window.WindowDialog
 
 /**
@@ -67,128 +48,98 @@ internal fun RearScreenTimingPage(
 ) {
     // 关闭时间与开启时间共用同一个弹窗，只换标题与初值。
     var editingSchedule by remember { mutableStateOf<ScheduleTimeField?>(null) }
-    val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
-    val surfaceColor = MiuixTheme.colorScheme.surface
-    val backdrop = rememberLayerBackdrop {
-        drawRect(surfaceColor)
-        drawContent()
-    }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = MiuixTheme.colorScheme.surface,
-        topBar = {
-            BlurredBar(backdrop) {
-                TopAppBar(
-                    title = stringResource(R.string.rear_screen_timing_title),
-                    largeTitle = stringResource(R.string.rear_screen_timing_title),
-                    color = Color.Transparent,
-                    scrollBehavior = scrollBehavior,
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = MiuixIcons.Back,
-                                contentDescription = stringResource(R.string.common_back),
-                                tint = MiuixTheme.colorScheme.onBackground
-                            )
-                        }
+    DetailPageScaffold(
+        title = stringResource(R.string.rear_screen_timing_title),
+        onBack = onBack,
+    ) {
+        item(key = "sleep") {
+            CardBlock(pressFeedbackType = PressFeedbackType.None) {
+                WindowDropdownPreference(
+                    items = RearScreenOffTimeout.entries.map { stringResource(it.labelRes) },
+                    selectedIndex = rearScreenOffTimeout.ordinal,
+                    title = stringResource(R.string.rear_screen_off_timeout_title),
+                    onSelectedIndexChange = { index ->
+                        RearScreenOffTimeout.entries.getOrNull(index)
+                            ?.let(onRearScreenOffTimeoutChange)
                     }
+                )
+                // 只有息屏时间为「跟随系统」时这个开关才起作用（其它档位已经覆盖了超时），
+                // 条件不满足时直接置灰并写明原因，而不是让用户开了却没效果。
+                val keepOnAvailable = rearScreenOffTimeout == RearScreenOffTimeout.SYSTEM
+                SwitchPreference(
+                    checked = keepRearScreenOnInGame,
+                    onCheckedChange = onKeepRearScreenOnInGameChange,
+                    title = stringResource(R.string.keep_rear_screen_on_in_game_title),
+                    summary = stringResource(
+                        if (keepOnAvailable) R.string.keep_rear_screen_on_in_game_summary
+                        else R.string.keep_rear_screen_on_in_game_unavailable
+                    ),
+                    enabled = keepOnAvailable
                 )
             }
         }
-    ) { paddingValues ->
-        Box(modifier = Modifier.layerBackdrop(backdrop)) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .scrollEndHaptic()
-                    .overScrollVertical()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .padding(horizontal = 12.dp),
-                contentPadding = PaddingValues(top = paddingValues.calculateTopPadding())
-            ) {
-                item(key = "top_spacer") {
-                    Spacer(Modifier.height(12.dp))
-                }
-                item(key = "sleep") {
-                    CardBlock(pressFeedbackType = PressFeedbackType.None) {
-                        WindowDropdownPreference(
-                            items = RearScreenOffTimeout.entries.map { stringResource(it.labelRes) },
-                            selectedIndex = rearScreenOffTimeout.ordinal,
-                            title = stringResource(R.string.rear_screen_off_timeout_title),
-                            onSelectedIndexChange = { index ->
-                                RearScreenOffTimeout.entries.getOrNull(index)
-                                    ?.let(onRearScreenOffTimeoutChange)
-                            }
-                        )
-                        SwitchPreference(
-                            checked = keepRearScreenOnInGame,
-                            onCheckedChange = onKeepRearScreenOnInGameChange,
-                            title = stringResource(R.string.keep_rear_screen_on_in_game_title),
-                            summary = stringResource(R.string.keep_rear_screen_on_in_game_summary)
-                        )
+        item(key = "schedule") {
+            CardBlock(pressFeedbackType = PressFeedbackType.None) {
+                WindowDropdownPreference(
+                    items = AutoWallpaperInterval.entries.map { stringResource(it.labelRes) },
+                    selectedIndex = autoWallpaperInterval.ordinal,
+                    title = stringResource(R.string.auto_wallpaper_interval_title),
+                    onSelectedIndexChange = { index ->
+                        AutoWallpaperInterval.entries.getOrNull(index)
+                            ?.let(onAutoWallpaperIntervalChange)
                     }
-                }
-                item(key = "schedule") {
-                    CardBlock(pressFeedbackType = PressFeedbackType.None) {
-                        WindowDropdownPreference(
-                            items = AutoWallpaperInterval.entries.map { stringResource(it.labelRes) },
-                            selectedIndex = autoWallpaperInterval.ordinal,
-                            title = stringResource(R.string.auto_wallpaper_interval_title),
-                            onSelectedIndexChange = { index ->
-                                AutoWallpaperInterval.entries.getOrNull(index)
-                                    ?.let(onAutoWallpaperIntervalChange)
-                            }
-                        )
-                        // 顺序 / 随机只在真的会切换时才有意义，关掉就收起，免得留一个死选项。
-                        AnimatedPreferenceVisibility(
-                            visible = autoWallpaperInterval != AutoWallpaperInterval.OFF
-                        ) {
-                            WindowDropdownPreference(
-                                items = AutoWallpaperOrder.entries.map { stringResource(it.labelRes) },
-                                selectedIndex = autoWallpaperOrder.ordinal,
-                                title = stringResource(R.string.auto_wallpaper_order_title),
-                                onSelectedIndexChange = { index ->
-                                    AutoWallpaperOrder.entries.getOrNull(index)
-                                        ?.let(onAutoWallpaperOrderChange)
-                                }
-                            )
+                )
+                // 顺序 / 随机只在真的会切换时才有意义，关掉就收起，免得留一个死选项。
+                AnimatedPreferenceVisibility(
+                    visible = autoWallpaperInterval != AutoWallpaperInterval.OFF
+                ) {
+                    WindowDropdownPreference(
+                        items = AutoWallpaperOrder.entries.map { stringResource(it.labelRes) },
+                        selectedIndex = autoWallpaperOrder.ordinal,
+                        title = stringResource(R.string.auto_wallpaper_order_title),
+                        onSelectedIndexChange = { index ->
+                            AutoWallpaperOrder.entries.getOrNull(index)
+                                ?.let(onAutoWallpaperOrderChange)
                         }
-                        SwitchPreference(
-                            checked = rearScreenSchedule.enabled,
-                            onCheckedChange = { enabled ->
-                                onRearScreenScheduleChange(rearScreenSchedule.copy(enabled = enabled))
-                            },
-                            title = stringResource(R.string.rear_screen_schedule_title),
-                            summary = scheduleSummary(rearScreenSchedule)
-                        )
-                        AnimatedPreferenceVisibility(visible = rearScreenSchedule.enabled) {
-                            ArrowPreference(
-                                title = stringResource(R.string.rear_screen_schedule_start_title),
-                                summary = rearScreenSchedule.start,
-                                onClick = { editingSchedule = ScheduleTimeField.START }
-                            )
-                            ArrowPreference(
-                                title = stringResource(R.string.rear_screen_schedule_end_title),
-                                summary = rearScreenSchedule.end,
-                                onClick = { editingSchedule = ScheduleTimeField.END }
-                            )
-                            WindowDropdownPreference(
-                                items = RearScreenScheduleMode.entries.map { stringResource(it.labelRes) },
-                                selectedIndex = rearScreenSchedule.scheduleMode.ordinal,
-                                title = stringResource(R.string.rear_screen_schedule_mode_title),
-                                onSelectedIndexChange = { index ->
+                    )
+                }
+                SwitchPreference(
+                    checked = rearScreenSchedule.enabled,
+                    onCheckedChange = { enabled ->
+                        onRearScreenScheduleChange(rearScreenSchedule.copy(enabled = enabled))
+                    },
+                    title = stringResource(R.string.rear_screen_schedule_title),
+                    summary = scheduleSummary(rearScreenSchedule)
+                )
+                AnimatedPreferenceVisibility(visible = rearScreenSchedule.enabled) {
+                    ArrowPreference(
+                        title = stringResource(R.string.rear_screen_schedule_start_title),
+                        summary = rearScreenSchedule.start,
+                        onClick = { editingSchedule = ScheduleTimeField.START }
+                    )
+                    ArrowPreference(
+                        title = stringResource(R.string.rear_screen_schedule_end_title),
+                        summary = rearScreenSchedule.end,
+                        onClick = { editingSchedule = ScheduleTimeField.END }
+                    )
+                    // 只有两个选项，用分段控件一眼看全，比下拉少点一次。
+                    BasicComponent(
+                        title = stringResource(R.string.rear_screen_schedule_mode_title),
+                        bottomAction = {
+                            TabRowWithContour(
+                                tabs = RearScreenScheduleMode.entries.map { stringResource(it.labelRes) },
+                                selectedTabIndex = rearScreenSchedule.scheduleMode.ordinal,
+                                onTabSelected = { index ->
                                     RearScreenScheduleMode.entries.getOrNull(index)
                                         ?.let { mode ->
                                             onRearScreenScheduleChange(rearScreenSchedule.withMode(mode))
                                         }
-                                }
+                                },
+                                modifier = Modifier.padding(top = 10.dp)
                             )
                         }
-                    }
-                }
-                item(key = "bottom_spacer") {
-                    Spacer(Modifier.height(12.dp))
+                    )
                 }
             }
         }

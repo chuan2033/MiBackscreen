@@ -39,6 +39,23 @@ public final class PreferenceBridgeProvider extends ContentProvider {
             return result;
         }
 
+        if (Constants.PANEL_PREFERENCE_METHOD_SET_STRING.equals(method)) {
+            String value = extras != null ? extras.getString(Constants.EXTRA_PREFERENCE_VALUE) : null;
+            boolean applied = context != null
+                    && arg != null
+                    && value != null
+                    && PrefsBridge.applyPanelStringPreference(context.getApplicationContext(), arg, value);
+            if (applied && Constants.KEY_REAR_SCREEN_OFF_TIMEOUT.equals(arg)) {
+                // 与主 App 改档位时一样，把系统设置 subscreen_display_time 也同步过去（需要 root）。
+                hook.HyperBackscreen.ui.util.RearScreenTimeoutSync.INSTANCE.apply(
+                        hook.HyperBackscreen.ui.RearScreenOffTimeout.Companion.fromPref(value));
+            }
+            result.putBoolean(Constants.EXTRA_PREFERENCE_ACCEPTED, applied);
+            Log.d(TAG, "Panel string preference " + arg + "=" + value
+                    + (applied ? " applied" : " rejected"));
+            return result;
+        }
+
         if (!Constants.PANEL_PREFERENCE_METHOD_SET.equals(method)
                 || !PrefsBridge.isPanelWritableKey(arg)
                 || extras == null

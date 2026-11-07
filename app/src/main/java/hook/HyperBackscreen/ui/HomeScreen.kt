@@ -1,16 +1,19 @@
 package hook.HyperBackscreen.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.WindowInsets
+import hook.HyperBackscreen.ui.theme.BottomBarMetrics
+import hook.HyperBackscreen.ui.components.DialogButtonRow
+import hook.HyperBackscreen.ui.components.DetailPageScaffold
+import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import android.os.Build
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -23,17 +26,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults.flingBehavior
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +46,6 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.ui.util.AppLanguage
 import hook.HyperBackscreen.ui.util.ThemeMode
@@ -76,7 +75,6 @@ import hook.HyperBackscreen.ui.config.ConfigPage
 import hook.HyperBackscreen.ui.function.FunctionPage
 import hook.HyperBackscreen.ui.function.RearScreenTimingPage
 import hook.HyperBackscreen.ui.home.HomePage
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -86,8 +84,6 @@ import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
@@ -96,7 +92,6 @@ import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Refresh
@@ -205,8 +200,11 @@ private object CardStackNavTransition : NavTransition {
     }
 }
 
-/** 官方 500ms 的 1.5 倍：同样是「起手快、尾巴长」，只是整段更从容。 */
-private const val NavProgrammaticDurationMillis = 750
+/**
+ * 点击进出二级页的时长：沿用官方 500ms。曾放慢到 750ms，频繁进出时显得拖沓；
+ * 侧滑返回松手后的软弹簧（下面两个刚度）单独保留，不受这里影响。
+ */
+private const val NavProgrammaticDurationMillis = 500
 
 /** 侧滑返回时页面位移的压缩指数：>1 表示同样手指距离下页面走得更少（露出更少）。 */
 private const val NavGestureTranslationPower = 1.15f
@@ -222,7 +220,7 @@ private const val NavCardStackShift = 0.02f
 /** 一级页被盖住时的最终不透明度。 */
 private const val NavCardStackAlpha = 0.85f
 /** 一级页缩成卡片时的圆角，随进度从 0 长到这个值。 */
-private val NavCardStackCornerRadius = 28.dp
+private val NavCardStackCornerRadius = HomeUiTokens.CornerPage
 
 @Composable
 internal fun HomeScreen(
@@ -304,6 +302,21 @@ internal fun HomeScreen(
         disableRearScreenCover = disableRearScreenCover,
         disableDoubleTapWake = disableDoubleTapWake,
     )
+    val functionGroupCounts = countFunctionGroups(
+        disableRearScreenCover = disableRearScreenCover,
+        disableDoubleTapWake = disableDoubleTapWake,
+        enableBatteryRing = enableBatteryRing,
+        batteryRingSupported = BatteryRingGeometry.isCalibratedDevice(Build.DEVICE),
+        disableLongPress = disableLongPress,
+        removeAppCardLimit = removeAppCardLimit,
+        autoWallpaperEnabled = autoWallpaperInterval != AutoWallpaperInterval.OFF,
+        rearScreenOffTimeoutActive = rearScreenOffTimeout != RearScreenOffTimeout.SYSTEM
+                || rearScreenSchedule.enabled,
+        keepRearScreenOnInGame = keepRearScreenOnInGame,
+        fixRearScreenApply = fixRearScreenApply,
+        faceEnrollmentCompat = faceEnrollmentCompat,
+        removeWallpaperLimit = removeWallpaperLimit,
+    )
     var selected by rememberSaveable { mutableStateOf(HomeNavigationPolicy.Tab.HOME) }
     val backStack = rememberNavBackStack<HomeRoute>(HomeRoute.Main)
     val homeListState = rememberLazyListState()
@@ -331,7 +344,7 @@ internal fun HomeScreen(
     val navBackdropColor = MiuixTheme.colorScheme.surface
     val navEffects = remember(navCornerRadius, navBackdropColor) {
         NavDisplayEffects(
-            // 不吞输入：转场拉长到 750ms、松手弹簧也放缓之后，blockInputDuringTransition 会让
+            // 不吞输入：松手弹簧放缓之后，blockInputDuringTransition 会让
             // 「刚返回就点」的第一下落在还没 settle 的层上被丢弃（用户实测要点两次）。
             // 连点由 openDetail 的 `lastOrNull() == Main` 守卫拦重复入栈。
             blockInputDuringTransition = false,
@@ -422,6 +435,7 @@ internal fun HomeScreen(
                         enable18ProFeatures = enable18ProFeatures,
                         onEnable18ProFeaturesChange = onEnable18ProFeaturesChange,
                         enabledFunctionCount = enabledFunctionCount,
+                        functionGroupCounts = functionGroupCounts,
                         selected = selected,
                         homeListState = homeListState,
                         functionListState = functionListState,
@@ -474,7 +488,12 @@ internal fun HomeScreen(
                 state = feedback.host,
                 modifier = Modifier.align(Alignment.BottomCenter)
                     .navigationBarsPadding().imePadding()
-                    .padding(bottom = if (backStack.lastOrNull() == HomeRoute.Main) 100.dp else 12.dp)
+                    .padding(
+                        bottom = BottomBarMetrics.snackbarBottomPadding(
+                            onMainPage = backStack.lastOrNull() == HomeRoute.Main,
+                            floatingBar = floatingNavBar
+                        )
+                    )
             )
         }
     }
@@ -505,82 +524,41 @@ private fun SettingsPage(
     onRestorePreferences: () -> Unit,
     onBack: () -> Unit
 ) {
-    val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
-    val surfaceColor = MiuixTheme.colorScheme.surface
-    val backdrop = rememberLayerBackdrop {
-        drawRect(surfaceColor)
-        drawContent()
-    }
-
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = MiuixTheme.colorScheme.surface,
-        topBar = {
-            BlurredBar(backdrop) {
-                TopAppBar(
-                    title = stringResource(R.string.settings_title),
-                    largeTitle = stringResource(R.string.settings_title),
-                    color = Color.Transparent,
-                    scrollBehavior = scrollBehavior,
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = MiuixIcons.Back,
-                                contentDescription = stringResource(R.string.common_back),
-                                tint = MiuixTheme.colorScheme.onBackground
-                            )
-                        }
-                    }
-                )
-            }
-        }
-    ) { paddingValues ->
-        Box(modifier = Modifier.layerBackdrop(backdrop)) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .scrollEndHaptic()
-                    .overScrollVertical()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .padding(horizontal = 12.dp),
-                contentPadding = PaddingValues(
-                    top = paddingValues.calculateTopPadding()
-                )
-            ) {
-                item {
-                    ConfigPage(
-                        floatingNavBar = floatingNavBar,
-                        liquidGlass = liquidGlass,
-                        bottomBarBlur = bottomBarBlur,
-                        showFunctionCount = showFunctionCount,
-                        appLanguage = appLanguage,
-                        enableAppCard = enableAppCard,
-                        launcherIconHidden = launcherIconHidden,
-                        onFloatingNavBarChange = onFloatingNavBarChange,
-                        onLiquidGlassChange = onLiquidGlassChange,
-                        onBottomBarBlurChange = onBottomBarBlurChange,
-                        onShowFunctionCountChange = onShowFunctionCountChange,
-                        onAppLanguageChange = onAppLanguageChange,
-                        onEnableAppCardChange = onEnableAppCardChange,
-                        onLauncherIconHiddenChange = onLauncherIconHiddenChange,
-                        themeMode = themeMode,
-                        onThemeModeChange = onThemeModeChange,
-                        themeSettingsShortcut = themeSettingsShortcut,
-                        onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
-                        onBackupPreferences = onBackupPreferences,
-                        onRestorePreferences = onRestorePreferences
-                    )
-                }
-                item {
-                    Spacer(Modifier.height(24.dp).navigationBarsPadding())
-                }
-            }
+    DetailPageScaffold(
+        title = stringResource(R.string.settings_title),
+        onBack = onBack,
+        topSpacing = 0.dp,
+    ) {
+        item {
+            ConfigPage(
+                floatingNavBar = floatingNavBar,
+                liquidGlass = liquidGlass,
+                bottomBarBlur = bottomBarBlur,
+                showFunctionCount = showFunctionCount,
+                appLanguage = appLanguage,
+                enableAppCard = enableAppCard,
+                launcherIconHidden = launcherIconHidden,
+                onFloatingNavBarChange = onFloatingNavBarChange,
+                onLiquidGlassChange = onLiquidGlassChange,
+                onBottomBarBlurChange = onBottomBarBlurChange,
+                onShowFunctionCountChange = onShowFunctionCountChange,
+                onAppLanguageChange = onAppLanguageChange,
+                onEnableAppCardChange = onEnableAppCardChange,
+                onLauncherIconHiddenChange = onLauncherIconHiddenChange,
+                themeMode = themeMode,
+                onThemeModeChange = onThemeModeChange,
+                themeSettingsShortcut = themeSettingsShortcut,
+                onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
+                onBackupPreferences = onBackupPreferences,
+                onRestorePreferences = onRestorePreferences
+            )
         }
     }
 }
 
 @Composable
 private fun MainTabPage(
+    functionGroupCounts: FunctionGroupCounts,
     enable18ProFeatures: Boolean,
     onEnable18ProFeaturesChange: (Boolean) -> Unit,
     tab: HomeNavigationPolicy.Tab,
@@ -677,12 +655,12 @@ private fun MainTabPage(
                     HomeNavigationPolicy.Tab.HOME -> item {
                         HomePage(
                             moduleActivated = moduleActivated,
-                            usesDynamicColors = themeMode.usesDynamicColors,
                             onDonateClick = onDonateClick
                         )
                     }
                     HomeNavigationPolicy.Tab.FUNCTION -> item {
                         FunctionPage(
+                            groupCounts = functionGroupCounts,
                             enable18ProFeatures = enable18ProFeatures,
                             onEnable18ProFeaturesChange = onEnable18ProFeaturesChange,
                             disableLongPress = disableLongPress,
@@ -727,6 +705,7 @@ private fun MainContent(
     enable18ProFeatures: Boolean,
     onEnable18ProFeaturesChange: (Boolean) -> Unit,
     enabledFunctionCount: Int,
+    functionGroupCounts: FunctionGroupCounts,
     selected: HomeNavigationPolicy.Tab,
     homeListState: LazyListState,
     functionListState: LazyListState,
@@ -784,6 +763,7 @@ private fun MainContent(
     )
 
     var showRestartDialog by remember { mutableStateOf(false) }
+    val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val checkedItems = remember { mutableStateMapOf<String, Boolean>() }
     val selectedPage = navItems.indexOfFirst { it.tab == selected }.coerceAtLeast(0)
     val pagerState = rememberPagerState(initialPage = selectedPage) { navItems.size }
@@ -834,6 +814,7 @@ private fun MainContent(
         ) { page ->
             val tab = navItems[page].tab
             MainTabPage(
+                functionGroupCounts = functionGroupCounts,
                 enable18ProFeatures = enable18ProFeatures,
                 onEnable18ProFeaturesChange = onEnable18ProFeaturesChange,
                 tab = tab,
@@ -912,8 +893,7 @@ private fun MainContent(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
-                        .padding(bottom = 16.dp)
-                        .offset(y = 12.dp)
+                        .padding(bottom = BottomBarMetrics.FloatingGap)
                 ) {
                     FloatingBottomBar(
                         items = navItems.map { NavigationItem(stringResource(it.labelRes), it.icon) },
@@ -933,15 +913,15 @@ private fun MainContent(
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .offset(y = 40.dp)
+                        // miuix 悬浮底栏自己处理导航栏 inset，这里只把它的固定留白折算成统一间距。
+                        .offset(y = BottomBarMetrics.miuixFloatingBarOffset(navigationInset))
                 ) {
                     FloatingNavigationBar(
                         modifier = Modifier.then(
                             if (bottomBarBlur) {
                                 Modifier.textureBlur(
                                     backdrop = bottomBarBackdrop,
-                                    shape = RoundedCornerShape(28.dp),
+                                    shape = RoundedCornerShape(HomeUiTokens.CornerPage),
                                     blurRadius = 20f,
                                     colors = glassBlurColors
                                 )
@@ -954,7 +934,7 @@ private fun MainContent(
                         } else {
                             MiuixTheme.colorScheme.surfaceContainer
                         },
-                        cornerRadius = 28.dp,
+                        cornerRadius = HomeUiTokens.CornerPage,
                         horizontalAlignment = Alignment.CenterHorizontally,
                         showDivider = false
                     ) {
@@ -981,9 +961,17 @@ private fun MainContent(
         title = stringResource(R.string.restart_title),
         onDismissRequest = { showRestartDialog = false }
     ) {
+        // 勾选「系统框架」执行的是重启手机而不是停止进程，选中时确认按钮要把后果写明。
+        val anySelected = restartScopeItems.any { checkedItems[it.packageName] == true }
+        val rebootSelected = checkedItems[Constants.SYSTEM_PACKAGE] == true
         restartScopeItems.forEach { item ->
             CheckboxPreference(
                 title = stringResource(item.labelRes),
+                summary = if (item.packageName == Constants.SYSTEM_PACKAGE) {
+                    stringResource(R.string.restart_system_summary)
+                } else {
+                    null
+                },
                 checked = checkedItems[item.packageName] == true,
                 onCheckedChange = { checked ->
                     checkedItems[item.packageName] = checked
@@ -992,33 +980,33 @@ private fun MainContent(
             )
         }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            TextButton(
-                text = stringResource(R.string.common_select_all),
-                modifier = Modifier.weight(1f).height(48.dp),
-                onClick = {
-                    val allChecked = restartScopeItems.all { checkedItems[it.packageName] == true }
-                    restartScopeItems.forEach { checkedItems[it.packageName] = !allChecked }
-                }
-            )
-            Button(
-                modifier = Modifier.weight(1f).height(48.dp),
-                onClick = {
-                    showRestartDialog = false
-                    val selected = restartScopeItems.filter { checkedItems[it.packageName] == true }
-                        .map { it.packageName }
-                    if (selected.isNotEmpty()) onRestartScopes(selected)
-                    checkedItems.clear()
-                },
-                colors = ButtonDefaults.buttonColorsPrimary(),
-                content = { Text(stringResource(R.string.common_confirm)) }
-            )
-        }
+        DialogButtonRow(
+            modifier = Modifier.padding(top = 12.dp),
+            secondaryText = stringResource(R.string.common_select_all),
+            onSecondary = {
+                val allChecked = restartScopeItems.all { checkedItems[it.packageName] == true }
+                restartScopeItems.forEach { checkedItems[it.packageName] = !allChecked }
+            },
+            primaryText = stringResource(
+                if (rebootSelected) R.string.restart_device_confirm else R.string.common_confirm
+            ),
+            primaryEnabled = anySelected,
+            // 勾了「系统框架」会直接重启手机：主按钮换成错误色，和普通「确定」区分开。
+            primaryColors = if (rebootSelected) {
+                ButtonDefaults.buttonColorsPrimary(
+                    color = MiuixTheme.colorScheme.error,
+                    contentColor = MiuixTheme.colorScheme.onError
+                )
+            } else {
+                ButtonDefaults.buttonColorsPrimary()
+            },
+            onPrimary = {
+                showRestartDialog = false
+                val selected = restartScopeItems.filter { checkedItems[it.packageName] == true }
+                    .map { it.packageName }
+                if (selected.isNotEmpty()) onRestartScopes(selected)
+                checkedItems.clear()
+            }
+        )
     }
 }

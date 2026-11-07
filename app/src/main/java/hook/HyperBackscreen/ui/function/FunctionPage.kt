@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import hook.HyperBackscreen.R
+import hook.HyperBackscreen.ui.FunctionGroupCounts
 import hook.HyperBackscreen.common.PackageListCodec
 import hook.HyperBackscreen.ui.battery.BatteryRingGeometry
 import hook.HyperBackscreen.ui.components.CardBlock
@@ -16,6 +17,7 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 @Composable
 internal fun FunctionPage(
+    groupCounts: FunctionGroupCounts,
     onBatteryColorClick: () -> Unit,
     onRearScreenTimingClick: () -> Unit,
     enable18ProFeatures: Boolean,
@@ -42,7 +44,8 @@ internal fun FunctionPage(
             SwitchPreference(
                 checked = enable18ProFeatures,
                 onCheckedChange = onEnable18ProFeaturesChange,
-                title = stringResource(R.string.home_enable_18_pro_features_title)
+                title = stringResource(R.string.home_enable_18_pro_features_title),
+                summary = stringResource(R.string.scope_restart_hint_18pro)
             )
         }
 
@@ -51,7 +54,9 @@ internal fun FunctionPage(
         CardBlock(pressFeedbackType = PressFeedbackType.None) {
             CollapsibleFunctionGroup(
                 title = stringResource(R.string.function_group_system),
-                iconRes = R.drawable.group_system
+                iconRes = R.drawable.group_system,
+                enabledCount = groupCounts.system,
+                persistKey = "system"
             ) {
                 SwitchPreference(
                     checked = disableRearScreenCover,
@@ -65,10 +70,10 @@ internal fun FunctionPage(
                     // 名单为空时总开关也是关的（写名单时自动推导），这里把空状态说清楚，
                     // 免得用户以为「点进去什么都不选也在拦」。
                     summary = if (disabledPackageCount == 0) {
-                        stringResource(R.string.config_disabled_apps_count_none)
+                        stringResource(R.string.double_tap_wake_summary_none)
                     } else {
                         pluralStringResource(
-                            R.plurals.config_disabled_apps_count,
+                            R.plurals.double_tap_wake_summary_count,
                             disabledPackageCount,
                             disabledPackageCount
                         )
@@ -79,7 +84,9 @@ internal fun FunctionPage(
 
             CollapsibleFunctionGroup(
                 title = stringResource(R.string.function_group_subscreen),
-                iconRes = R.drawable.group_subscreen
+                iconRes = R.drawable.group_subscreen,
+                enabledCount = groupCounts.subscreen,
+                persistKey = "subscreen"
             ) {
                 // 几何按校准机型实测，其他机型背屏不绘制，入口也不显示。
                 // 电量总开关已经收到二级页里，这里只留常驻入口。
@@ -97,7 +104,8 @@ internal fun FunctionPage(
                 SwitchPreference(
                     checked = removeAppCardLimit,
                     onCheckedChange = onRemoveAppCardLimitChange,
-                    title = stringResource(R.string.home_remove_app_card_limit_title)
+                    title = stringResource(R.string.home_remove_app_card_limit_title),
+                    summary = stringResource(R.string.scope_restart_hint_backscreen)
                 )
                 // 息屏档位、两个定时开关、游戏时保持常亮都收进二级页，这里只留入口。
                 ArrowPreference(
@@ -108,24 +116,29 @@ internal fun FunctionPage(
 
             CollapsibleFunctionGroup(
                 title = stringResource(R.string.function_group_theme),
-                iconRes = R.drawable.group_theme
+                iconRes = R.drawable.group_theme,
+                enabledCount = groupCounts.theme,
+                persistKey = "theme"
             ) {
                 SwitchPreference(
                     checked = fixRearScreenApply,
                     onCheckedChange = onFixRearScreenApplyChange,
                     title = stringResource(R.string.home_fix_apply_title),
-                    summary = stringResource(R.string.home_fix_apply_summary)
+                    summary = stringResource(R.string.home_fix_apply_summary) + "\n" +
+                        stringResource(R.string.scope_restart_hint_backscreen_theme)
                 )
                 SwitchPreference(
                     checked = faceEnrollmentCompat,
                     onCheckedChange = onFaceEnrollmentCompatChange,
                     title = stringResource(R.string.face_enrollment_compat_title),
-                    summary = stringResource(R.string.face_enrollment_compat_summary)
+                    summary = stringResource(R.string.face_enrollment_compat_summary) + "\n" +
+                        stringResource(R.string.scope_restart_hint_theme)
                 )
                 SwitchPreference(
                     checked = removeWallpaperLimit,
                     onCheckedChange = onRemoveWallpaperLimitChange,
-                    title = stringResource(R.string.home_remove_wallpaper_limit_title)
+                    title = stringResource(R.string.home_remove_wallpaper_limit_title),
+                    summary = stringResource(R.string.scope_restart_hint_theme)
                 )
             }
         }

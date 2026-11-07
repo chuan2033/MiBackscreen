@@ -1,15 +1,21 @@
 package hook.HyperBackscreen.ui.home
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import hook.HyperBackscreen.ui.components.DialogButtonRow
 import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -28,12 +34,7 @@ import hook.HyperBackscreen.ui.about.LogExportState
 import hook.HyperBackscreen.ui.about.LogExportViewModel
 import hook.HyperBackscreen.ui.about.LocalLogExportOperation
 import hook.HyperBackscreen.ui.about.LogExportPopup
-import hook.HyperBackscreen.ui.updater.UpdateChecker
-import hook.HyperBackscreen.ui.updater.UpdateDialog
-import hook.HyperBackscreen.ui.updater.UpdateInfo
-import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
@@ -51,6 +52,11 @@ import hook.HyperBackscreen.ui.util.RootAccess
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.withContext
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import hook.HyperBackscreen.app.ModuleApp
+import top.yukonga.miuix.kmp.window.WindowDialog
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -59,15 +65,30 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 @Composable
 internal fun HomePage(
     moduleActivated: Boolean,
-    usesDynamicColors: Boolean,
     onDonateClick: () -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var rootGranted by remember { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(lifecycleOwner) {
+    // 「重新检测」只是让这个 key 变一下，复用同一段回到前台时的检测逻辑。
+    var rootCheckRequest by remember { mutableStateOf(0) }
+    var rootChecking by remember { mutableStateOf(false) }
+    LaunchedEffect(lifecycleOwner, rootCheckRequest) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            rootGranted = runInterruptible(Dispatchers.IO) { RootAccess.isGranted() }
+            rootChecking = true
+            try {
+                rootGranted = runInterruptible(Dispatchers.IO) { RootAccess.isGranted() }
+            } finally {
+                rootChecking = false
+            }
+        }
+    }
+    // 作用域注入状态：每次回到前台刷新（用户可能刚去 LSPosed 勾选或重启了作用域）。
+    var scopeStatus by remember { mutableStateOf<List<ScopeStatusItem>?>(null) }
+    var showScopeDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(lifecycleOwner, moduleActivated) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            scopeStatus = withContext(Dispatchers.IO) { readScopeStatus(ModuleApp.getService()) }
         }
     }
     val operation = LocalLogExportOperation.current
@@ -100,23 +121,89 @@ internal fun HomePage(
     }
 
     if (rootGranted == false) {
-        Text(
-            text = stringResource(R.string.home_root_permission_required),
+        // errorContainer 底色：提醒但不刺眼；右侧给一个就地重试，授权完不用切页面再回来。
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 12.dp)
-                .background(MiuixTheme.colorScheme.error, RoundedCornerShape(HomeUiTokens.CardCornerRadius))
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .background(
+                    MiuixTheme.colorScheme.errorContainer,
+                    RoundedCornerShape(HomeUiTokens.CardCornerRadius)
+                )
+                .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp)
                 .semantics { liveRegion = LiveRegionMode.Polite },
-            color = MiuixTheme.colorScheme.onError,
-            style = MiuixTheme.textStyles.body2
-        )
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.home_root_permission_required),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(vertical = 6.dp),
+                color = MiuixTheme.colorScheme.onErrorContainer,
+                style = MiuixTheme.textStyles.body2
+            )
+            Text(
+                text = stringResource(
+                    if (rootChecking) R.string.home_root_checking else R.string.home_root_recheck
+                ),
+                modifier = Modifier
+                    .clickable(enabled = !rootChecking) { rootCheckRequest++ }
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                color = MiuixTheme.colorScheme.onErrorContainer,
+                style = MiuixTheme.textStyles.body2,
+                fontWeight = FontWeight.Medium
+            )
+        }
     }
 
     HomeStatusCard(
         activated = moduleActivated,
-        usesDynamicColors = usesDynamicColors
+        scopeStatus = scopeStatus,
+        onClick = if (moduleActivated && scopeStatus != null) {
+            { showScopeDialog = true }
+        } else {
+            null
+        }
     )
+
+    WindowDialog(
+        show = showScopeDialog,
+        title = stringResource(R.string.scope_status_title),
+        summary = stringResource(R.string.scope_status_summary),
+        onDismissRequest = { showScopeDialog = false }
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            scopeStatus.orEmpty().forEach { item ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(item.labelRes),
+                        modifier = Modifier.weight(1f),
+                        style = MiuixTheme.textStyles.body1
+                    )
+                    Text(
+                        text = stringResource(item.descriptionRes),
+                        color = when (item.state) {
+                            ScopeState.FAILED, ScopeState.STALE -> MiuixTheme.colorScheme.error
+                            ScopeState.ACTIVE -> MiuixTheme.colorScheme.onSurfaceVariantSummary
+                            else -> MiuixTheme.colorScheme.onSurface
+                        },
+                        style = MiuixTheme.textStyles.body2
+                    )
+                }
+            }
+            DialogButtonRow(
+                modifier = Modifier.padding(top = 8.dp),
+                primaryText = stringResource(R.string.common_confirm),
+                onPrimary = { showScopeDialog = false }
+            )
+        }
+    }
 
     CardBlock {
         InfoRow(label = stringResource(R.string.home_device), value = currentDeviceName())

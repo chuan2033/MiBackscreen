@@ -75,6 +75,24 @@ internal object PreferencesBackup {
         )
     }
 
+    /** 备份文件的概要，用于恢复前的确认弹窗。 */
+    data class BackupInfo(
+        val keyCount: Int,
+        val exportedAt: String?,
+        val appVersion: String?,
+    )
+
+    /** 只读取备份概要、不写任何偏好；返回 null 表示文件缺失或无法识别（与 [restore] 同一判据）。 */
+    fun inspect(): BackupInfo? {
+        val payload = readPayload() ?: return null
+        if (payload.format != FORMAT || payload.values.isEmpty()) return null
+        return BackupInfo(
+            keyCount = payload.values.size,
+            exportedAt = payload.exportedAt,
+            appVersion = payload.appVersion,
+        )
+    }
+
     /** 从根目录读回并覆盖当前偏好；返回 null 表示文件缺失或无法识别。 */
     fun restore(context: Context): RestoreResult? {
         val payload = readPayload() ?: return null
