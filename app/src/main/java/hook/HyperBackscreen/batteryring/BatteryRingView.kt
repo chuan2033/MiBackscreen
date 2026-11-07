@@ -135,7 +135,8 @@ internal class BatteryRingView(
     }
 
     private fun updateSweep() {
-        val shouldRun = state?.charging == true && isAttachedToWindow && windowVisibility == VISIBLE
+        val shouldRun = layout.chargeSweepEnabled && state?.charging == true &&
+            isAttachedToWindow && windowVisibility == VISIBLE
         if (shouldRun && sweepAnimator == null) {
             sweepAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
                 duration = CHARGE_SWEEP_DURATION_MS

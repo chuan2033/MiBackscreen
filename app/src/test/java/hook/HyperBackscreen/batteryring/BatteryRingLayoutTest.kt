@@ -40,4 +40,16 @@ class BatteryRingLayoutTest {
         // 落盘的每一项都能按 of() 原样读回来。
         assertEquals(400, BatteryRingLayout.of(BatteryPercentPosition.RIGHT) { entries[it] }.percentTextWeight)
     }
+
+    @Test
+    fun chargeSweepDefaultsOnAndOnlyExplicitZeroTurnsItOff() {
+        // 旧版本没有这个键：保持有流光
+        assertEquals(true, layout().chargeSweepEnabled)
+        assertEquals(true, layout(Constants.KEY_BATTERY_CHARGE_SWEEP to "1").chargeSweepEnabled)
+        assertEquals(false, layout(Constants.KEY_BATTERY_CHARGE_SWEEP to "0").chargeSweepEnabled)
+        val off = BatteryRingLayout.defaultFor(BatteryPercentPosition.RIGHT).copy(chargeSweepEnabled = false)
+        val entries = off.entries(BatteryPercentPosition.RIGHT).toMap()
+        assertEquals("0", entries[Constants.KEY_BATTERY_CHARGE_SWEEP])
+        assertEquals(false, BatteryRingLayout.of(BatteryPercentPosition.RIGHT) { entries[it] }.chargeSweepEnabled)
+    }
 }

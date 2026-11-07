@@ -29,6 +29,8 @@ internal data class BatteryRingLayout(
     val ringStyle: BatteryRingStyle,
     /** 低电量阈值（百分比）：低于它且未充电时用「低电量」颜色。 */
     val lowThresholdPercent: Int = DEFAULT_LOW_THRESHOLD,
+    /** 充电时是否播放沿线条转动的流光。 */
+    val chargeSweepEnabled: Boolean = DEFAULT_CHARGE_SWEEP,
 ) {
     /**
      * 逐项落盘的键值对，[of] 的反向操作。
@@ -45,6 +47,7 @@ internal data class BatteryRingLayout(
         Constants.KEY_BATTERY_RING_TRACK to encode(ringTrackVisible),
         Constants.KEY_BATTERY_RING_STYLE to ringStyle.prefValue,
         Constants.KEY_BATTERY_LOW_THRESHOLD to encode(lowThresholdPercent),
+        Constants.KEY_BATTERY_CHARGE_SWEEP to encode(chargeSweepEnabled),
     )
 
     companion object {
@@ -83,6 +86,7 @@ internal data class BatteryRingLayout(
         /** 与旧版本固定 BOLD 一致，升级后观感不变。 */
         const val DEFAULT_PERCENT_TEXT_WEIGHT = 700
         const val DEFAULT_RING_TRACK = false
+        const val DEFAULT_CHARGE_SWEEP = true
 
         /** 低电量阈值的可调区间与默认值；默认 20 与系统电池图标换色点一致。 */
         const val LOW_THRESHOLD_MIN = 5
@@ -154,6 +158,7 @@ internal data class BatteryRingLayout(
             ringTrackVisible = DEFAULT_RING_TRACK,
             ringStyle = BatteryRingStyle.DEFAULT,
             lowThresholdPercent = DEFAULT_LOW_THRESHOLD,
+            chargeSweepEnabled = DEFAULT_CHARGE_SWEEP,
         )
 
         /**
@@ -208,6 +213,8 @@ internal data class BatteryRingLayout(
                     LOW_THRESHOLD_MIN,
                     LOW_THRESHOLD_MAX,
                     DEFAULT_LOW_THRESHOLD),
+                // 和底轨相反，这项默认开：只有明确的 "0" 才算关，旧版本没有这个键时保持有流光。
+                chargeSweepEnabled = read(Constants.KEY_BATTERY_CHARGE_SWEEP)?.trim() != TRACK_OFF,
             )
         }
 
