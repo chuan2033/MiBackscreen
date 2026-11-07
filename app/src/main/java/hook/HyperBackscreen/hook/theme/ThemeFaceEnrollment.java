@@ -1,4 +1,4 @@
-package hook.HyperBackscreen.hook;
+package hook.HyperBackscreen.hook.theme;
 
 import android.content.Context;
 import android.net.Uri;

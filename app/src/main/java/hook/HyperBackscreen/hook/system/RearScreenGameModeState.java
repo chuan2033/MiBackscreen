@@ -1,4 +1,4 @@
-package hook.HyperBackscreen.hook;
+package hook.HyperBackscreen.hook.system;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 

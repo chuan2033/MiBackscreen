@@ -1,4 +1,4 @@
-package hook.HyperBackscreen.hook;
+package hook.HyperBackscreen.hook.appindex;
 
 import android.content.Context;
 import android.content.pm.ApplicationInfo;

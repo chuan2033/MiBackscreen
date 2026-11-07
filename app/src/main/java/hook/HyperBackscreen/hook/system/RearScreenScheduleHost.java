@@ -1,4 +1,4 @@
-package hook.HyperBackscreen.hook;
+package hook.HyperBackscreen.hook.system;
 
 import android.os.Process;
 import android.os.SystemClock;
@@ -19,7 +19,7 @@ import io.github.libxposed.api.XposedModule;
  * 「定时关闭背屏」在 system_server 里的执行端。
  *
  * 三件事：
- * 1. 时间窗内的超时覆盖与唤醒拦截由 {@link hook.HyperBackscreen.hook.ModuleMain} 的
+ * 1. 时间窗内的超时覆盖与唤醒拦截由 {@link SystemServerHooks} 的
  *    `adjustScreenOffTimeoutIfNeededLocked` / `isScreenSkippedWakeup` 钩子现算，不需要定时器；
  * 2. 但「到点那一刻」没人会调用那两个方法，所以这里起一个低频线程，在跨过时间窗边界时
  *    主动触发一次电源状态重算，让背屏按上面的覆盖值立刻熄灭；
