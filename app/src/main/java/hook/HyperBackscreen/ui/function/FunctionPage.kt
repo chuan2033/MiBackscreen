@@ -51,6 +51,7 @@ internal fun FunctionPage(
     musicWidgetWhitelistPackages: String,
     onMusicWidgetWhitelistClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit,
+    onRearCastClick: () -> Unit = {},
     rearMedia: RearMediaSwitches = RearMediaSwitches(),
     onRearMediaChange: (RearMediaSwitch, Boolean) -> Unit = { _, _ -> },
 ) {
@@ -133,6 +134,12 @@ internal fun FunctionPage(
                         )
                     },
                     onClick = onMusicWidgetWhitelistClick
+                )
+                // 应用投放到背屏：默认可用、没有开关，入口进说明页（磁贴、面板卡片、重启生效）。
+                ArrowPreference(
+                    title = stringResource(R.string.rear_cast_title),
+                    summary = stringResource(R.string.rear_cast_entry_summary),
+                    onClick = onRearCastClick
                 )
                 SwitchPreference(
                     checked = rearMedia.rearLyric,

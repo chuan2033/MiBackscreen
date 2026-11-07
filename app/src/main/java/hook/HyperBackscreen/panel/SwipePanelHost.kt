@@ -43,6 +43,8 @@ import hook.HyperBackscreen.BuildConfig
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.bridge.PrefsBridge
 import hook.HyperBackscreen.bridge.DiagnosticLogStore
+import hook.HyperBackscreen.bridge.RearCastClient
+import hook.HyperBackscreen.common.RearCastPolicy
 import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.common.BackgroundTasks
 import hook.HyperBackscreen.batteryring.BatteryRingGeometry
@@ -799,6 +801,8 @@ object SwipePanelHost {
                 when (spec) {
                     is ToggleTileSpec -> append(spec.read())
                     is CycleTileSpec -> append(spec.read())
+                    // 预览图里动作卡片只画默认文字，不查实时状态。
+                    is ActionTileSpec -> append(spec.defaultText)
                 }
                 append(';')
             }
@@ -809,10 +813,12 @@ object SwipePanelHost {
     }
 
     /**
-     * 面板内容：顶部模块标识 + 两列大号开关卡片。
+     * 面板内容：两列网格。第一行左格是模块标识（下方是失败提示），右格是「投放」动作卡片；
+     * 其后是开关 / 循环卡片。
      *
-     * 背屏离眼睛远，整张卡片都是点击区；行数按卡片数量平分剩余高度，校准机型 6 张（3 行），
-     * 其它机型 4 张（2 行，卡片更高）。[host] 为 null 时用于离屏预览，卡片不响应点击。
+     * 背屏离眼睛远，整张卡片都是点击区；行数按卡片数量平分全部高度，校准机型 4 行（标识行 + 6 张），
+     * 其它机型 3 行（标识行 + 4 张，卡片更高）。动作卡片放进原来标题行右侧的空位，
+     * 不额外加一行，6 张开关卡片的高度几乎不变。[host] 为 null 时用于离屏预览，卡片不响应点击。
      */
     private fun buildPanelContent(
         context: Context,
@@ -835,16 +841,22 @@ object SwipePanelHost {
         val status = TextView(context).apply {
             textSize = 12f
             setTextColor(palette.error)
-            maxLines = 1
+            maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
-            gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
             visibility = View.GONE
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(context, 2).toInt() }
         }
-        column.addView(headerRow(context, palette, status))
 
-        val tiles = panelTileSpecs(strings).map { spec -> tileView(context, palette, strings, spec, host, status) }
-        tiles.chunked(2).forEachIndexed { index, pair ->
+        val specs = panelTileSpecs(strings)
+        val action = specs.firstOrNull { it is ActionTileSpec }
+        val cells = mutableListOf<View>(brandCell(context, palette, status))
+        cells += action?.let { tileView(context, palette, strings, it, host, status) } ?: Space(context)
+        cells += specs.filter { it !== action }.map { spec -> tileView(context, palette, strings, spec, host, status) }
+        cells.chunked(2).forEachIndexed { index, pair ->
             val row = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply {
@@ -869,17 +881,12 @@ object SwipePanelHost {
         return column
     }
 
-    /** 左上角（安全区之后）：模块图标 + 名称；右侧留给保存失败之类的提示。 */
-    private fun headerRow(context: Context, palette: PanelPalette, status: TextView): LinearLayout {
+    /** 第一行左格（安全区之后）：模块图标 + 名称，下面是保存 / 投放失败之类的提示。 */
+    private fun brandCell(context: Context, palette: PanelPalette, status: TextView): LinearLayout {
         val iconSize = dp(context, 20).toInt()
-        return LinearLayout(context).apply {
+        val titleRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = dp(context, 28).toInt()
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            ).apply { bottomMargin = dp(context, 8).toInt() }
             val icon = runCatching { context.packageManager.getApplicationIcon(Constants.MODULE_PACKAGE) }.getOrNull()
             if (icon != null) {
                 addView(ImageView(context).apply {
@@ -897,11 +904,19 @@ object SwipePanelHost {
                 setTextColor(palette.title)
                 maxLines = 1
             })
+        }
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(titleRow, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ))
             addView(status)
         }
     }
 
-    /** 面板里的一张卡片：开关（点一下切换开 / 关）或循环项（点一下换到下一档）。 */
+    /** 面板里的一张卡片：开关（点一下切换开 / 关）、循环项（点一下换到下一档）或动作（点一下执行一次）。 */
     private sealed interface PanelTileSpec {
         val title: String
     }
@@ -923,6 +938,23 @@ object SwipePanelHost {
         val write: (Context, String) -> Boolean,
         val onSaved: (Activity, String) -> Unit = { _, _ -> },
     ) : PanelTileSpec
+
+    /**
+     * 动作卡片：点一下执行一次动作，不保存任何偏好。执行期间整张卡片置灰、不接受重复点击；
+     * 失败原因显示在标题行的状态提示里。
+     */
+    private class ActionTileSpec(
+        override val title: String,
+        /** 状态未知（离屏预览、查询还没返回）时显示的文字。 */
+        val defaultText: String,
+        /** 打开面板、执行完动作后各调一次，异步给出要显示的文字（回调在主线程）。 */
+        val refresh: (Context, (String) -> Unit) -> Unit,
+        /** 执行动作；完成时在主线程回调结果。 */
+        val run: (Activity, (ActionOutcome) -> Unit) -> Unit,
+    ) : PanelTileSpec
+
+    /** 动作结果：[error] 非空时提示失败原因；[dismissPanel] 为 true 时关闭面板。 */
+    private class ActionOutcome(val error: String?, val dismissPanel: Boolean)
 
     private fun panelTileSpecs(strings: PanelStrings): List<PanelTileSpec> {
         val calibrated = BatteryRingGeometry.isCalibratedDevice(Build.DEVICE)
@@ -981,7 +1013,47 @@ object SwipePanelHost {
                 AutoWallpaperRotationHost.updateIntervalForAll(AutoWallpaperInterval.fromPref(value).minutes)
             },
         )
+        specs += rearCastTileSpec(strings)
         return specs
+    }
+
+    /**
+     * 「投放」：背屏上有被投放的应用时显示「拉回主屏」，否则显示「切到背屏」（把主屏当前应用移过来）。
+     * 真正的执行者在 system_server（RearCastHost），这里只发请求、读结果。
+     */
+    private fun rearCastTileSpec(strings: PanelStrings): ActionTileSpec {
+        // 最近一次查到的状态；null = 还没查到，点击时交给 system_server 按「切换」处理。
+        var rearHasApp: Boolean? = null
+        fun text() = if (rearHasApp == true) strings.castToMain else strings.castToRear
+        return ActionTileSpec(
+            title = strings.castTitle,
+            defaultText = strings.castToRear,
+            refresh = { context, update ->
+                RearCastClient.send(context, Constants.REAR_CAST_OP_QUERY) { outcome, _ ->
+                    rearHasApp = outcome.rearHasApp()
+                    update(text())
+                }
+            },
+            run = { activity, done ->
+                // 按卡片上显示的文字执行，避免「显示切到背屏、实际却拉回」。
+                val op = when (rearHasApp) {
+                    true -> Constants.REAR_CAST_OP_TO_MAIN
+                    false -> Constants.REAR_CAST_OP_TO_REAR
+                    null -> Constants.REAR_CAST_OP_TOGGLE
+                }
+                RearCastClient.send(activity, op) { outcome, packageName ->
+                    DiagnosticLogStore.recordRemoteAsync(activity, "quick_panel rear_cast op=$op outcome=$outcome pkg=$packageName")
+                    outcome.rearHasApp()?.let { rearHasApp = it }
+                    done(
+                        ActionOutcome(
+                            error = if (outcome.isSuccess()) null else strings.castMessage(outcome),
+                            // 应用已经盖在背屏桌面上，面板留着没有意义。
+                            dismissPanel = outcome == RearCastPolicy.Outcome.MOVED_TO_REAR,
+                        ),
+                    )
+                }
+            },
+        )
     }
 
     private fun tileView(
@@ -1083,6 +1155,44 @@ object SwipePanelHost {
                                 showStatus(status, strings.saveFailed)
                             }
                             done()
+                        }
+                    }
+                }
+            }
+
+            is ActionTileSpec -> {
+                var text = spec.defaultText
+                fun render(animate: Boolean = true) {
+                    look.apply(
+                        background = palette.tile,
+                        titleColor = palette.onTile,
+                        valueColor = palette.accent,
+                        text = text,
+                        animate = animate,
+                    )
+                    tile.contentDescription = spec.title + ", " + text
+                }
+                render(animate = false)
+                tile.accessibilityDelegate = buttonDelegate()
+                if (host != null) {
+                    val update: (String) -> Unit = { next ->
+                        if (next != text) {
+                            text = next
+                            render()
+                        }
+                    }
+                    spec.refresh(host, update)
+                    bindTileClick(tile, host) { done ->
+                        // 结果回来时面板可能已经关掉又重开：只关当初点的那一块。
+                        val generation = showGeneration
+                        spec.run(host) { result ->
+                            done()
+                            if (result.dismissPanel) {
+                                if (generation == showGeneration) dismiss()
+                            } else {
+                                result.error?.let { showStatus(status, it) }
+                                if (!host.isDestroyed && !host.isFinishing) spec.refresh(host, update)
+                            }
                         }
                     }
                 }
@@ -1357,6 +1467,28 @@ object SwipePanelHost {
         val ringStyleTitle = get(R.string.panel_tile_ring_style, "电量环样式", "Ring style")
         val offTimeoutTitle = get(R.string.panel_tile_off_timeout, "息屏时间", "Screen timeout")
         val autoWallpaperTitle = get(R.string.panel_tile_auto_wallpaper, "定时换壁纸", "Auto wallpaper")
+        val castTitle = get(R.string.panel_tile_rear_cast, "投放", "Cast")
+        val castToRear = get(R.string.panel_tile_rear_cast_to_rear, "切到背屏", "To rear")
+        val castToMain = get(R.string.panel_tile_rear_cast_to_main, "拉回主屏", "Back to main")
+
+        /** 投放失败的原因（与控制中心磁贴共用同一组字符串）。 */
+        fun castMessage(outcome: RearCastPolicy.Outcome): String = when (outcome) {
+            RearCastPolicy.Outcome.NO_APP_ON_MAIN ->
+                get(R.string.rear_cast_no_app_on_main, "主屏上没有可投放的应用", "No app on the main screen to cast")
+            RearCastPolicy.Outcome.NO_APP_ON_REAR ->
+                get(R.string.rear_cast_no_app_on_rear, "背屏上没有投放的应用", "No cast app on the rear screen")
+            RearCastPolicy.Outcome.API_UNAVAILABLE ->
+                get(R.string.rear_cast_api_unavailable, "系统接口不可用", "System API unavailable")
+            RearCastPolicy.Outcome.NOT_ACTIVE ->
+                get(R.string.rear_cast_not_active, "未生效，请重启手机", "Not active, reboot the phone")
+            RearCastPolicy.Outcome.TIMEOUT ->
+                get(R.string.rear_cast_timeout, "系统无响应，请稍后再试", "System did not respond, try again")
+            RearCastPolicy.Outcome.LOCKED ->
+                get(R.string.rear_cast_locked, "请先解锁手机", "Unlock the phone first")
+            RearCastPolicy.Outcome.DENIED ->
+                get(R.string.rear_cast_denied, "请求被系统拒绝", "Request rejected by the system")
+            else -> get(R.string.rear_cast_move_failed, "移动失败", "Move failed")
+        }
     }
 
     private class SwipeDismissCard(

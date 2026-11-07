@@ -90,6 +90,7 @@ import hook.HyperBackscreen.common.PackageListCodec
 import hook.HyperBackscreen.ui.config.ConfigPage
 import hook.HyperBackscreen.ui.function.FunctionPage
 import hook.HyperBackscreen.ui.function.RearDoubleTapPage
+import hook.HyperBackscreen.ui.function.RearCastPage
 import hook.HyperBackscreen.ui.function.RearScreenTimingPage
 import hook.HyperBackscreen.ui.home.HomePage
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -505,6 +506,10 @@ internal fun HomeScreen(
                         hintRes = R.string.music_widget_whitelist_picker_hint
                     )
                     HomeRoute.RearScreenRecord -> RearScreenRecordPage(onBack = { navigateBackFrom(page) })
+                    HomeRoute.RearCast -> RearCastPage(
+                        onRearScreenTimingClick = { openDetail(page, HomeRoute.RearScreenTiming) },
+                        onBack = { navigateBackFrom(page) }
+                    )
                     HomeRoute.Main -> MainContent(
                         enable18ProFeatures = enable18ProFeatures,
                         onEnable18ProFeaturesChange = onEnable18ProFeaturesChange,
@@ -546,6 +551,7 @@ internal fun HomeScreen(
                         onRearDoubleTapClick = { openDetail(page, HomeRoute.RearDoubleTap) },
                         onMusicWidgetWhitelistClick = { openDetail(page, HomeRoute.MusicWhitelistAppPicker) },
                         onRearScreenRecordClick = { openDetail(page, HomeRoute.RearScreenRecord) },
+                        onRearCastClick = { openDetail(page, HomeRoute.RearCast) },
                         onLicenseClick = { openDetail(page, HomeRoute.License) },
                         onDonateClick = { openDetail(page, HomeRoute.Donate) },
                         onAppUpdateClick = { openDetail(page, HomeRoute.AppUpdate) },
@@ -664,6 +670,7 @@ private fun MainTabPage(
     onRearDoubleTapClick: () -> Unit,
     onMusicWidgetWhitelistClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit,
+    onRearCastClick: () -> Unit,
     onBatteryColorClick: () -> Unit,
     onRearScreenTimingClick: () -> Unit,
     onLicenseClick: () -> Unit,
@@ -767,6 +774,7 @@ private fun MainTabPage(
                             onRearDoubleTapClick = onRearDoubleTapClick,
                             onMusicWidgetWhitelistClick = onMusicWidgetWhitelistClick,
                             onRearScreenRecordClick = onRearScreenRecordClick,
+                            onRearCastClick = onRearCastClick,
                             onBatteryColorClick = onBatteryColorClick,
                             onRearScreenTimingClick = onRearScreenTimingClick,
                             rearMedia = rearMedia,
@@ -834,6 +842,7 @@ private fun MainContent(
     onRearDoubleTapClick: () -> Unit,
     onMusicWidgetWhitelistClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit,
+    onRearCastClick: () -> Unit,
     onLicenseClick: () -> Unit,
     onDonateClick: () -> Unit,
     onAppUpdateClick: () -> Unit,
@@ -942,6 +951,7 @@ private fun MainContent(
                 onRearDoubleTapClick = onRearDoubleTapClick,
                 onMusicWidgetWhitelistClick = onMusicWidgetWhitelistClick,
                 onRearScreenRecordClick = onRearScreenRecordClick,
+                onRearCastClick = onRearCastClick,
                 onBatteryColorClick = onBatteryColorClick,
                 onRearScreenTimingClick = onRearScreenTimingClick,
                 onLicenseClick = onLicenseClick,
