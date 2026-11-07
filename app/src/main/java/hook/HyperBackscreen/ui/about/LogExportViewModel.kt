@@ -71,6 +71,18 @@ internal class LogExportViewModel(
         }
     }
 
+    /**
+     * 中止正在进行的导出。
+     *
+     * 半成品（`.partial` 与数据库快照目录）由导出器的 finally 清理，这里只负责取消协程并把状态放回 Idle。
+     */
+    fun cancel() {
+        val wasRunning = job?.isActive == true
+        job?.cancel()
+        job = null
+        if (wasRunning) mutableState.value = LogExportState.Idle
+    }
+
     class Factory(context: Context, private val operation: LogExportOperation) : ViewModelProvider.Factory {
         private val application = context.applicationContext as Application
         @Suppress("UNCHECKED_CAST")

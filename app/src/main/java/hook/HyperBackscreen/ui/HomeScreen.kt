@@ -52,8 +52,10 @@ import hook.HyperBackscreen.ui.util.AppLanguage
 import hook.HyperBackscreen.ui.util.ThemeMode
 import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.ui.about.AboutPage
+import hook.HyperBackscreen.ui.about.AppUpdatePage
 import hook.HyperBackscreen.ui.about.DonatePage
 import hook.HyperBackscreen.ui.about.LicensePage
+import hook.HyperBackscreen.ui.about.VersionHistoryPage
 import hook.HyperBackscreen.ui.battery.BatteryRingGeometry
 import hook.HyperBackscreen.ui.battery.BatteryColorPage
 import hook.HyperBackscreen.ui.battery.BatteryColorSlot
@@ -318,7 +320,8 @@ internal fun HomeScreen(
     }
     fun openDetail(route: HomeRoute) {
         // Repeated taps must not push duplicate content keys during a transition.
-        if (backStack.lastOrNull() == HomeRoute.Main) backStack.add(route)
+        // 详情页之间也能互相进（例如「应用更新」→「版本历史」），只拦栈顶同名的重复入栈。
+        if (backStack.lastOrNull() != route) backStack.add(route)
     }
 
     val feedback = LocalUiFeedback.current
@@ -358,7 +361,6 @@ internal fun HomeScreen(
                         bottomBarBlur = bottomBarBlur,
                         showFunctionCount = showFunctionCount,
                         appLanguage = appLanguage,
-                        checkUpdates = checkUpdates,
                         enableAppCard = enableAppCard,
                         launcherIconHidden = launcherIconHidden,
                         onFloatingNavBarChange = onFloatingNavBarChange,
@@ -366,7 +368,6 @@ internal fun HomeScreen(
                         onBottomBarBlurChange = onBottomBarBlurChange,
                         onShowFunctionCountChange = onShowFunctionCountChange,
                         onAppLanguageChange = onAppLanguageChange,
-                        onCheckUpdatesChange = onCheckUpdatesChange,
                         onEnableAppCardChange = onEnableAppCardChange,
                         onLauncherIconHiddenChange = onLauncherIconHiddenChange,
                         themeMode = themeMode,
@@ -410,6 +411,13 @@ internal fun HomeScreen(
                         onAutoWallpaperOrderChange = onAutoWallpaperOrderChange,
                         onBack = navigateBack
                     )
+                    HomeRoute.AppUpdate -> AppUpdatePage(
+                        checkUpdates = checkUpdates,
+                        onCheckUpdatesChange = onCheckUpdatesChange,
+                        onVersionHistoryClick = { openDetail(HomeRoute.VersionHistory) },
+                        onBack = navigateBack
+                    )
+                    HomeRoute.VersionHistory -> VersionHistoryPage(onBack = navigateBack)
                     HomeRoute.Main -> MainContent(
                         enable18ProFeatures = enable18ProFeatures,
                         onEnable18ProFeaturesChange = onEnable18ProFeaturesChange,
@@ -429,7 +437,6 @@ internal fun HomeScreen(
                         bottomBarBlur = bottomBarBlur,
                         showFunctionCount = showFunctionCount,
                         appLanguage = appLanguage,
-                        checkUpdates = checkUpdates,
                         disableRearScreenCover = disableRearScreenCover,
                         doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
                         launcherIconHidden = launcherIconHidden,
@@ -443,13 +450,13 @@ internal fun HomeScreen(
                         onLiquidGlassChange = onLiquidGlassChange,
                         onBottomBarBlurChange = onBottomBarBlurChange,
                         onAppLanguageChange = onAppLanguageChange,
-                        onCheckUpdatesChange = onCheckUpdatesChange,
                         onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                         onLauncherIconHiddenChange = onLauncherIconHiddenChange,
                         onSettingsClick = { openDetail(HomeRoute.Settings) },
                         onAddDisabledAppsClick = { openDetail(HomeRoute.AppPicker) },
                         onLicenseClick = { openDetail(HomeRoute.License) },
                         onDonateClick = { openDetail(HomeRoute.Donate) },
+                        onAppUpdateClick = { openDetail(HomeRoute.AppUpdate) },
                         onRestartScopes = onRestartScopes,
                         themeMode = themeMode,
                         onThemeModeChange = onThemeModeChange,
@@ -481,7 +488,6 @@ private fun SettingsPage(
     bottomBarBlur: Boolean,
     showFunctionCount: Boolean,
     appLanguage: AppLanguage,
-    checkUpdates: Boolean,
     enableAppCard: Boolean,
     launcherIconHidden: Boolean,
     onFloatingNavBarChange: (Boolean) -> Unit,
@@ -489,7 +495,6 @@ private fun SettingsPage(
     onBottomBarBlurChange: (Boolean) -> Unit,
     onShowFunctionCountChange: (Boolean) -> Unit,
     onAppLanguageChange: (AppLanguage) -> Unit,
-    onCheckUpdatesChange: (Boolean) -> Unit,
     onEnableAppCardChange: (Boolean) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
     themeMode: ThemeMode,
@@ -549,7 +554,6 @@ private fun SettingsPage(
                         bottomBarBlur = bottomBarBlur,
                         showFunctionCount = showFunctionCount,
                         appLanguage = appLanguage,
-                        checkUpdates = checkUpdates,
                         enableAppCard = enableAppCard,
                         launcherIconHidden = launcherIconHidden,
                         onFloatingNavBarChange = onFloatingNavBarChange,
@@ -557,7 +561,6 @@ private fun SettingsPage(
                         onBottomBarBlurChange = onBottomBarBlurChange,
                         onShowFunctionCountChange = onShowFunctionCountChange,
                         onAppLanguageChange = onAppLanguageChange,
-                        onCheckUpdatesChange = onCheckUpdatesChange,
                         onEnableAppCardChange = onEnableAppCardChange,
                         onLauncherIconHiddenChange = onLauncherIconHiddenChange,
                         themeMode = themeMode,
@@ -602,6 +605,7 @@ private fun MainTabPage(
     onBatteryColorClick: () -> Unit,
     onRearScreenTimingClick: () -> Unit,
     onLicenseClick: () -> Unit,
+    onAppUpdateClick: () -> Unit,
     onRestartClick: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
@@ -700,7 +704,10 @@ private fun MainTabPage(
                         )
                     }
                     HomeNavigationPolicy.Tab.ABOUT -> item {
-                        AboutPage(onLicenseClick = onLicenseClick)
+                        AboutPage(
+                            onLicenseClick = onLicenseClick,
+                            onAppUpdateClick = onAppUpdateClick
+                        )
                     }
                 }
                 item {
@@ -735,7 +742,6 @@ private fun MainContent(
     bottomBarBlur: Boolean,
     showFunctionCount: Boolean,
     appLanguage: AppLanguage,
-    checkUpdates: Boolean,
     disableRearScreenCover: Boolean,
     doubleTapWakeDisabledPackages: String,
     launcherIconHidden: Boolean,
@@ -749,13 +755,13 @@ private fun MainContent(
     onLiquidGlassChange: (Boolean) -> Unit,
     onBottomBarBlurChange: (Boolean) -> Unit,
     onAppLanguageChange: (AppLanguage) -> Unit,
-    onCheckUpdatesChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
     onSettingsClick: () -> Unit,
     onAddDisabledAppsClick: () -> Unit,
     onLicenseClick: () -> Unit,
     onDonateClick: () -> Unit,
+    onAppUpdateClick: () -> Unit,
     onRestartScopes: (List<String>) -> Unit,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
@@ -856,6 +862,7 @@ private fun MainContent(
                 onBatteryColorClick = onBatteryColorClick,
                 onRearScreenTimingClick = onRearScreenTimingClick,
                 onLicenseClick = onLicenseClick,
+                onAppUpdateClick = onAppUpdateClick,
                 onRestartClick = { showRestartDialog = true },
                 onSettingsClick = onSettingsClick
             )

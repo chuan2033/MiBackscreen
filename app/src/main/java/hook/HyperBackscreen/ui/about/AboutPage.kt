@@ -31,7 +31,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 @Composable
-internal fun AboutPage(onLicenseClick: () -> Unit = {}) {
+internal fun AboutPage(
+    onLicenseClick: () -> Unit = {},
+    onAppUpdateClick: () -> Unit = {}
+) {
     AboutHeader()
 
     SmallTitle(text = stringResource(R.string.about_developer_title), insideMargin = PaddingValues(16.dp, 8.dp))
@@ -61,6 +64,14 @@ internal fun AboutPage(onLicenseClick: () -> Unit = {}) {
                     )
                 )
             }
+        )
+    }
+
+    CardBlock(pressFeedbackType = PressFeedbackType.None) {
+        AboutArrowPreference(
+            title = stringResource(R.string.about_update_title),
+            summary = null,
+            onClick = onAppUpdateClick
         )
     }
 

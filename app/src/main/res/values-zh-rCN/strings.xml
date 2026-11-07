@@ -146,12 +146,29 @@
     <string name="config_language_default">默认</string>
     <string name="config_language_chinese">简体中文</string>
     <string name="config_language_english">English</string>
-    <string name="config_check_updates_title">检查更新</string>
+    <string name="config_check_updates_title">自动检测更新</string>
     <string name="config_check_updates_summary_on">启动时自动检查是否有新版本</string>
     <string name="config_check_updates_summary_off">已关闭自动检查</string>
+    <string name="about_update_title">应用更新</string>
+    <string name="about_update_status_latest">已是最新版本</string>
+    <string name="about_update_status_available">检测到新版本</string>
+    <string name="about_update_status_checking">正在检查更新</string>
+    <string name="about_update_last_checked">上次检测 %1$s</string>
+    <string name="about_update_never_checked">还没有检测过</string>
+    <string name="about_update_check_now">检查更新</string>
+    <string name="about_update_settings_title">更新设置</string>
+    <string name="about_update_version_title">版本</string>
+    <string name="about_update_current_version">当前版本</string>
+    <string name="about_version_history">版本历史</string>
+    <string name="about_version_history_loading">正在加载</string>
+    <string name="about_version_history_empty">暂无版本记录</string>
+    <string name="about_version_history_expand">展开</string>
+    <string name="about_version_history_collapse">收起</string>
     <string name="update_available_title">检测到新版本</string>
     <string name="update_download">下载</string>
     <string name="update_cancel">取消</string>
+    <string name="tools_check_update">正在检查更新</string>
+    <string name="tools_update_none">当前已是最新版本</string>
     <string name="config_disable_rear_cover_title">禁用背屏保护提示</string>
     <string name="config_disable_rear_cover_summary">屏蔽背屏保护弹窗提醒</string>
     <string name="config_disable_double_tap_wake_title">双击亮屏黑名单</string>
@@ -177,6 +194,10 @@
     <string name="about_donate_wechat">微信</string>
     <string name="about_donate_alipay">支付宝</string>
     <string name="about_donate_qr_description">捐赠二维码</string>
+    <string name="about_donate_name">Star</string>
+    <string name="about_donate_save_qr">保存收款码</string>
+    <string name="about_donate_saved">收款码已保存到相册</string>
+    <string name="about_donate_save_failed">保存失败，请检查存储权限</string>
 
     <!-- License Page -->
     <string name="license_title">开源许可</string>
@@ -219,6 +240,7 @@
     <string name="log_export_start">导出日志</string>
     <string name="log_stage_count">%1$d/%2$d</string>
     <string name="log_close">关闭</string>
+    <string name="log_cancel_export">取消导出日志</string>
     <string name="log_share_failed">无法打开分享，请重试</string>
     <string name="log_file_missing">日志文件已失效，请重新生成</string>
     <string name="log_failed_retry">日志生成失败，点击重试</string>

@@ -23,7 +23,6 @@ internal fun ConfigPage(
     bottomBarBlur: Boolean,
     showFunctionCount: Boolean,
     appLanguage: AppLanguage,
-    checkUpdates: Boolean,
     enableAppCard: Boolean,
     launcherIconHidden: Boolean,
     onFloatingNavBarChange: (Boolean) -> Unit,
@@ -31,7 +30,6 @@ internal fun ConfigPage(
     onBottomBarBlurChange: (Boolean) -> Unit,
     onShowFunctionCountChange: (Boolean) -> Unit,
     onAppLanguageChange: (AppLanguage) -> Unit,
-    onCheckUpdatesChange: (Boolean) -> Unit,
     onEnableAppCardChange: (Boolean) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
     themeMode: ThemeMode,
@@ -65,16 +63,6 @@ internal fun ConfigPage(
             checked = launcherIconHidden,
             onCheckedChange = onLauncherIconHiddenChange,
             title = stringResource(R.string.config_hide_launcher_icon)
-        )
-        SwitchPreference(
-            checked = checkUpdates,
-            onCheckedChange = onCheckUpdatesChange,
-            title = stringResource(R.string.config_check_updates_title),
-            summary = if (checkUpdates) {
-                stringResource(R.string.config_check_updates_summary_on)
-            } else {
-                stringResource(R.string.config_check_updates_summary_off)
-            }
         )
         WindowDropdownPreference(
             items = listOf(

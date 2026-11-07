@@ -28,6 +28,10 @@ import hook.HyperBackscreen.ui.about.LogExportState
 import hook.HyperBackscreen.ui.about.LogExportViewModel
 import hook.HyperBackscreen.ui.about.LocalLogExportOperation
 import hook.HyperBackscreen.ui.about.LogExportPopup
+import hook.HyperBackscreen.ui.updater.UpdateChecker
+import hook.HyperBackscreen.ui.updater.UpdateDialog
+import hook.HyperBackscreen.ui.updater.UpdateInfo
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -155,6 +159,10 @@ internal fun HomePage(
                 shareFailed = popupShareFailed,
                 fileMissing = popupFileMissing,
                 onDismiss = { showLogPopup = false },
+                onCancel = {
+                    exporter.cancel()
+                    showLogPopup = false
+                },
                 onExport = { startExport() },
                 onShare = { (exportState as? LogExportState.Ready)?.let { share(it.file) } },
             )

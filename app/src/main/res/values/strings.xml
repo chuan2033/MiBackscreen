@@ -147,12 +147,29 @@
     <string name="config_language_default">Default</string>
     <string name="config_language_chinese">简体中文</string>
     <string name="config_language_english">English</string>
-    <string name="config_check_updates_title">Check for updates</string>
+    <string name="config_check_updates_title">Auto check for updates</string>
     <string name="config_check_updates_summary_on">Automatically check for updates on launch</string>
     <string name="config_check_updates_summary_off">Automatic update check disabled</string>
+    <string name="about_update_title">App Update</string>
+    <string name="about_update_status_latest">Already up to date</string>
+    <string name="about_update_status_available">Update available</string>
+    <string name="about_update_status_checking">Checking for updates</string>
+    <string name="about_update_last_checked">Last checked %1$s</string>
+    <string name="about_update_never_checked">Never checked</string>
+    <string name="about_update_check_now">Check for updates</string>
+    <string name="about_update_settings_title">Update settings</string>
+    <string name="about_update_version_title">Version</string>
+    <string name="about_update_current_version">Current version</string>
+    <string name="about_version_history">Version history</string>
+    <string name="about_version_history_loading">Loading</string>
+    <string name="about_version_history_empty">No releases</string>
+    <string name="about_version_history_expand">Expand</string>
+    <string name="about_version_history_collapse">Collapse</string>
     <string name="update_available_title">Update available</string>
     <string name="update_download">Download</string>
     <string name="update_cancel">Cancel</string>
+    <string name="tools_check_update">Checking for updates</string>
+    <string name="tools_update_none">Already up to date</string>
     <string name="config_disable_rear_cover_title">Disable rear screen cover prompt</string>
     <string name="config_disable_rear_cover_summary">Block rear screen protection popup prompts</string>
     <string name="config_disable_double_tap_wake_title">Double-tap wake blocklist</string>
@@ -179,6 +196,10 @@
     <string name="about_donate_wechat">WeChat</string>
     <string name="about_donate_alipay">Alipay</string>
     <string name="about_donate_qr_description">Donation QR code</string>
+    <string name="about_donate_name">Star</string>
+    <string name="about_donate_save_qr">Save QR code</string>
+    <string name="about_donate_saved">QR code saved to gallery</string>
+    <string name="about_donate_save_failed">Save failed, check storage permission</string>
 
     <!-- License Page -->
     <string name="license_title">Open Source Licenses</string>
@@ -221,6 +242,7 @@
     <string name="log_export_start">Export log</string>
     <string name="log_stage_count">%1$d/%2$d</string>
     <string name="log_close">Close</string>
+    <string name="log_cancel_export">Cancel log export</string>
     <string name="log_share_failed">Could not open sharing. Tap to retry</string>
     <string name="log_file_missing">Log file is unavailable. Generate it again</string>
     <string name="log_failed_retry">Failed to generate log. Tap to retry</string>

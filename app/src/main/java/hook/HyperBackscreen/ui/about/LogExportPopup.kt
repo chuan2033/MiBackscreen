@@ -39,6 +39,7 @@ internal fun LogExportPopup(
     shareFailed: Boolean,
     fileMissing: Boolean,
     onDismiss: () -> Unit,
+    onCancel: () -> Unit,
     onExport: () -> Unit,
     onShare: () -> Unit,
 ) {
@@ -59,10 +60,16 @@ internal fun LogExportPopup(
                     style = MiuixTheme.textStyles.title4,
                     modifier = Modifier.weight(1f).semantics { heading() },
                 )
-                IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                val exporting = state is LogExportState.Running
+                IconButton(
+                    onClick = { if (exporting) onCancel() else onDismiss() },
+                    modifier = Modifier.size(32.dp)
+                ) {
                     Icon(
                         imageVector = MiuixIcons.Basic.Close,
-                        contentDescription = stringResource(R.string.log_close),
+                        contentDescription = stringResource(
+                            if (exporting) R.string.log_cancel_export else R.string.log_close
+                        ),
                         modifier = Modifier.size(20.dp),
                         tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )

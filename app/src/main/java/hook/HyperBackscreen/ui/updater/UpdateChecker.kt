@@ -12,9 +12,10 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** 一条可下载的更新：版本名、变更说明、APK 直链。 */
+/** 一条可下载的更新：版本名、发布日期、变更说明、APK 直链。 */
 data class UpdateInfo(
     val versionName: String,
+    val publishedAt: String,
     val notes: String,
     val apkUrl: String,
 )
@@ -37,6 +38,11 @@ object UpdateChecker {
     @Volatile
     private var checkedAt = 0L
 
+    /** 上次真实检查的墙钟时间（毫秒）；0 表示从未检查过。用于「上次检测」展示。 */
+    @Volatile
+    var lastCheckAtWallClock: Long = 0L
+        private set
+
     /** 上次检查的结果；可能过期，仅供展示。 */
     fun last(): UpdateInfo? = cached
 
@@ -46,13 +52,29 @@ object UpdateChecker {
         return at == 0L || SystemClock.elapsedRealtime() - at >= MIN_INTERVAL_MS
     }
 
-    /** 查一次；不满足间隔时直接复用上次结果，不发网络请求。 */
-    suspend fun check(): UpdateInfo? {
-        if (!due()) return cached
+    /**
+     * 查一次。
+     *
+     * @param force 忽略 [MIN_INTERVAL_MS] 节流，强制发起请求；页面上的手动「检查更新」用它，
+     *   否则启动自动检查之后的十分钟内点按钮没有任何反应。
+     */
+    suspend fun check(force: Boolean = false): UpdateInfo? {
+        if (!force && !due()) return cached
         val result = fetch()
         cached = result
         checkedAt = SystemClock.elapsedRealtime()
+        lastCheckAtWallClock = System.currentTimeMillis()
         return result
+    }
+
+    /** 全部正式版，新的在前；网络失败返回空列表。用于「版本历史」。 */
+    suspend fun history(): List<UpdateInfo> = withContext(Dispatchers.IO) {
+        try {
+            readReleases()
+        } catch (e: Exception) {
+            Log.w("MiBackscreen", "release history failed", e)
+            emptyList()
+        }
     }
 
     private suspend fun fetch(): UpdateInfo? = withContext(Dispatchers.IO) {
@@ -86,7 +108,14 @@ object UpdateChecker {
                 val tag = release.optString("tag_name", "").removePrefix("v").trim()
                 if (!looksLikeVersion(tag)) continue
                 val apk = apkUrl(release) ?: continue
-                out.add(UpdateInfo(tag, cleanNotes(release.optString("body", "")), apk))
+                out.add(
+                    UpdateInfo(
+                        versionName = tag,
+                        publishedAt = release.optString("published_at", ""),
+                        notes = cleanNotes(release.optString("body", "")),
+                        apkUrl = apk
+                    )
+                )
             }
             out
         } finally {
