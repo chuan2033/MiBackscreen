@@ -98,6 +98,8 @@ internal data class RearMediaSwitches(
     val videoUnlockLimits: Boolean = false,
     val videoKeepAudio: Boolean = false,
     val rearLyric: Boolean = false,
+    /** 歌词的子选项，不单独计入开启数。 */
+    val rearLyricInAod: Boolean = false,
 )
 
 /** [RearMediaSwitches] 里的单项，用于开关回调。 */
@@ -106,4 +108,5 @@ internal enum class RearMediaSwitch {
     VIDEO_UNLOCK_LIMITS,
     VIDEO_KEEP_AUDIO,
     REAR_LYRIC,
+    REAR_LYRIC_IN_AOD,
 }

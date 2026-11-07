@@ -154,11 +154,27 @@ internal class RearLyricSource(
             receiver.unregister(listener)
         }
 
+        /** 同一首歌每帧都带同一个 Lyric 对象，按引用缓存时间轴，不必每句重建。 */
+        @Volatile private var timelineSource: Any? = null
+        @Volatile private var timeline: LyricTimeline? = null
+
         private fun LyricView.toUpdate() = LyricLineUpdate(
             session = LyricSession(publisher, lyric.id),
             text = line?.text,
             paused = state != null && state != PlaybackState.PLAYING && state != PlaybackState.BUFFERING,
+            title = lyric.title,
+            timeline = timelineOf(lyric),
         )
+
+        private fun timelineOf(lyric: com.hchen.superlyricapi.model.Lyric): LyricTimeline? {
+            if (timelineSource === lyric) return timeline
+            val built = runCatching {
+                LyricTimeline.of(lyric.lines.map { TimedLine(it.text, it.start, it.end) }, lyric.title)
+            }.getOrNull()
+            timeline = built
+            timelineSource = lyric
+            return built
+        }
     }
 
     /**
@@ -172,6 +188,7 @@ internal class RearLyricSource(
         private val cacheLock = Any()
         private var cachedSession: LyricSession? = null
         private var cachedLines: Array<out SuperLyricLine?>? = null
+        private var cachedTimeline: LyricTimeline? = null
 
         private val stub = object : ISuperLyricReceiver.Stub() {
             override fun onLyric(publisher: String?, data: SuperLyricData?) {
@@ -189,6 +206,7 @@ internal class RearLyricSource(
                     if (cachedSession?.acceptsStop(session) == true) {
                         cachedSession = null
                         cachedLines = null
+                        cachedTimeline = null
                     }
                 }
                 this@RearLyricSource.onStop(session)
@@ -217,15 +235,33 @@ internal class RearLyricSource(
 
         private fun project(publisher: String?, data: SuperLyricData): LyricLineUpdate {
             val session = LyricSession(publisher, data.lyricId)
+            val title = runCatching { data.title }.getOrNull()
+            var timeline: LyricTimeline? = null
             val lines = synchronized(cacheLock) {
-                if (session != cachedSession || session.lyricId.isNullOrBlank()) cachedLines = null
-                cachedSession = session
-                if (data.hasAllLyrics()) cachedLines = data.allLyrics
+                // 主动拉取的数据不带发布方：歌词 id 相同就当同一段会话，不清掉已缓存的全量歌词。
+                val cached = cachedSession
+                val same = cached != null && !session.lyricId.isNullOrBlank() &&
+                    cached.lyricId == session.lyricId && (publisher == null || cached.publisher == publisher)
+                if (!same) {
+                    cachedLines = null
+                    cachedTimeline = null
+                    cachedSession = session
+                }
+                if (data.hasAllLyrics()) {
+                    cachedLines = data.allLyrics
+                    cachedTimeline = runCatching {
+                        LyricTimeline.of(
+                            data.allLyrics.orEmpty().filterNotNull().map { TimedLine(it.text, it.startTime, it.endTime) },
+                            title,
+                        )
+                    }.getOrNull()
+                }
+                timeline = cachedTimeline
                 cachedLines
             }
             val index = if (data.hasCurrentLyricIndex()) data.currentLyricIndex else -1
             val line = data.lyric ?: data.getLyricAt(index) ?: lines?.getOrNull(index)
-            return LyricLineUpdate(session, line?.text, title = runCatching { data.title }.getOrNull())
+            return LyricLineUpdate(session, line?.text, title = title, timeline = timeline)
         }
     }
 

@@ -99,6 +99,8 @@ public final class Constants {
     public static final String KEY_REAR_VIDEO_KEEP_AUDIO = "rear_video_keep_audio";
     /** 背屏实时歌词：订阅 SuperLyric，把当前歌词行显示在背屏音乐卡片的歌手行上。 */
     public static final String KEY_ENABLE_REAR_LYRIC = "enable_rear_lyric";
+    /** 背屏实时歌词在 AOD（背屏息屏显示）时也显示；关着时息屏恢复原歌手名。 */
+    public static final String KEY_REAR_LYRIC_IN_AOD = "rear_lyric_in_aod";
     public static final String PANEL_PREFERENCE_AUTHORITY = MODULE_PACKAGE + ".PanelPreferences";
     public static final String PANEL_PREFERENCE_METHOD_SET = "set_panel_preference";
     /** 模块 → 宿主同步广播的签名级权限：宿主注册接收器时要求发送方持有，挡住第三方应用。 */
@@ -109,7 +111,11 @@ public final class Constants {
             MODULE_PACKAGE + ".action.SYNC_BATTERY_RING";
     public static final String ACTION_SYNC_AUTO_WALLPAPER =
             MODULE_PACKAGE + ".action.SYNC_AUTO_WALLPAPER";
-    /** 背屏实时歌词开关变化：extra {@link #EXTRA_PREFERENCE_VALUE} 为新值，背屏中心即时注册 / 注销订阅。 */
+    /**
+     * 背屏实时歌词开关变化：extra {@link #EXTRA_PREFERENCE_VALUE} 为新值，背屏中心即时生效。
+     * {@link #EXTRA_PREFERENCE_KEY} 缺省为 {@link #KEY_ENABLE_REAR_LYRIC}（注册 / 注销订阅），
+     * 也可以是 {@link #KEY_REAR_LYRIC_IN_AOD}。
+     */
     public static final String ACTION_SYNC_REAR_LYRIC =
             MODULE_PACKAGE + ".action.SYNC_REAR_LYRIC";
     public static final String EXTRA_PREFERENCE_KEY = "preference_key";

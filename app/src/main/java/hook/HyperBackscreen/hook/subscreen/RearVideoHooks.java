@@ -338,18 +338,12 @@ public final class RearVideoHooks {
                         }
                     });
         }
-        Class<?> mamlView = findClass(MAML_VIEW, classLoader);
-        if (mamlView != null) {
-            module.hookMethodIfPresent(findDeclaredMethod(mamlView, "sendCommand", String.class),
-                    MAML_VIEW + "#sendCommand",
-                    chain -> {
-                        Object command = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
-                        if (RearVideoResumePolicy.isLifecycleCommand(command instanceof String ? (String) command : null)) {
-                            lastLifecycleCommandAt = SystemClock.elapsedRealtime();
-                        }
-                        return chain.proceed();
-                    });
-        }
+        // MamlView#sendCommand 和背屏歌词共用一个 Hook。
+        MamlCommandHook.addObserver(module, classLoader, command -> {
+            if (RearVideoResumePolicy.isLifecycleCommand(command)) {
+                lastLifecycleCommandAt = SystemClock.elapsedRealtime();
+            }
+        });
         Class<?> element = findClass(VIDEO_ELEMENT, classLoader);
         Field holderField = null;
         if (element != null) {

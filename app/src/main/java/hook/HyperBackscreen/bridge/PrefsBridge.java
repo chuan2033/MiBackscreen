@@ -166,6 +166,8 @@ public final class PrefsBridge {
     public static final boolean DEFAULT_REAR_VIDEO_KEEP_AUDIO = false;
     /** 背屏实时歌词默认关：依赖第三方模块 SuperLyric。 */
     public static final boolean DEFAULT_ENABLE_REAR_LYRIC = false;
+    /** AOD 时也显示歌词默认关：息屏期间每句歌词都会刷新一次背屏，略费电。 */
+    public static final boolean DEFAULT_REAR_LYRIC_IN_AOD = false;
 
     /**
      * 配置备份覆盖的偏好键：只收「会改变行为或观感」的键。
@@ -197,6 +199,7 @@ public final class PrefsBridge {
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_REAR_VIDEO_UNLOCK_LIMITS, DEFAULT_REAR_VIDEO_UNLOCK_LIMITS);
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_REAR_VIDEO_KEEP_AUDIO, DEFAULT_REAR_VIDEO_KEEP_AUDIO);
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_ENABLE_REAR_LYRIC, DEFAULT_ENABLE_REAR_LYRIC);
+        BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_REAR_LYRIC_IN_AOD, DEFAULT_REAR_LYRIC_IN_AOD);
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_CHECK_UPDATES, DEFAULT_CHECK_UPDATES);
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_FLOATING_NAV_BAR, DEFAULT_FLOATING_NAV_BAR);
         BACKUP_BOOLEAN_DEFAULTS.put(Constants.KEY_LIQUID_GLASS, DEFAULT_LIQUID_GLASS);
@@ -1175,6 +1178,15 @@ public final class PrefsBridge {
         return writeFromUiCommitted(context, Constants.KEY_ENABLE_REAR_LYRIC, enabled);
     }
 
+    public static boolean readRearLyricInAodForUi(@NonNull Context context) {
+        return readForUi(context, Constants.KEY_REAR_LYRIC_IN_AOD, DEFAULT_REAR_LYRIC_IN_AOD);
+    }
+
+    /** 同 {@link #writeEnableRearLyricFromUi}：同步提交，成功后才发同步广播。 */
+    public static boolean writeRearLyricInAodFromUi(@NonNull Context context, boolean enabled) {
+        return writeFromUiCommitted(context, Constants.KEY_REAR_LYRIC_IN_AOD, enabled);
+    }
+
     /** 纯 UI 外观项，Hook 端不消费，只存本地。 */
     public static boolean readFloatingNavBar(@NonNull Context context) {
         return local(context).getBoolean(Constants.KEY_FLOATING_NAV_BAR, DEFAULT_FLOATING_NAV_BAR);
@@ -1289,6 +1301,14 @@ public final class PrefsBridge {
         return override instanceof Boolean
                 ? (Boolean) override
                 : readForHook(module, Constants.KEY_ENABLE_REAR_LYRIC, DEFAULT_ENABLE_REAR_LYRIC);
+    }
+
+    /** 背屏中心读「AOD 时也显示歌词」：同步广播刚送到的值优先。 */
+    public static boolean shouldShowRearLyricInAod(@NonNull XposedModule module) {
+        Object override = liveOverride(sRemoteBooleanOverrides, Constants.KEY_REAR_LYRIC_IN_AOD);
+        return override instanceof Boolean
+                ? (Boolean) override
+                : readForHook(module, Constants.KEY_REAR_LYRIC_IN_AOD, DEFAULT_REAR_LYRIC_IN_AOD);
     }
 
     public static boolean shouldShowThemeSettingsShortcut(@NonNull XposedModule module) {
@@ -1597,6 +1617,7 @@ public final class PrefsBridge {
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REAR_VIDEO_UNLOCK_LIMITS);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REAR_VIDEO_KEEP_AUDIO);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_REAR_LYRIC);
+            flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_REAR_LYRIC_IN_AOD);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES);
@@ -1669,6 +1690,7 @@ public final class PrefsBridge {
                     DEFAULT_REAR_VIDEO_UNLOCK_LIMITS);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REAR_VIDEO_KEEP_AUDIO, DEFAULT_REAR_VIDEO_KEEP_AUDIO);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_ENABLE_REAR_LYRIC, DEFAULT_ENABLE_REAR_LYRIC);
+            syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REAR_LYRIC_IN_AOD, DEFAULT_REAR_LYRIC_IN_AOD);
             syncStringKey(
                     localPrefs,
                     remotePrefs,

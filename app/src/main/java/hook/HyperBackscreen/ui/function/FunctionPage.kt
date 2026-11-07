@@ -148,7 +148,15 @@ internal fun FunctionPage(
                     summary = stringResource(R.string.rear_lyric_summary)
                 )
                 AnimatedPreferenceVisibility(visible = rearMedia.rearLyric) {
-                    SuperLyricStatusRow(active = rearMedia.rearLyric)
+                    Column {
+                        SuperLyricStatusRow(active = rearMedia.rearLyric)
+                        SwitchPreference(
+                            checked = rearMedia.rearLyricInAod,
+                            onCheckedChange = { onRearMediaChange(RearMediaSwitch.REAR_LYRIC_IN_AOD, it) },
+                            title = stringResource(R.string.rear_lyric_in_aod_title),
+                            summary = stringResource(R.string.rear_lyric_in_aod_summary)
+                        )
+                    }
                 }
             }
 

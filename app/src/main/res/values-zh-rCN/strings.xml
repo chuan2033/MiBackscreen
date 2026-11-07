@@ -335,8 +335,10 @@
     <string name="rear_video_keep_audio_title">视频壁纸保留声音</string>
     <string name="rear_video_keep_audio_summary">新设置的背屏视频保留音轨，播放时跟随媒体音量，不会打断正在播放的音乐。之前设置的视频需要重新选一次才有声音</string>
     <string name="rear_lyric_title">背屏实时歌词</string>
-    <string name="rear_lyric_summary">播放音乐时，背屏音乐卡片的歌手一行改为显示当前歌词。需要安装 SuperLyric，在 LSPosed 里为它勾选「系统框架」和对应的音乐 App，并重启手机</string>
+    <string name="rear_lyric_summary">播放音乐时，背屏音乐卡片的歌名一行改为显示当前歌词，歌手一行显示「歌名 - 歌手」。需要安装 SuperLyric，在 LSPosed 里为它勾选「系统框架」和对应的音乐 App，并重启手机</string>
     <string name="rear_lyric_status_checking">检测中…</string>
+    <string name="rear_lyric_in_aod_title">息屏时也显示歌词</string>
+    <string name="rear_lyric_in_aod_summary">背屏进入息屏显示（AOD）后继续显示当前歌词。每句歌词会刷新一次背屏，耗电略高</string>
     <string name="rear_lyric_status_v4">已连接 · 4.x</string>
     <string name="rear_lyric_status_legacy">已连接 · 3.x</string>
     <string name="rear_lyric_status_unavailable">服务未生效</string>

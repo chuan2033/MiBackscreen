@@ -13,6 +13,7 @@ import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
 import java.lang.reflect.Constructor;
+import java.util.List;
 
 import hook.HyperBackscreen.common.Constants;
 import hook.HyperBackscreen.hook.ModuleMain;
@@ -23,11 +24,14 @@ import hook.HyperBackscreen.lyric.RearLyricHost;
  *
  * <ul>
  *   <li>{@code MusicControlScreenElement.<init>(Element, ScreenElementRoot)} 之后：登记卡片。
- *       卡片 XML 里有 {@code name="album_artist_text"} 的 Text 才算背屏自带的音乐卡片，只有它的歌手行会被替换；</li>
+ *       卡片 XML 里有 {@code name="album_artist_text"} 的 Text 才算背屏自带的音乐卡片，只有它的歌名行 / 歌手行会被替换；</li>
  *   <li>{@code ScreenElement.show(boolean)}、{@code MusicControlScreenElement.pause()/resume()}、
  *       {@code onMusicStateChange(boolean)} 之后：重新判断要不要显示歌词；</li>
- *   <li>{@code updateAlbum(String, String, String)} 前后：记下原歌手名；歌词显示期间宿主刷新元数据后写回歌词；</li>
- *   <li>{@code finish()}：注销卡片。</li>
+ *   <li>{@code updateAlbum(String, String, String)} 前后：播放器车载 / 蓝牙歌词把标题换成歌词时换回真实歌名；
+ *       记下原歌手名；歌词显示期间宿主刷新元数据后写回歌词；</li>
+ *   <li>{@code finish()}：注销卡片；</li>
+ *   <li>{@code MamlView.sendCommand(String)} 之前：歌手行正显示歌词时推迟 {@code enterAod}，先写回歌手名
+ *       （AOD 动画按歌手行文字宽度定位），见 {@link RearLyricHost#beforeMamlCommand}。</li>
  * </ul>
  * 背屏桌面前后台与息屏状态由 {@link SubScreenCenterHooks} 已有的 Hook 转发给 {@link RearLyricHost}
  * （同一个方法不能挂两次）。开关关着时这些 Hook 只做登记，不写任何变量。
@@ -98,8 +102,14 @@ public final class RearLyricHooks {
                 findDeclaredMethod(music, "updateAlbum", String.class, String.class, String.class),
                 MUSIC_CONTROL + "#updateAlbum", chain -> {
                     Object element = chain.getThisObject();
-                    RearLyricHost.beforeUpdateAlbum(element, chain.getArgs().size() > 1 ? chain.getArgs().get(1) : null);
-                    Object result = chain.proceed();
+                    List<Object> args = chain.getArgs();
+                    Object[] rewritten = args.size() == 3
+                            ? RearLyricHost.rewriteAlbum(element, args.get(0), args.get(1), args.get(2))
+                            : null;
+                    Object title = rewritten != null ? rewritten[0] : (args.isEmpty() ? null : args.get(0));
+                    Object artist = rewritten != null ? rewritten[1] : (args.size() > 1 ? args.get(1) : null);
+                    RearLyricHost.beforeUpdateAlbum(element, title, artist);
+                    Object result = rewritten != null ? chain.proceed(rewritten) : chain.proceed();
                     RearLyricHost.afterUpdateAlbum(element);
                     return result;
                 });
@@ -107,7 +117,13 @@ public final class RearLyricHooks {
             RearLyricHost.onCardFinished(chain.getThisObject());
             return chain.proceed();
         });
+        installAodCommandHook(classLoader);
         module.log(Log.INFO, Constants.LOG_TAG, "Rear lyric hooks installed");
+    }
+
+    private void installAodCommandHook(@NonNull ClassLoader classLoader) {
+        // MamlView#sendCommand 和视频壁纸共用一个 Hook。
+        MamlCommandHook.addInterceptor(module, classLoader, RearLyricHost::beforeMamlCommand);
     }
 
     /** 卡片 DOM 里能找到 {@code <Text name="album_artist_text">} 才是背屏自带的音乐卡片。 */
