@@ -76,13 +76,16 @@ private val systemProcessNames = setOf("system", "system_server", "android")
  */
 internal fun readScopeStatus(service: XposedService?): List<ScopeStatusItem>? {
     if (service == null) return null
+    // getScope / getRunningTargets 是 API 102 才有的接口；模块 minApiVersion 是 101，
+    // 跑在 101 的框架上时直接不显示圆点，不去调不存在的方法。
+    if (service.apiVersion < 102) return null
     return try {
         val scope = service.scope.toSet()
         val targets = service.runningTargets
         Log.d(TAG, "scope status: scope=$scope targets=" +
             targets.joinToString { "${it.processName}(${it.state}, v${it.loadedVersionCode})" })
         scopeDefinitions.map { definition ->
-            val matched = targets.filter { matchesScope(it, definition.packageName) }
+            val matched = targets.filter { matchesScope(it.processName, definition.packageName) }
             val state = when {
                 matched.any { it.state == HookedTarget.State.UP_TO_DATE } -> ScopeState.ACTIVE
                 matched.any {
@@ -100,8 +103,7 @@ internal fun readScopeStatus(service: XposedService?): List<ScopeStatusItem>? {
     }
 }
 
-private fun matchesScope(target: HookedTarget, packageName: String): Boolean {
-    val process = target.processName
+private fun matchesScope(process: String, packageName: String): Boolean {
     if (packageName == Constants.SYSTEM_PACKAGE) return process in systemProcessNames
     return process == packageName || process.startsWith("$packageName:")
 }
