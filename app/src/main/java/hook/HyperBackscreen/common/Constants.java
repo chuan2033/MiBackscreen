@@ -87,6 +87,15 @@ public final class Constants {
      */
     public static final String KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES = "double_tap_sleep_disabled_packages";
     public static final String KEY_THEME_SETTINGS_SHORTCUT = "theme_settings_shortcut";
+    /** 系统「设置」首页里的模块入口位置：off / top / middle / bottom。 */
+    public static final String KEY_SETTINGS_ENTRY = "settings_entry";
+    public static final String SETTINGS_PACKAGE = "com.android.settings";
+    /** 系统设置首页 Activity 与它的条目列表；条目类来自 settingslib，类名与字段都不混淆。 */
+    public static final String SETTINGS_MIUI_SETTINGS_CLASS = "com.android.settings.MiuiSettings";
+    public static final String SETTINGS_HEADER_ADAPTER_CLASS = "com.android.settings.MiuiSettings$HeaderAdapter";
+    public static final String SETTINGS_HEADER_VIEW_HOLDER_CLASS = "com.android.settings.MiuiSettings$HeaderViewHolder";
+    public static final String SETTINGS_HEADER_CLASS =
+            "com.android.settingslib.miuisettings.preference.PreferenceActivity$Header";
     /**
      * 背屏视频壁纸续播（背屏中心）：重开播放器时从上次的位置接着播，不再每次亮屏从头开始。
      * 视频三项都只在宿主进程启动时决定是否安装 Hook（关着就完全不挂），所以改完要重启对应作用域；
@@ -521,6 +530,11 @@ public final class Constants {
     public static final int SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_DARK_BACKGROUND = 0xFF2B2B2F;
     // 预览图里图标占短边的比例。
     public static final float SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_ICON_RATIO = 0.62f;
+    /** 智能助理里「背屏应用卡详情」页；类名和 onCreate 都不混淆。 */
+    public static final String PERSONAL_ASSISTANT_BACKSCREEN_DETAIL_ACTIVITY_CLASS =
+            "com.miui.personalassistant.backscreen.detail.view.BackScreenDetailActivity";
+    /** 智能助理自带的 Glide；get / clearMemory / clearDiskCache 是公开 API，不混淆。 */
+    public static final String PERSONAL_ASSISTANT_GLIDE_CLASS = "com.bumptech.glide.Glide";
     public static final String PERSONAL_ASSISTANT_COMMON_PARAMS_CLASS =
             "com.miui.personalassistant.network.util.a";
     public static final String PERSONAL_ASSISTANT_ENVIRONMENT_SIGNAL_METHOD = "a";

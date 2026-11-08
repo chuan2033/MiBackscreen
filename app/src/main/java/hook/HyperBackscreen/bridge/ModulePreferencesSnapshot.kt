@@ -13,6 +13,7 @@ internal data class ModulePreferencesSnapshot(
     val fixRearScreenApply: Boolean,
     val disableRearScreenCover: Boolean,
     val themeSettingsShortcut: Boolean,
+    val settingsEntry: String = PrefsBridge.DEFAULT_SETTINGS_ENTRY,
     val disableDoubleTapWake: Boolean,
     val doubleTapWakeDisabledPackages: String,
     val enable18ProFeatures: Boolean,
@@ -61,6 +62,7 @@ internal data class ModulePreferencesSnapshot(
             Constants.KEY_FIX_REAR_SCREEN_APPLY,
             Constants.KEY_DISABLE_REAR_SCREEN_COVER,
             Constants.KEY_THEME_SETTINGS_SHORTCUT,
+            Constants.KEY_SETTINGS_ENTRY,
             Constants.KEY_DISABLE_DOUBLE_TAP_WAKE,
             Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,
             Constants.KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES,
@@ -115,6 +117,7 @@ internal data class ModulePreferencesSnapshot(
                 fixRearScreenApply = boolean(Constants.KEY_FIX_REAR_SCREEN_APPLY, PrefsBridge.DEFAULT_FIX_REAR_SCREEN_APPLY),
                 disableRearScreenCover = boolean(Constants.KEY_DISABLE_REAR_SCREEN_COVER, PrefsBridge.DEFAULT_DISABLE_REAR_SCREEN_COVER),
                 themeSettingsShortcut = boolean(Constants.KEY_THEME_SETTINGS_SHORTCUT, PrefsBridge.DEFAULT_THEME_SETTINGS_SHORTCUT),
+                settingsEntry = PrefsBridge.normalizeSettingsEntry(value(Constants.KEY_SETTINGS_ENTRY) as? String),
                 disableDoubleTapWake = boolean(Constants.KEY_DISABLE_DOUBLE_TAP_WAKE, PrefsBridge.DEFAULT_DISABLE_DOUBLE_TAP_WAKE),
                 doubleTapWakeDisabledPackages = value(Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES) as? String
                     ?: PrefsBridge.DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,

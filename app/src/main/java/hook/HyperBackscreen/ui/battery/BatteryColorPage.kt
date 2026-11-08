@@ -1,5 +1,6 @@
 package hook.HyperBackscreen.ui.battery
 
+import hook.HyperBackscreen.ui.components.AppDialog
 import hook.HyperBackscreen.batteryring.BatteryPercentPosition
 import hook.HyperBackscreen.batteryring.BatteryRingGeometry
 import hook.HyperBackscreen.batteryring.BatteryRingLayout
@@ -95,7 +96,6 @@ import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
-import top.yukonga.miuix.kmp.window.WindowDialog
 
 /**
  * 电量状态分段控件上下的留白。
@@ -449,7 +449,7 @@ internal fun BatteryColorPage(
 
     // 精确输入弹窗放在页面级：两个折叠里的滑杆共用它，页面上同时只挂一个弹窗实例。
     val active = inputField
-    WindowDialog(
+    AppDialog(
         show = inputVisible,
         title = active?.let { stringResource(it.titleRes) }.orEmpty(),
         summary = active?.let { field ->
