@@ -60,17 +60,27 @@ import hook.HyperBackscreen.ui.theme.currentAppColors
 import java.text.SimpleDateFormat
 import java.util.Locale
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.platform.LocalContext
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 /** 「版本历史」二级页：按发布时间倒序列出每个正式版的更新说明。 */
 @Composable
 internal fun VersionHistoryPage(onBack: () -> Unit) {
+    val context = LocalContext.current
     var releases by remember { mutableStateOf<List<UpdateInfo>>(emptyList()) }
+    var failed by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
+    // 递增一次就重新加载；「重试」跳过半天缓存直接请求。
+    var reloadRequest by remember { mutableIntStateOf(0) }
     val loadingDescription = stringResource(R.string.about_version_history_loading)
-    LaunchedEffect(Unit) {
-        releases = UpdateChecker.history()
+    LaunchedEffect(reloadRequest) {
+        loading = true
+        val result = UpdateChecker.history(context, force = reloadRequest > 0)
+        releases = result.releases
+        failed = result.failed
         loading = false
     }
 
@@ -94,8 +104,14 @@ internal fun VersionHistoryPage(onBack: () -> Unit) {
                 )
                 Spacer(Modifier.height(6.dp))
             }
+            failed -> item {
+                StatusCard(
+                    text = stringResource(R.string.about_version_history_failed),
+                    onRetry = { reloadRequest++ }
+                )
+            }
             releases.isEmpty() -> item {
-                StatusText(stringResource(R.string.about_version_history_empty))
+                StatusCard(text = stringResource(R.string.about_version_history_empty))
             }
             else -> items(releases.size) { index ->
                 ReleaseCard(releases[index])
@@ -105,16 +121,24 @@ internal fun VersionHistoryPage(onBack: () -> Unit) {
     }
 }
 
+/** 空状态 / 失败提示：和其它页面的提示一样放在卡片里；失败时下方给一个重试。 */
 @Composable
-private fun StatusText(text: String) {
-    Text(
-        text = text,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 32.dp),
-        color = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-        style = MiuixTheme.textStyles.body2
-    )
+private fun StatusCard(text: String, onRetry: (() -> Unit)? = null) {
+    CardBlock(pressFeedbackType = PressFeedbackType.None) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            style = MiuixTheme.textStyles.body2
+        )
+        if (onRetry != null) {
+            TextButton(
+                text = stringResource(R.string.common_retry),
+                onClick = onRetry,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp)
+            )
+        }
+    }
 }
 
 @Composable

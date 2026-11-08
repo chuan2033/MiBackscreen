@@ -2,6 +2,7 @@ package hook.HyperBackscreen.lyric
 
 import android.annotation.SuppressLint
 import android.os.IBinder
+import android.os.SystemClock
 import com.hchen.superlyricapi.ISuperLyricManager
 import com.hchen.superlyricapi.ISuperLyricReceiver
 import com.hchen.superlyricapi.LyricListener
@@ -17,8 +18,8 @@ import com.hchen.superlyricapi.model.Stop
  * SuperLyric 订阅（只用在背屏中心进程里）。
  *
  * SuperLyric 在 system_server 里把服务 Binder 塞进每个应用进程的 ServiceManager 缓存，所以这里直接
- * `ServiceManager.getService` 就能拿到，不需要权限也不需要被 SuperLyric 勾选。先查 v4，有就用 4.0 库的
- * receiver；没有再直连 3.x。两个后端只注册一个。
+ * `ServiceManager.getService` 就能拿到，不需要权限也不需要被 SuperLyric 勾选（4.2 起按调用方裁剪服务，
+ * 背屏中心是系统应用，两代都能拿到）。先查 v4，有就用 4.0 库的 receiver；没有再直连 3.x。两个后端只注册一个。
  *
  * 回调在 Binder 线程 / 库内部线程，[onLine] / [onStop] 由调用方切回主线程。
  */
@@ -36,8 +37,12 @@ internal class RearLyricSource(
         /**
          * 主动拉一次「当前这一句」。SuperLyric 只在换句时推送，新订阅方在下一次换句前拿不到当前句，
          * 背屏中心每次重新订阅后会空等一整句（长句 / 间奏可达数十秒），表现为背屏歌词跟不上主屏。
+         * [afterRegister] 为 true 时是注册后紧接着的那次：注册期间已经收到推送就不用再拉。
          */
-        fun pullLatest() {}
+        fun pullLatest(afterRegister: Boolean = false) {}
+
+        /** 注册成功日志里的附加信息（服务端版本等）。 */
+        fun describe(): String = ""
     }
 
     private val lock = Any()
@@ -55,7 +60,10 @@ internal class RearLyricSource(
         synchronized(lock) { if (backend != null) return true }
         val type = SuperLyricBackend.select(::lookupService)
         val created: Backend = when (type) {
-            SuperLyricBackend.V4 -> ModernBackend()
+            SuperLyricBackend.V4 -> {
+                val binder = lookupService(SuperLyricServices.V4) ?: return false
+                ModernBackend(binder)
+            }
             SuperLyricBackend.LEGACY -> {
                 val binder = lookupService(SuperLyricServices.LEGACY) ?: return false
                 LegacyBackend(ISuperLyricManager.Stub.asInterface(binder), binder)
@@ -78,8 +86,8 @@ internal class RearLyricSource(
             backendType = type
         }
         watchDeath(created)
-        log("SuperLyric receiver registered via $type")
-        runCatching { created.pullLatest() }
+        log("SuperLyric receiver registered via $type${created.describe()}")
+        runCatching { created.pullLatest(afterRegister = true) }
         return true
     }
 
@@ -104,9 +112,19 @@ internal class RearLyricSource(
     private fun watchDeath(target: Backend) {
         val binder = target.binder ?: return
         val recipient = IBinder.DeathRecipient {
-            synchronized(lock) { if (backend === target) backend = null }
+            val mine = synchronized(lock) {
+                val value = backend === target
+                if (value) {
+                    backend = null
+                    deathRecipient = null
+                }
+                value
+            }
+            // 本地注销：4.0 库的 receiver 是进程单例，不摘掉旧 listener，下次 start() 重绑后新旧两个 listener 都会收帧。
+            // 远端已死，库里的 RemoteException 会被吞掉；3.x 后端检查 isBinderAlive 后跳过。
+            runCatching { target.unregister() }
             log("SuperLyric service died")
-            onStop(LyricSession(null, null))
+            if (mine) onStop(LyricSession(null, null))
         }
         if (runCatching { binder.linkToDeath(recipient, 0) }.isSuccess) {
             synchronized(lock) { deathRecipient = recipient }
@@ -122,8 +140,11 @@ internal class RearLyricSource(
         runCatching { target.binder?.unlinkToDeath(recipient, 0) }
     }
 
-    /** v4：4.0 库负责解 TLV 帧；注册时若正在播放会立刻推一帧，没推就主动拉一次 latest。 */
-    private inner class ModernBackend : Backend {
+    /**
+     * v4：4.0 库负责解 TLV 帧、合并 FULL / STATE。服务端（4.2）在注册后异步推一帧 FULL，所以注册返回时
+     * 通常还没收到，这里主动拉一次 latest；两者内容一样，重复投递无害。
+     */
+    private inner class ModernBackend(override val binder: IBinder) : Backend {
         private val receiver: Receiver = SuperLyric.receiver()
         @Volatile private var delivered = false
         private val listener = object : LyricListener {
@@ -138,20 +159,29 @@ internal class RearLyricSource(
             }
         }
 
-        override val binder: IBinder? get() = lookupService(SuperLyricServices.V4)
-
         override fun register(): Boolean {
             val result = receiver.register(listener)
             if (result != Receiver.RegisterResult.OK) {
                 log("SuperLyric v4 register rejected: $result")
                 return false
             }
-            if (!delivered) runCatching { receiver.latest() }.getOrNull()?.let { onLine(it.toUpdate()) }
             return true
         }
 
         override fun unregister() {
             receiver.unregister(listener)
+        }
+
+        override fun pullLatest(afterRegister: Boolean) {
+            if (afterRegister && delivered) return
+            val view = runCatching { receiver.latest() }.getOrNull() ?: return
+            if (hook.HyperBackscreen.BuildConfig.DEBUG) log("SuperLyric v4 pulled latest: $view")
+            onLine(view.toUpdate())
+        }
+
+        override fun describe(): String {
+            val version = runCatching { SuperLyric.serverApiVersion() }.getOrDefault(0)
+            return if (version > 0) " (server API $version)" else ""
         }
 
         /** 同一首歌每帧都带同一个 Lyric 对象，按引用缓存时间轴，不必每句重建。 */
@@ -162,8 +192,14 @@ internal class RearLyricSource(
             session = LyricSession(publisher, lyric.id),
             text = line?.text,
             paused = state != null && state != PlaybackState.PLAYING && state != PlaybackState.BUFFERING,
-            title = lyric.title,
+            title = lyric.title.takeIf { it.isNotBlank() },
             timeline = timelineOf(lyric),
+            anchor = ProgressAnchor(
+                position = position,
+                speed = speed,
+                elapsedAt = SystemClock.elapsedRealtime(),
+                playing = state == PlaybackState.PLAYING,
+            ),
         )
 
         private fun timelineOf(lyric: com.hchen.superlyricapi.model.Lyric): LyricTimeline? {
@@ -222,7 +258,7 @@ internal class RearLyricSource(
             if (binder.isBinderAlive) manager.unregisterReceiver(stub)
         }
 
-        override fun pullLatest() {
+        override fun pullLatest(afterRegister: Boolean) {
             val data = manager.latestLyric ?: return
             if (data.isStopPayload) return
             val update = project(null, data)

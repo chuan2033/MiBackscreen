@@ -11,6 +11,12 @@ import hook.HyperBackscreen.ui.function.countEnabledFunctions
 import hook.HyperBackscreen.ui.function.countFunctionGroups
 import hook.HyperBackscreen.ui.navigation.HomeNavigationPolicy
 import hook.HyperBackscreen.ui.navigation.HomeRoute
+import hook.HyperBackscreen.ui.components.AppDialog
+import hook.HyperBackscreen.ui.components.LocalPageBackdrop
+import hook.HyperBackscreen.ui.config.ThemePage
+import hook.HyperBackscreen.ui.theme.LocalThemeState
+import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
+import androidx.compose.ui.platform.LocalLayoutDirection
 import hook.HyperBackscreen.ui.home.ActivationState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -42,6 +48,7 @@ import androidx.compose.foundation.pager.PagerDefaults.flingBehavior
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -62,7 +69,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.ui.util.AppLanguage
-import hook.HyperBackscreen.ui.util.ThemeMode
 import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.ui.about.AboutPage
 import hook.HyperBackscreen.ui.about.AppUpdatePage
@@ -91,6 +97,9 @@ import hook.HyperBackscreen.ui.config.ConfigPage
 import hook.HyperBackscreen.ui.function.FunctionPage
 import hook.HyperBackscreen.ui.function.RearDoubleTapPage
 import hook.HyperBackscreen.ui.function.RearCastPage
+import hook.HyperBackscreen.ui.function.RearMusicPage
+import hook.HyperBackscreen.ui.function.RearWidgetPickerPage
+import hook.HyperBackscreen.ui.function.RearWidgetsPage
 import hook.HyperBackscreen.ui.function.RearScreenTimingPage
 import hook.HyperBackscreen.ui.home.HomePage
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -134,7 +143,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
-import top.yukonga.miuix.kmp.window.WindowDialog
 
 private data class NavigationTabItem(
     val tab: HomeNavigationPolicy.Tab,
@@ -295,10 +303,10 @@ internal fun HomeScreen(
     onMusicWidgetWhitelistPickerClosed: () -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
     onRestartScopes: (List<String>) -> Unit,
-    themeMode: ThemeMode,
-    onThemeModeChange: (ThemeMode) -> Unit,
     themeSettingsShortcut: Boolean,
     onThemeSettingsShortcutChange: (Boolean) -> Unit,
+    settingsEntry: String,
+    onSettingsEntryChange: (String) -> Unit,
     onBackupPreferences: () -> Unit,
     onRestorePreferences: () -> Unit,
     batteryColorIdle: String,
@@ -403,6 +411,13 @@ internal fun HomeScreen(
             backdropColor = navBackdropColor
         )
     }
+    // 全屏横滑返回（移植自 KernelSU 的「横移返回手势」）：要在 NavDisplay 的构建 lambda 外读，
+    // NavDisplay 只在构建 lambda 变化时重建 entry，值得由 lambda 捕获才会跟着开关更新。
+    val swipeBackDirection = when {
+        LocalThemeState.current?.swipeBack != true -> null
+        LocalLayoutDirection.current == LayoutDirection.Rtl -> NavSwipeDirection.RightToLeft
+        else -> NavSwipeDirection.LeftToRight
+    }
     Box(Modifier.fillMaxSize()) {
     NavDisplay(
         backStack = backStack,
@@ -411,7 +426,7 @@ internal fun HomeScreen(
         transition = CardStackNavTransition,
         effects = navEffects
     ) {
-        entry<HomeRoute> { page ->
+        entry<HomeRoute>(swipeDismiss = swipeBackDirection) { page ->
             // A covered entry stays alive for back navigation, but must not expose hidden controls.
             Box(
                 modifier = Modifier.fillMaxSize().then(
@@ -420,26 +435,30 @@ internal fun HomeScreen(
             ) {
                 when (page) {
                     HomeRoute.Settings -> SettingsPage(
+                        appLanguage = appLanguage,
+                        enableAppCard = enableAppCard,
+                        launcherIconHidden = launcherIconHidden,
+                        onThemeClick = { openDetail(page, HomeRoute.Theme) },
+                        onAppLanguageChange = onAppLanguageChange,
+                        onEnableAppCardChange = onEnableAppCardChange,
+                        onLauncherIconHiddenChange = onLauncherIconHiddenChange,
+                        themeSettingsShortcut = themeSettingsShortcut,
+                        onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
+                        settingsEntry = settingsEntry,
+                        onSettingsEntryChange = onSettingsEntryChange,
+                        onBackupPreferences = onBackupPreferences,
+                        onRestorePreferences = onRestorePreferences,
+                        onBack = { navigateBackFrom(page) }
+                    )
+                    HomeRoute.Theme -> ThemePage(
                         floatingNavBar = floatingNavBar,
                         liquidGlass = liquidGlass,
                         bottomBarBlur = bottomBarBlur,
                         showFunctionCount = showFunctionCount,
-                        appLanguage = appLanguage,
-                        enableAppCard = enableAppCard,
-                        launcherIconHidden = launcherIconHidden,
                         onFloatingNavBarChange = onFloatingNavBarChange,
                         onLiquidGlassChange = onLiquidGlassChange,
                         onBottomBarBlurChange = onBottomBarBlurChange,
                         onShowFunctionCountChange = onShowFunctionCountChange,
-                        onAppLanguageChange = onAppLanguageChange,
-                        onEnableAppCardChange = onEnableAppCardChange,
-                        onLauncherIconHiddenChange = onLauncherIconHiddenChange,
-                        themeMode = themeMode,
-                        onThemeModeChange = onThemeModeChange,
-                        themeSettingsShortcut = themeSettingsShortcut,
-                        onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
-                        onBackupPreferences = onBackupPreferences,
-                        onRestorePreferences = onRestorePreferences,
                         onBack = { navigateBackFrom(page) }
                     )
                     HomeRoute.License -> LicensePage(onBack = { navigateBackFrom(page) })
@@ -505,7 +524,20 @@ internal fun HomeScreen(
                         titleRes = R.string.music_widget_whitelist_title,
                         hintRes = R.string.music_widget_whitelist_picker_hint
                     )
+                    HomeRoute.RearMusic -> RearMusicPage(
+                        musicWidgetWhitelistPackages = musicWidgetWhitelistPackages,
+                        rearMedia = rearMedia,
+                        onRearMediaChange = onRearMediaChange,
+                        onWhitelistClick = { openDetail(page, HomeRoute.MusicWhitelistAppPicker) },
+                        onBack = { navigateBackFrom(page) }
+                    )
                     HomeRoute.RearScreenRecord -> RearScreenRecordPage(onBack = { navigateBackFrom(page) })
+                    HomeRoute.RearWidgets -> RearWidgetsPage(
+                        onAddClick = { openDetail(page, HomeRoute.RearWidgetPicker) },
+                        onBack = { navigateBackFrom(page) }
+                    )
+                    HomeRoute.RearWidgetPicker -> RearWidgetPickerPage(onBack = { navigateBackFrom(page) })
+                    // 功能页已不放入口；路由只追加不删，保留它让旧版本保存的返回栈仍能恢复到这一页。
                     HomeRoute.RearCast -> RearCastPage(
                         onRearScreenTimingClick = { openDetail(page, HomeRoute.RearScreenTiming) },
                         onBack = { navigateBackFrom(page) }
@@ -549,17 +581,17 @@ internal fun HomeScreen(
                         onLauncherIconHiddenChange = onLauncherIconHiddenChange,
                         onSettingsClick = { openDetail(page, HomeRoute.Settings) },
                         onRearDoubleTapClick = { openDetail(page, HomeRoute.RearDoubleTap) },
-                        onMusicWidgetWhitelistClick = { openDetail(page, HomeRoute.MusicWhitelistAppPicker) },
+                        onRearMusicClick = { openDetail(page, HomeRoute.RearMusic) },
+                        onRearWidgetsClick = { openDetail(page, HomeRoute.RearWidgets) },
                         onRearScreenRecordClick = { openDetail(page, HomeRoute.RearScreenRecord) },
-                        onRearCastClick = { openDetail(page, HomeRoute.RearCast) },
                         onLicenseClick = { openDetail(page, HomeRoute.License) },
                         onDonateClick = { openDetail(page, HomeRoute.Donate) },
                         onAppUpdateClick = { openDetail(page, HomeRoute.AppUpdate) },
                         onRestartScopes = onRestartScopes,
-                        themeMode = themeMode,
-                        onThemeModeChange = onThemeModeChange,
                         themeSettingsShortcut = themeSettingsShortcut,
                         onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
+                        settingsEntry = settingsEntry,
+                        onSettingsEntryChange = onSettingsEntryChange,
                         onBatteryColorClick = { openDetail(page, HomeRoute.BatteryColor) },
                         onRearScreenTimingClick = { openDetail(page, HomeRoute.RearScreenTiming) },
                         rearMedia = rearMedia,
@@ -588,24 +620,17 @@ internal fun HomeScreen(
 
 @Composable
 private fun SettingsPage(
-    floatingNavBar: Boolean,
-    liquidGlass: Boolean,
-    bottomBarBlur: Boolean,
-    showFunctionCount: Boolean,
     appLanguage: AppLanguage,
     enableAppCard: Boolean,
     launcherIconHidden: Boolean,
-    onFloatingNavBarChange: (Boolean) -> Unit,
-    onLiquidGlassChange: (Boolean) -> Unit,
-    onBottomBarBlurChange: (Boolean) -> Unit,
-    onShowFunctionCountChange: (Boolean) -> Unit,
+    onThemeClick: () -> Unit,
     onAppLanguageChange: (AppLanguage) -> Unit,
     onEnableAppCardChange: (Boolean) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
-    themeMode: ThemeMode,
-    onThemeModeChange: (ThemeMode) -> Unit,
     themeSettingsShortcut: Boolean,
     onThemeSettingsShortcutChange: (Boolean) -> Unit,
+    settingsEntry: String,
+    onSettingsEntryChange: (String) -> Unit,
     onBackupPreferences: () -> Unit,
     onRestorePreferences: () -> Unit,
     onBack: () -> Unit
@@ -617,24 +642,17 @@ private fun SettingsPage(
     ) {
         item {
             ConfigPage(
-                floatingNavBar = floatingNavBar,
-                liquidGlass = liquidGlass,
-                bottomBarBlur = bottomBarBlur,
-                showFunctionCount = showFunctionCount,
                 appLanguage = appLanguage,
                 enableAppCard = enableAppCard,
                 launcherIconHidden = launcherIconHidden,
-                onFloatingNavBarChange = onFloatingNavBarChange,
-                onLiquidGlassChange = onLiquidGlassChange,
-                onBottomBarBlurChange = onBottomBarBlurChange,
-                onShowFunctionCountChange = onShowFunctionCountChange,
+                onThemeClick = onThemeClick,
                 onAppLanguageChange = onAppLanguageChange,
                 onEnableAppCardChange = onEnableAppCardChange,
                 onLauncherIconHiddenChange = onLauncherIconHiddenChange,
-                themeMode = themeMode,
-                onThemeModeChange = onThemeModeChange,
                 themeSettingsShortcut = themeSettingsShortcut,
                 onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
+                settingsEntry = settingsEntry,
+                onSettingsEntryChange = onSettingsEntryChange,
                 onBackupPreferences = onBackupPreferences,
                 onRestorePreferences = onRestorePreferences
             )
@@ -648,6 +666,7 @@ private fun MainTabPage(
     enable18ProFeatures: Boolean,
     onEnable18ProFeaturesChange: (Boolean) -> Unit,
     tab: HomeNavigationPolicy.Tab,
+    isCurrentPage: Boolean,
     listState: LazyListState,
     moduleActivated: ActivationState,
     disableLongPress: Boolean,
@@ -659,7 +678,6 @@ private fun MainTabPage(
     doubleTapWakeDisabledPackages: String,
     doubleTapSleepDisabledPackages: String,
     musicWidgetWhitelistPackages: String,
-    themeMode: ThemeMode,
     onDonateClick: () -> Unit,
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
@@ -668,9 +686,9 @@ private fun MainTabPage(
     onFaceEnrollmentCompatChange: (Boolean) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onRearDoubleTapClick: () -> Unit,
-    onMusicWidgetWhitelistClick: () -> Unit,
+    onRearMusicClick: () -> Unit,
+    onRearWidgetsClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit,
-    onRearCastClick: () -> Unit,
     onBatteryColorClick: () -> Unit,
     onRearScreenTimingClick: () -> Unit,
     onLicenseClick: () -> Unit,
@@ -727,6 +745,7 @@ private fun MainTabPage(
             }
         }
     ) { innerPadding ->
+        CompositionLocalProvider(LocalPageBackdrop provides backdrop) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -738,9 +757,11 @@ private fun MainTabPage(
                     .fillMaxSize()
                     .scrollEndHaptic()
                     .overScrollVertical()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .padding(horizontal = 12.dp),
+                    .nestedScroll(scrollBehavior.nestedScrollConnection),
+                // 左右留白放进 contentPadding：给列表本身加 padding 会把卡片阴影在两侧裁出竖直灰边。
                 contentPadding = PaddingValues(
+                    start = 12.dp,
+                    end = 12.dp,
                     top = innerPadding.calculateTopPadding()
                 )
             ) {
@@ -748,6 +769,7 @@ private fun MainTabPage(
                     HomeNavigationPolicy.Tab.HOME -> item {
                         HomePage(
                             moduleActivated = moduleActivated,
+                            visible = isCurrentPage,
                             onDonateClick = onDonateClick
                         )
                     }
@@ -772,9 +794,9 @@ private fun MainTabPage(
                             onFaceEnrollmentCompatChange = onFaceEnrollmentCompatChange,
                             onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                             onRearDoubleTapClick = onRearDoubleTapClick,
-                            onMusicWidgetWhitelistClick = onMusicWidgetWhitelistClick,
+                            onRearMusicClick = onRearMusicClick,
+                            onRearWidgetsClick = onRearWidgetsClick,
                             onRearScreenRecordClick = onRearScreenRecordClick,
-                            onRearCastClick = onRearCastClick,
                             onBatteryColorClick = onBatteryColorClick,
                             onRearScreenTimingClick = onRearScreenTimingClick,
                             rearMedia = rearMedia,
@@ -796,6 +818,7 @@ private fun MainTabPage(
                     )
                 }
             }
+        }
         }
     }
 }
@@ -840,17 +863,17 @@ private fun MainContent(
     onLauncherIconHiddenChange: (Boolean) -> Unit,
     onSettingsClick: () -> Unit,
     onRearDoubleTapClick: () -> Unit,
-    onMusicWidgetWhitelistClick: () -> Unit,
+    onRearMusicClick: () -> Unit,
+    onRearWidgetsClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit,
-    onRearCastClick: () -> Unit,
     onLicenseClick: () -> Unit,
     onDonateClick: () -> Unit,
     onAppUpdateClick: () -> Unit,
     onRestartScopes: (List<String>) -> Unit,
-    themeMode: ThemeMode,
-    onThemeModeChange: (ThemeMode) -> Unit,
     themeSettingsShortcut: Boolean,
     onThemeSettingsShortcutChange: (Boolean) -> Unit,
+    settingsEntry: String,
+    onSettingsEntryChange: (String) -> Unit,
     onBatteryColorClick: () -> Unit,
     onRearScreenTimingClick: () -> Unit,
     rearMedia: RearMediaSwitches,
@@ -925,6 +948,7 @@ private fun MainContent(
                 enable18ProFeatures = enable18ProFeatures,
                 onEnable18ProFeaturesChange = onEnable18ProFeaturesChange,
                 tab = tab,
+                isCurrentPage = page == pagerState.currentPage,
                 listState = when (tab) {
                     HomeNavigationPolicy.Tab.HOME -> homeListState
                     HomeNavigationPolicy.Tab.FUNCTION -> functionListState
@@ -940,7 +964,6 @@ private fun MainContent(
                 doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
                 doubleTapSleepDisabledPackages = doubleTapSleepDisabledPackages,
                 musicWidgetWhitelistPackages = musicWidgetWhitelistPackages,
-                themeMode = themeMode,
                 onDonateClick = onDonateClick,
                 onDisableLongPressChange = onDisableLongPressChange,
                 onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
@@ -949,9 +972,9 @@ private fun MainContent(
                 onFaceEnrollmentCompatChange = onFaceEnrollmentCompatChange,
                 onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                 onRearDoubleTapClick = onRearDoubleTapClick,
-                onMusicWidgetWhitelistClick = onMusicWidgetWhitelistClick,
+                onRearMusicClick = onRearMusicClick,
+                onRearWidgetsClick = onRearWidgetsClick,
                 onRearScreenRecordClick = onRearScreenRecordClick,
-                onRearCastClick = onRearCastClick,
                 onBatteryColorClick = onBatteryColorClick,
                 onRearScreenTimingClick = onRearScreenTimingClick,
                 onLicenseClick = onLicenseClick,
@@ -1070,7 +1093,7 @@ private fun MainContent(
             }
     }
 
-    WindowDialog(
+    AppDialog(
         show = showRestartDialog,
         title = stringResource(R.string.restart_title),
         onDismissRequest = { showRestartDialog = false },

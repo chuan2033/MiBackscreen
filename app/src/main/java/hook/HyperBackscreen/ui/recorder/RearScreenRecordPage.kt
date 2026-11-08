@@ -1,11 +1,14 @@
 package hook.HyperBackscreen.ui.recorder
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.SystemClock
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -15,7 +18,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
@@ -33,16 +35,17 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 /**
  * 「背屏录屏」二级页：一个开始 / 停止按钮加录制计时。
  *
- * 录制状态在 [RearScreenRecorder] 单例里，这里只展示与发指令。离开本页、App 退到后台都会
- * 停止录制并保存；录制期间保持主屏常亮，免得主屏超时熄灭把 App 切到后台、录制被提前结束。
+ * 录制状态在 [RearScreenRecorder] 单例里、由 [RearRecordService] 前台服务托住进程，这里只展示与发指令：
+ * 离开本页、App 退到后台都不影响录制，可以从通知或控制中心磁贴停止。
  */
 @Composable
 internal fun RearScreenRecordPage(onBack: () -> Unit) {
     val context = LocalContext.current
     val resources = LocalResources.current
     val feedback = LocalUiFeedback.current
-    val view = LocalView.current
     val state by RearScreenRecorder.state.collectAsState()
+    // 录制通知（计时 + 停止按钮）需要通知权限；不给也照样录，只是通知栏里看不到，可以用磁贴停止。
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     LaunchedEffect(Unit) {
         RearScreenRecorder.events.collect { event ->
@@ -52,23 +55,6 @@ internal fun RearScreenRecordPage(onBack: () -> Unit) {
             }
             feedback?.show(message)
         }
-    }
-
-    // 录背屏时人通常会把手机翻过来操作背屏，主屏随之熄灭、App 退到后台，所以退后台不能停；
-    // 只有离开这个页面才停。Activity 因切语言 / 深色模式重建时录制继续，新页面接着显示状态。
-    DisposableEffect(Unit) {
-        onDispose {
-            var host: android.content.Context? = context
-            while (host is android.content.ContextWrapper && host !is android.app.Activity) host = host.baseContext
-            val recreating = (host as? android.app.Activity)?.isChangingConfigurations == true
-            if (!recreating) RearScreenRecorder.stop(context)
-        }
-    }
-
-    val active = state !is RearRecorderState.Idle
-    DisposableEffect(view, active) {
-        view.keepScreenOn = active
-        onDispose { view.keepScreenOn = false }
     }
 
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
@@ -115,7 +101,14 @@ internal fun RearScreenRecordPage(onBack: () -> Unit) {
                         Button(
                             onClick = {
                                 if (recording) RearScreenRecorder.stop(context)
-                                else RearScreenRecorder.start(context)
+                                else {
+                                    if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                                        PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    }
+                                    if (!RearRecordService.start(context)) RearScreenRecorder.start(context)
+                                }
                             },
                             modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(48.dp),
                             enabled = current == RearRecorderState.Idle || recording,

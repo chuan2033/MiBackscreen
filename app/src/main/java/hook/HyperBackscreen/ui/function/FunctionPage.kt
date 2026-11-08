@@ -3,25 +3,13 @@ package hook.HyperBackscreen.ui.function
 import android.os.Build
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import hook.HyperBackscreen.R
 
 import hook.HyperBackscreen.common.PackageListCodec
 import hook.HyperBackscreen.batteryring.BatteryRingGeometry
-import hook.HyperBackscreen.lyric.SuperLyricAvailability
-import hook.HyperBackscreen.ui.components.AnimatedPreferenceVisibility
 import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.components.CollapsibleFunctionGroup
-import hook.HyperBackscreen.ui.components.SettingsInfoRow
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
@@ -49,9 +37,9 @@ internal fun FunctionPage(
     onRearDoubleTapClick: () -> Unit,
     doubleTapSleepDisabledPackages: String,
     musicWidgetWhitelistPackages: String,
-    onMusicWidgetWhitelistClick: () -> Unit,
+    onRearMusicClick: () -> Unit,
+    onRearWidgetsClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit,
-    onRearCastClick: () -> Unit = {},
     rearMedia: RearMediaSwitches = RearMediaSwitches(),
     onRearMediaChange: (RearMediaSwitch, Boolean) -> Unit = { _, _ -> },
 ) {
@@ -121,43 +109,17 @@ internal fun FunctionPage(
                     title = stringResource(R.string.rear_screen_timing_title),
                     onClick = onRearScreenTimingClick
                 )
-                val musicAppCount = PackageListCodec.parse(musicWidgetWhitelistPackages).size
+                // 音乐卡片白名单与实时歌词收进「背屏音乐」二级页，这里只留入口。
                 ArrowPreference(
-                    title = stringResource(R.string.music_widget_whitelist_title),
-                    summary = if (musicAppCount == 0) {
-                        stringResource(R.string.music_widget_whitelist_summary_none)
-                    } else {
-                        pluralStringResource(
-                            R.plurals.music_widget_whitelist_summary_count,
-                            musicAppCount,
-                            musicAppCount
-                        )
-                    },
-                    onClick = onMusicWidgetWhitelistClick
+                    title = stringResource(R.string.rear_music_title),
+                    summary = rearMusicEntrySummary(rearMedia.rearLyric, musicWidgetWhitelistPackages),
+                    onClick = onRearMusicClick
                 )
-                // 应用投放到背屏：默认可用、没有开关，入口进说明页（磁贴、面板卡片、重启生效）。
                 ArrowPreference(
-                    title = stringResource(R.string.rear_cast_title),
-                    summary = stringResource(R.string.rear_cast_entry_summary),
-                    onClick = onRearCastClick
+                    title = stringResource(R.string.rear_widgets_title),
+                    summary = rearWidgetsEntrySummary(),
+                    onClick = onRearWidgetsClick
                 )
-                SwitchPreference(
-                    checked = rearMedia.rearLyric,
-                    onCheckedChange = { onRearMediaChange(RearMediaSwitch.REAR_LYRIC, it) },
-                    title = stringResource(R.string.rear_lyric_title),
-                    summary = stringResource(R.string.rear_lyric_summary)
-                )
-                AnimatedPreferenceVisibility(visible = rearMedia.rearLyric) {
-                    Column {
-                        SuperLyricStatusRow(active = rearMedia.rearLyric)
-                        SwitchPreference(
-                            checked = rearMedia.rearLyricInAod,
-                            onCheckedChange = { onRearMediaChange(RearMediaSwitch.REAR_LYRIC_IN_AOD, it) },
-                            title = stringResource(R.string.rear_lyric_in_aod_title),
-                            summary = stringResource(R.string.rear_lyric_in_aod_summary)
-                        )
-                    }
-                }
             }
 
             CollapsibleFunctionGroup(
@@ -215,31 +177,3 @@ internal fun FunctionPage(
     }
 }
 
-/** 歌词开关下的 SuperLyric 状态：模块 App 进程里能拿到服务，背屏中心里也一定能拿到。 */
-@Composable
-private fun SuperLyricStatusRow(active: Boolean) {
-    val context = LocalContext.current
-    var status by remember { mutableStateOf<SuperLyricAvailability?>(null) }
-    // 每次打开开关重新检测一次（用户可能刚去 LSPosed 勾完作用域回来）；检测有 Binder 调用，放 IO 线程。
-    LaunchedEffect(active) {
-        if (active) {
-            status = null
-            status = withContext(Dispatchers.IO) {
-                runCatching { SuperLyricAvailability.detect(context.applicationContext) }.getOrNull()
-                    ?: SuperLyricAvailability.SERVICE_UNAVAILABLE
-            }
-        }
-    }
-    SettingsInfoRow(
-        label = stringResource(R.string.rear_lyric_status_label),
-        value = stringResource(
-            when (status) {
-                null -> R.string.rear_lyric_status_checking
-                SuperLyricAvailability.V4 -> R.string.rear_lyric_status_v4
-                SuperLyricAvailability.LEGACY -> R.string.rear_lyric_status_legacy
-                SuperLyricAvailability.SERVICE_UNAVAILABLE -> R.string.rear_lyric_status_unavailable
-                SuperLyricAvailability.NOT_INSTALLED -> R.string.rear_lyric_status_not_installed
-            }
-        )
-    )
-}
