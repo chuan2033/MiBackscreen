@@ -398,6 +398,9 @@ internal fun RearScreenApp() {
             sendAutoWallpaperSync(context, AutoWallpaperInterval.fromPref(after.autoWallpaperIntervalMinutes))
         }
         // 歌词开关不重启背屏中心，和手动切换一样只发同步广播。
+        if (after.rearAppWidgets != before.rearAppWidgets) {
+            hook.HyperBackscreen.ui.function.RearWidgetSelection.reload(context)
+        }
         if (after.enableRearLyric != before.enableRearLyric) {
             sendRearLyricSync(context, Constants.KEY_ENABLE_REAR_LYRIC, after.enableRearLyric)
         }
