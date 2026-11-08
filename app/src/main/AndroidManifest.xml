@@ -9,6 +9,10 @@
     <uses-permission android:name="${applicationId}.permission.SYNC_HOST" />
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 背屏录屏：录制期间用前台服务托住进程（root screenrecord，不走 MediaProjection，所以是 specialUse）。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
@@ -62,6 +66,30 @@
             <meta-data
                 android:name="android.service.quicksettings.TOGGLEABLE_TILE"
                 android:value="true" />
+        </service>
+
+        <!-- 控制中心「背屏录屏」磁贴：点一下开始，再点一下停止并保存。 -->
+        <service
+            android:name=".tile.RearRecordTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_rear_record"
+            android:label="@string/rear_record_title"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
+        <service
+            android:name=".ui.recorder.RearRecordService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Records the rear display with root screenrecord while the user is away from the app" />
         </service>
 
         <provider
