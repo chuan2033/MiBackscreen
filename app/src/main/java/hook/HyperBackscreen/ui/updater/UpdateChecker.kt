@@ -20,6 +20,12 @@ data class UpdateInfo(
     val apkUrl: String,
 )
 
+/**
+ * 版本历史的读取结果。[failed] 表示这次没拿到数据（网络或接口异常）且也没有可用的旧缓存，
+ * 页面要和「确实没有发布」区分开。
+ */
+data class ReleaseHistory(val releases: List<UpdateInfo>, val failed: Boolean)
+
 /** 一次检查的结果：有新版 / 已是最新 / 检查失败（网络或接口异常），三者要区分开展示。 */
 sealed interface UpdateCheckResult {
     data class Available(val info: UpdateInfo) : UpdateCheckResult
@@ -88,13 +94,79 @@ object UpdateChecker {
         return result
     }
 
-    /** 全部正式版，新的在前；网络失败返回空列表。用于「版本历史」。 */
-    suspend fun history(): List<UpdateInfo> = withContext(Dispatchers.IO) {
+    /**
+     * 全部正式版，新的在前。用于「版本历史」。
+     *
+     * 结果缓存半天（[HISTORY_CACHE_MS]）：内存一份，cacheDir 里再存一份，App 重启后也不用重新请求，
+     * 同样是为了省 GitHub 未登录请求的配额。缓存过期后请求失败时，退回旧缓存继续展示；
+     * 连旧缓存都没有才算失败。[force] 用于页面上的「重试」，跳过缓存直接请求。
+     */
+    suspend fun history(context: Context, force: Boolean = false): ReleaseHistory = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val cached = historyCache ?: readHistoryCache(context)?.also { historyCache = it }
+        if (!force && cached != null && now - cached.first in 0 until HISTORY_CACHE_MS) {
+            return@withContext ReleaseHistory(cached.second, failed = false)
+        }
         try {
-            readReleases()
+            val releases = readReleases()
+            historyCache = now to releases
+            writeHistoryCache(context, now, releases)
+            ReleaseHistory(releases, failed = false)
         } catch (e: Exception) {
             Log.w("MiBackscreen", "release history failed", e)
-            emptyList()
+            cached?.let { ReleaseHistory(it.second, failed = false) } ?: ReleaseHistory(emptyList(), failed = true)
+        }
+    }
+
+    private const val HISTORY_CACHE_MS = 12L * 60 * 60 * 1000
+    private const val HISTORY_CACHE_FILE = "release_history.json"
+
+    /** 内存里的版本历史缓存：(拉取时间, 列表)。 */
+    @Volatile
+    private var historyCache: Pair<Long, List<UpdateInfo>>? = null
+
+    private fun readHistoryCache(context: Context): Pair<Long, List<UpdateInfo>>? = try {
+        val file = java.io.File(context.cacheDir, HISTORY_CACHE_FILE)
+        if (!file.isFile) {
+            null
+        } else {
+            val root = JSONObject(file.readText())
+            val array = root.getJSONArray("releases")
+            val list = (0 until array.length()).map { i ->
+                val item = array.getJSONObject(i)
+                UpdateInfo(
+                    versionName = item.getString("versionName"),
+                    publishedAt = item.optString("publishedAt", ""),
+                    notes = item.optString("notes", ""),
+                    apkUrl = item.getString("apkUrl"),
+                )
+            }
+            root.getLong("fetchedAt") to list
+        }
+    } catch (e: Exception) {
+        Log.w("MiBackscreen", "release history cache unreadable", e)
+        null
+    }
+
+    private fun writeHistoryCache(context: Context, fetchedAt: Long, releases: List<UpdateInfo>) {
+        try {
+            val array = JSONArray()
+            releases.forEach { info ->
+                array.put(
+                    JSONObject()
+                        .put("versionName", info.versionName)
+                        .put("publishedAt", info.publishedAt)
+                        .put("notes", info.notes)
+                        .put("apkUrl", info.apkUrl)
+                )
+            }
+            val root = JSONObject().put("fetchedAt", fetchedAt).put("releases", array)
+            val file = java.io.File(context.cacheDir, HISTORY_CACHE_FILE)
+            val tmp = java.io.File(context.cacheDir, "$HISTORY_CACHE_FILE.tmp")
+            tmp.writeText(root.toString())
+            if (!tmp.renameTo(file)) tmp.delete()
+        } catch (e: Exception) {
+            Log.w("MiBackscreen", "release history cache write failed", e)
         }
     }
 
