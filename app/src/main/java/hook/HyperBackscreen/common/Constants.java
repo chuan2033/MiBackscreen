@@ -81,6 +81,8 @@ public final class Constants {
      * 背屏中心当成「支持的音乐应用」，播放时显示背屏音乐卡片。空 = 完全沿用宿主内置名单。
      */
     public static final String KEY_MUSIC_WIDGET_WHITELIST_PACKAGES = "music_widget_whitelist_packages";
+    /** 背屏小部件：用户选中的 AppWidget 提供方（ComponentName 扁平串，一行一个），见 RearWidgetList。 */
+    public static final String KEY_REAR_APP_WIDGETS = "rear_app_widgets";
     /**
      * 按应用禁用背屏「双击熄屏」（包名列表，PackageListCodec 编码）。与上面的双击唤醒名单
      * 互不相干：那份管「熄屏时双击不亮」，这份管「亮屏时双击不灭」。
@@ -127,6 +129,9 @@ public final class Constants {
      */
     public static final String ACTION_SYNC_REAR_LYRIC =
             MODULE_PACKAGE + ".action.SYNC_REAR_LYRIC";
+    /** 背屏小部件列表变化：extra {@link #EXTRA_PREFERENCE_VALUE} 为新的列表串，背屏中心即时重排页面。 */
+    public static final String ACTION_SYNC_REAR_WIDGETS =
+            MODULE_PACKAGE + ".action.SYNC_REAR_WIDGETS";
     public static final String EXTRA_PREFERENCE_KEY = "preference_key";
     public static final String EXTRA_INTERVAL_MINUTES = "interval_minutes";
     public static final String PANEL_DIAGNOSTIC_METHOD_APPEND = "append_diagnostic";

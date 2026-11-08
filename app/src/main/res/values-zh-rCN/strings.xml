@@ -433,4 +433,20 @@
     <string name="config_module_entry_scope_request">请在 LSPosed 通知里允许模块作用于「设置」</string>
     <string name="config_module_entry_scope_failed">无法把「设置」加入作用域，请在 LSPosed 里手动勾选</string>
     <string name="about_version_history_failed">无法获取版本记录，请检查网络后重试</string>
+    <!-- 背屏小部件 -->
+    <string name="rear_widgets_title">背屏小部件</string>
+    <string name="rear_widgets_summary_none">把桌面小部件放到背屏上</string>
+    <plurals name="rear_widgets_summary_count">
+        <item quantity="other">已添加 %1$d 个</item>
+    </plurals>
+    <string name="rear_widgets_section_added">已添加</string>
+    <string name="rear_widgets_empty">还没有添加小部件</string>
+    <string name="rear_widgets_uninstalled">应用已卸载，不会显示</string>
+    <string name="rear_widgets_remove">移除</string>
+    <string name="rear_widgets_add">添加小部件</string>
+    <string name="rear_widgets_hint">每个小部件是背屏上的一页，排在壁纸后面，左右滑动查看，会自动避开摄像头区域。最多 %1$d 个；需要先配置的小部件暂不支持。</string>
+    <string name="rear_widgets_option_summary">%1$s · %2$d×%3$d</string>
+    <string name="rear_widgets_cells">%1$d×%2$d</string>
+    <string name="rear_widgets_loading">正在读取小部件…</string>
+    <string name="rear_widgets_already_added">已添加</string>
 </resources>
