@@ -45,6 +45,7 @@ internal data class ModulePreferencesSnapshot(
     val faceEnrollmentCompat: Boolean = PrefsBridge.DEFAULT_FACE_ENROLLMENT_COMPAT,
     val doubleTapSleepDisabledPackages: String = PrefsBridge.DEFAULT_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES,
     val musicWidgetWhitelistPackages: String = PrefsBridge.DEFAULT_MUSIC_WIDGET_WHITELIST_PACKAGES,
+    val rearAppWidgets: String = PrefsBridge.DEFAULT_REAR_APP_WIDGETS,
     val rearVideoResume: Boolean = PrefsBridge.DEFAULT_REAR_VIDEO_RESUME,
     val rearVideoUnlockLimits: Boolean = PrefsBridge.DEFAULT_REAR_VIDEO_UNLOCK_LIMITS,
     val rearVideoKeepAudio: Boolean = PrefsBridge.DEFAULT_REAR_VIDEO_KEEP_AUDIO,
@@ -67,6 +68,7 @@ internal data class ModulePreferencesSnapshot(
             Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES,
             Constants.KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES,
             Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES,
+            Constants.KEY_REAR_APP_WIDGETS,
             Constants.KEY_BATTERY_COLOR_IDLE,
             Constants.KEY_BATTERY_COLOR_CHARGING,
             Constants.KEY_BATTERY_COLOR_LOW,
@@ -125,6 +127,8 @@ internal data class ModulePreferencesSnapshot(
                     ?: PrefsBridge.DEFAULT_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES,
                 musicWidgetWhitelistPackages = value(Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES) as? String
                     ?: PrefsBridge.DEFAULT_MUSIC_WIDGET_WHITELIST_PACKAGES,
+                rearAppWidgets = value(Constants.KEY_REAR_APP_WIDGETS) as? String
+                    ?: PrefsBridge.DEFAULT_REAR_APP_WIDGETS,
                 batteryColorIdle = value(Constants.KEY_BATTERY_COLOR_IDLE) as? String
                     ?: PrefsBridge.DEFAULT_BATTERY_COLOR,
                 batteryColorCharging = value(Constants.KEY_BATTERY_COLOR_CHARGING) as? String
