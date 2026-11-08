@@ -1,5 +1,10 @@
 package hook.HyperBackscreen.ui.about
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +18,9 @@ import top.yukonga.miuix.kmp.squircle.squircleClip
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -28,19 +36,45 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 @Composable
-internal fun AboutPage(onLicenseClick: () -> Unit = {}) {
-    AboutHeader()
+internal fun AboutPage(
+    onLicenseClick: () -> Unit = {},
+    onAppUpdateClick: () -> Unit = {}
+) {
+    AboutHeader(onVersionClick = onAppUpdateClick)
 
+    SmallTitle(text = stringResource(R.string.about_developer_title), insideMargin = PaddingValues(16.dp, 8.dp))
     CardBlock(pressFeedbackType = PressFeedbackType.None) {
         AboutArrowPreference(
-            title = stringResource(R.string.about_developer_title),
-            summary = "AxlQ",
-            url = "https://github.com/chuan2033"
+            title = "Axl_Q",
+            summary = null,
+            url = "https://github.com/chuan2033",
+            avatar = R.drawable.avatar_axlq
+        )
+    }
+
+    // 项目地址和应用更新都是「这个模块本身」的信息，放进同一张卡，不再单独占一块。
+    SmallTitle(text = stringResource(R.string.about_module_title), insideMargin = PaddingValues(16.dp, 8.dp))
+    CardBlock(pressFeedbackType = PressFeedbackType.None) {
+        AboutArrowPreference(
+            title = "MiBackscreen",
+            summary = null,
+            url = "https://github.com/chuan2033/MiBackscreen",
+            startAction = {
+                Image(
+                    painter = painterResource(R.drawable.ic_github),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    contentScale = ContentScale.Fit,
+                    colorFilter = ColorFilter.tint(
+                        if (MiuixTheme.colorScheme.surface.luminance() < 0.5f) Color.White else Color.Black
+                    )
+                )
+            }
         )
         AboutArrowPreference(
-            title = stringResource(R.string.about_project_url_title),
-            summary = "MiBackscreen",
-            url = "https://github.com/chuan2033/MiBackscreen"
+            title = stringResource(R.string.about_update_title),
+            summary = null,
+            onClick = onAppUpdateClick
         )
     }
 
@@ -61,7 +95,7 @@ internal fun AboutPage(onLicenseClick: () -> Unit = {}) {
 }
 
 @Composable
-private fun AboutHeader() {
+private fun AboutHeader(onVersionClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -79,7 +113,7 @@ private fun AboutHeader() {
         ) {
             Image(
                 painter = painterResource(id = R.drawable.ic_about_logo),
-                contentDescription = "App Icon",
+                contentDescription = null,
                 modifier = Modifier.size(HomeUiTokens.AboutLogoSize),
                 contentScale = ContentScale.Fit
             )
@@ -91,8 +125,18 @@ private fun AboutHeader() {
             style = MiuixTheme.textStyles.title1
         )
         Spacer(modifier = Modifier.height(HomeUiTokens.AboutVersionSpacing))
+        // 版本号做成胶囊按钮：点它直接进「应用更新」，底色提示它可以点。
         Text(
-            text = stringResource(R.string.about_version, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
+            text = stringResource(R.string.about_version, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE) + "  ›",
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(MiuixTheme.colorScheme.surfaceContainer)
+                .clickable(
+                    onClickLabel = stringResource(R.string.about_update_title),
+                    role = Role.Button,
+                    onClick = onVersionClick
+                )
+                .padding(horizontal = 12.dp, vertical = 4.dp),
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             style = MiuixTheme.textStyles.body2
         )

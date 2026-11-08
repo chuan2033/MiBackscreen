@@ -54,3 +54,32 @@ jobs:
 
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon --console=plain
+
+  ksu-module:
+    # 附加资源模块的脚本在设备上由 busybox ash 执行：语法错误、CRLF、BOM 都会让模块直接失效。
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install busybox
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq busybox
+
+      - name: Syntax check (dash + busybox ash)
+        run: |
+          status=0
+          for f in $(git ls-files 'ksu-module/*.sh'); do
+            sh -n "$f" || status=1
+            busybox sh -n "$f" || status=1
+          done
+          exit $status
+
+      - name: ShellCheck (errors only)
+        run: shellcheck -s sh -S error $(git ls-files 'ksu-module/*.sh')
+
+      - name: No CRLF or BOM in module files
+        run: |
+          bad=$(git ls-files ksu-module/packaging | while read -r f; do
+            if grep -qU $'\r' "$f" || head -c3 "$f" | grep -q $'\xef\xbb\xbf'; then echo "$f"; fi
+          done)
+          if [ -n "$bad" ]; then echo "CRLF/BOM found:"; echo "$bad"; exit 1; fi

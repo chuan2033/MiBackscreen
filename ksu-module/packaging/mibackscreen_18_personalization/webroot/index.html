@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<title>MiBackscreen背屏附加资源 · 状态</title>
+<!-- 官方推荐的内联引入方式：命中宿主虚拟域时由 SuFilePathHandler 动态生成安全区变量，
+     同时自动启用 enableEdgeToEdge，页面才铺得到状态栏与手势条区域。 -->
+<link rel="stylesheet" type="text/css" href="/internal/insets.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="statusveil" id="statusveil"></div>
+
+<div class="busybar" id="busybar" hidden><i></i></div>
+
+<div class="hero">
+    <div class="hero-top">
+        <div>
+            <h1>MiBackscreen背屏附加资源</h1>
+            <div class="ver">18 系列个性化 · KSU 附加模块</div>
+        </div>
+        <div class="badge busy" id="badge">检测中…</div>
+    </div>
+</div>
+
+<div id="sections">
+    <div class="empty"><span class="spinner"></span>正在检查模块状态…</div>
+</div>
+
+<div class="hint">
+    卡住了？先点「重新检测」。<br>
+    卡片不出现多半是配套 App 没装，看「卡片就绪度」那一栏。
+</div>
+
+<div class="dock">
+    <button id="btn-refresh" class="primary">重新检测</button>
+    <button id="btn-restart">重启宿主</button>
+    <button id="btn-log">导出日志</button>
+    <button id="btn-copy">复制诊断</button>
+</div>
+
+<div id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

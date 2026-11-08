@@ -4,18 +4,23 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.app.LocaleManager
+import android.content.res.Configuration
 import android.os.Build
+import android.os.Environment
 import androidx.core.content.FileProvider
 import hook.HyperBackscreen.BuildConfig
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.bridge.DiagnosticLogStore
 import hook.HyperBackscreen.bridge.PrefsBridge
 import hook.HyperBackscreen.common.Constants
-import hook.HyperBackscreen.ui.LauncherIconController
+import hook.HyperBackscreen.lyric.SuperLyricAvailability
+import hook.HyperBackscreen.ui.util.LauncherIconController
 import hook.HyperBackscreen.ui.util.RearDisplayCompatibility
 import hook.HyperBackscreen.ui.util.currentDeviceName
 import hook.HyperBackscreen.ui.util.currentHyperOSVersion
 import hook.HyperBackscreen.ui.util.currentSystemVersion
+import hook.HyperBackscreen.ui.util.ThemePrefs
 import java.io.File
 import java.io.FileOutputStream
 import java.io.ByteArrayOutputStream
@@ -27,9 +32,17 @@ import java.util.concurrent.TimeUnit
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
+/** 一次日志导出的产物：私有缓存里的压缩包，以及它在手机存储根目录的副本（没发布成为 null）。 */
+internal data class LogExportResult(
+    val archive: File,
+    val sharedPath: File?,
+)
+
 internal object FeedbackLogExporter {
+    const val TOTAL_STEPS = 12
     private const val COMMAND_TIMEOUT_SECONDS = 20L
-    private const val FEEDBACK_SCHEMA_VERSION = 5
+    private const val FEEDBACK_SCHEMA_VERSION = 8
+    private const val MAX_AI_INDEX_BYTES = 2 * 1024 * 1024
     private const val MAX_LSPOSED_OUTPUT_BYTES = 256 * 1024
     private const val MAX_LOGCAT_OUTPUT_BYTES = 1024 * 1024
     private const val MAX_HOST_LOG_OUTPUT_BYTES = 1024 * 1024
@@ -39,42 +52,73 @@ internal object FeedbackLogExporter {
     private const val MAX_SYSTEM_DIAGNOSTICS_OUTPUT_BYTES = 512 * 1024
     private const val MAX_RESOURCE_REPORT_OUTPUT_BYTES = 1024 * 1024
     private const val MAX_THEME_MANAGER_FILES_OUTPUT_BYTES = 512 * 1024
+    private const val MAX_PUBLISH_OUTPUT_BYTES = 8 * 1024
+
+    /** 复制命令成功后打印的标记，用来判断这次发布到底成没成。 */
+    private const val PUBLISH_MARKER = "MIBS_PUBLISHED"
+
+    /**
+     * 本模块在 `cache/feedback` 里写下的产物统一前缀。
+     *
+     * 判据必须是「前缀 + 保留期」，不能逐个枚举具体名字：导出物早期叫
+     * `MiBackscreen-diag-*.txt`，后来改名成 `MiBackscreen-feedback-*`，而清理规则
+     * 只认新前缀 —— 老文件从此永远留在缓存里（实测 2026-10-13 仍有 7 个 10-07/10-08 的 diag）。
+     */
+    private const val ARCHIVE_PREFIX = "MiBackscreen-"
+    private const val PARTIAL_SUFFIX = ".partial"
+    private const val ARCHIVE_RETENTION_DAYS = 1L
+
+    /** 数据库副本的暂存目录前缀；只在一次导出过程中存在，残留的随时可删。 */
+    private const val STAGING_DIR_PREFIX = ARCHIVE_PREFIX + "database-"
+    private const val LEGACY_STAGING_DIR_PREFIX = "database-"
 
     private data class DatabaseSnapshot(
         val files: List<File>,
         val report: String,
     )
 
-    fun create(context: Context): File? {
+    fun create(context: Context, onProgress: (Int, Int) -> Unit = { _, _ -> }): LogExportResult? {
+        var staging: File? = null
+        var partial: File? = null
         return try {
             val appContext = context.applicationContext
+            val configSync = PrefsBridge.buildSyncDiagnosticReport(appContext)
+            val appearance = buildAppearanceReport(appContext)
             val directory = File(appContext.cacheDir, "feedback")
             if (!directory.exists() && !directory.mkdirs()) return null
-            directory.listFiles()
-                ?.filter { it.isFile && it.name.startsWith("MiBackscreen-feedback-") }
-                ?.forEach { it.delete() }
+            purgeStaleArchives(appContext)
 
-            val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+            val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()) + "-${System.nanoTime()}"
             val output = File(directory, "MiBackscreen-feedback-$timestamp.zip")
-            val databaseDirectory = File(directory, "database-$timestamp")
-            val lsposedLog = collectLsposedLog()
-            val logcat = collectLogcat()
-            val rearScreenState = collectRearScreenState()
-            val rearScreenFiles = collectRearScreenFiles()
-            val rearScreenResourceReport = collectRearScreenResourceReport()
-            val themeManagerFiles = collectThemeManagerFiles()
-            val systemDiagnostics = collectSystemDiagnostics()
-            val hostLog = collectSubScreenCenterLog()
-            val databaseSnapshot = collectDatabaseSnapshot(databaseDirectory)
-            val pickupState = buildPickupState(appContext, lsposedLog, logcat)
+            val partialOutput = File(directory, "MiBackscreen-feedback-$timestamp.partial").also { partial = it }
+            // 暂存目录也带模块前缀：导出中途进程被杀、finally 没执行时，
+            // 下次 purgeStaleArchives 能认出并清掉这份主题商店数据库副本。
+            val databaseDirectory = File(directory, "$STAGING_DIR_PREFIX$timestamp")
+            staging = databaseDirectory
+            onProgress(0, TOTAL_STEPS)
+            val lsposedLog = collectLsposedLog().also { onProgress(1, TOTAL_STEPS) }
+            val logcat = collectLogcat().also { onProgress(2, TOTAL_STEPS) }
+            val rearScreenState = collectRearScreenState().also { onProgress(3, TOTAL_STEPS) }
+            val rearScreenFiles = collectRearScreenFiles().also { onProgress(4, TOTAL_STEPS) }
+            val rearScreenResourceReport = collectRearScreenResourceReport().also { onProgress(5, TOTAL_STEPS) }
+            val themeManagerFiles = collectThemeManagerFiles().also { onProgress(6, TOTAL_STEPS) }
+            val systemDiagnostics = collectSystemDiagnostics().also { onProgress(7, TOTAL_STEPS) }
+            val hostLog = collectSubScreenCenterLog().also { onProgress(8, TOTAL_STEPS) }
+            val databaseSnapshot = collectDatabaseSnapshot(databaseDirectory).also { onProgress(9, TOTAL_STEPS) }
+            val aiRuntime = collectAiIndex("rearScreenAiApp_Theme/runtimeAiApp.json").also { onProgress(10, TOTAL_STEPS) }
+            val aiAppInfo = collectAiIndex("subscreencenter/config/appInfo.json").also { onProgress(11, TOTAL_STEPS) }
 
             try {
-                ZipOutputStream(FileOutputStream(output)).use { zip ->
+                ZipOutputStream(FileOutputStream(partialOutput)).use { zip ->
                     zip.addText("feedback-info.txt", buildFeedbackInfo())
                     zip.addText("device.txt", buildDeviceReport(appContext))
                     zip.addText("config.txt", buildConfigReport(appContext))
+                    zip.addText("config-sync.txt", configSync)
+                    zip.addText("appearance.txt", appearance)
+                    zip.addText("ai-app-index/runtimeAiApp.txt", aiRuntime)
+                    zip.addText("ai-app-index/appInfo.txt", aiAppInfo)
+                    zip.addText("ai-app-index/comparison.txt", AiAppIndexReport.build(aiRuntime, aiAppInfo))
                     zip.addText("hook-status.txt", buildHookStatus(lsposedLog))
-                    zip.addText("pickup-state.txt", pickupState)
                     zip.addText("system-diagnostics.txt", systemDiagnostics)
                     zip.addText("rear-screen-state.txt", rearScreenState)
                     zip.addText("rear-screen-files.txt", rearScreenFiles)
@@ -93,10 +137,26 @@ internal object FeedbackLogExporter {
             } finally {
                 databaseDirectory.deleteRecursively()
             }
+            check(partialOutput.renameTo(output)) { "Unable to finish feedback archive" }
             DiagnosticLogStore.appendLocal(appContext, "feedback archive created: ${output.name}")
-            output
-        } catch (_: Throwable) {
+            // 另存一份到手机存储根目录：文件管理器、数据线都能直接取走，不必再走分享面板。
+            val shared = publishToSharedStorage(output)
+            DiagnosticLogStore.appendLocal(
+                appContext,
+                if (shared != null) "feedback archive published: ${shared.absolutePath}"
+                else "feedback archive not published (shared storage unavailable)"
+            )
+            onProgress(TOTAL_STEPS, TOTAL_STEPS)
+            LogExportResult(output, shared)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            DiagnosticLogStore.appendLocal(context.applicationContext,
+                "feedback export failed: ${error.javaClass.simpleName}")
             null
+        } finally {
+            partial?.delete()
+            staging?.deleteRecursively()
         }
     }
 
@@ -104,11 +164,48 @@ internal object FeedbackLogExporter {
         appendLine("feedback_schema=$FEEDBACK_SCHEMA_VERSION")
         appendLine("capture_time=${SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US).format(Date())}")
         appendLine("capture_hint=Generate this archive immediately after reproducing the issue, before reapplying the wallpaper or restarting related apps.")
-        appendLine("privacy_hint=This archive contains rear-screen configuration, resource paths, editConfig text, file metadata, filtered system logs, and the Theme Manager rear-screen database. User wallpaper image/video bytes are not copied.")
+        appendLine("privacy_hint=This archive contains local/remote/pending preferences, app lists, appearance settings, AI app indexes, resource paths, editConfig text, file metadata, diagnostic events, filtered system logs, and the Theme Manager rear-screen database. User wallpaper image/video bytes are not copied.")
         appendLine("missing_data_hint=Each root-backed report records collection errors when root access is unavailable.")
     }
 
+    /**
+     * 清掉缓存目录里的历史产物。
+     *
+     * `cache/feedback` 是本模块独占的目录，所以判据只按「本模块产物前缀 + 保留期」，
+     * 不逐个枚举具体名字（改名一次就会漏掉一批，见 [ARCHIVE_PREFIX]）。
+     * `*.partial` 是写到一半的中间产物，永远不可用，任何年龄都直接删。
+     *
+     * 除了导出前清一次，应用启动时也会清一次（[hook.HyperBackscreen.app.ModuleApp]）——
+     * 否则「再也不导出」的用户，缓存只会一直涨。
+     *
+     * @return 实际删掉的文件数
+     */
+    @JvmStatic
+    fun purgeStaleArchives(context: Context): Int {
+        val directory = File(context.applicationContext.cacheDir, "feedback")
+        val files = directory.listFiles() ?: return 0
+        val expireBefore = System.currentTimeMillis() -
+            TimeUnit.DAYS.toMillis(ARCHIVE_RETENTION_DAYS)
+        var removed = 0
+        files.forEach { file ->
+            // 暂存目录（含数据库副本，涉及隐私）：正常导出结束就会删，留下来的都是被中断的残留，
+            // 不看保留期直接整目录删除。旧版本的 `database-*` 命名也一并清理。
+            if (file.isDirectory) {
+                if ((file.name.startsWith(STAGING_DIR_PREFIX) || file.name.startsWith(LEGACY_STAGING_DIR_PREFIX)) &&
+                    file.deleteRecursively()
+                ) removed++
+                return@forEach
+            }
+            if (!file.isFile || !file.name.startsWith(ARCHIVE_PREFIX)) return@forEach
+            val partial = file.name.endsWith(PARTIAL_SUFFIX)
+            if (!partial && file.lastModified() >= expireBefore) return@forEach
+            if (file.delete()) removed++
+        }
+        return removed
+    }
+
     fun share(context: Context, file: File) {
+        check(file.isFile && file.length() > 0L) { "Feedback archive is missing or empty" }
         val uri = FileProvider.getUriForFile(
             context,
             "${context.packageName}.files",
@@ -124,6 +221,26 @@ internal object FeedbackLogExporter {
         )
     }
 
+    /**
+     * 把压缩包另存一份到手机存储根目录（/storage/emulated/0）。
+     *
+     * 不走普通文件 API：zip 不是媒体文件，分区存储下应用没有权限直接往公共目录写，
+     * 走 MediaStore 也只能落到 Download 子目录，都到不了根目录。模块本身有 root，
+     * 直接借 su 复制并补上读权限最直接，拷完文件管理器和数据线立刻就能看到。
+     *
+     * @return 根目录下的目标文件；root 不可用或复制失败时为 null（此时缓存里那份仍在）。
+     */
+    @Suppress("DEPRECATION")
+    private fun publishToSharedStorage(archive: File): File? {
+        val directory = Environment.getExternalStorageDirectory() ?: return null
+        val target = File(directory, archive.name)
+        val command = "cp -f ${shellQuote(archive.absolutePath)} ${shellQuote(target.absolutePath)}; " +
+            "if [ -f ${shellQuote(target.absolutePath)} ]; then " +
+            "chmod 0644 ${shellQuote(target.absolutePath)} 2>/dev/null; echo $PUBLISH_MARKER; fi"
+        val output = runRootCommand(command, MAX_PUBLISH_OUTPUT_BYTES)
+        return if (output.contains(PUBLISH_MARKER)) target else null
+    }
+
     private fun buildDeviceReport(context: Context): String = buildString {
         appendLine("feedback_schema=$FEEDBACK_SCHEMA_VERSION")
         appendLine("generated_at=${SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US).format(Date())}")
@@ -137,6 +254,7 @@ internal object FeedbackLogExporter {
         appendLine("fingerprint=${Build.FINGERPRINT}")
         appendPackageVersion(context, Constants.TARGET_PACKAGE)
         appendPackageVersion(context, Constants.THEME_STORE_PACKAGE)
+        appendPackageVersion(context, Constants.PERSONAL_ASSISTANT_PACKAGE)
     }
 
     private fun StringBuilder.appendPackageVersion(context: Context, packageName: String) {
@@ -155,19 +273,88 @@ internal object FeedbackLogExporter {
     private fun buildConfigReport(context: Context): String = buildString {
         appendLine("disable_long_press_edit=${PrefsBridge.readDisableLongPressForUi(context)}")
         appendLine("remove_wallpaper_limit=${PrefsBridge.readRemoveWallpaperLimitForUi(context)}")
+        appendLine("auto_wallpaper_interval_minutes=${PrefsBridge.readAutoWallpaperIntervalForUi(context)}")
+        appendLine("auto_wallpaper_order=${PrefsBridge.readAutoWallpaperOrderForUi(context)}")
+        appendLine("rear_screen_off_timeout=${PrefsBridge.readRearScreenOffTimeoutForUi(context)}")
+        appendLine("keep_rear_screen_on_in_game=${PrefsBridge.readKeepRearScreenOnInGameForUi(context)}")
+        appendLine("enable_app_card=${PrefsBridge.readEnableAppCardForUi(context)}")
+        appendLine("enable_18_pro_features=${PrefsBridge.readEnable18ProFeaturesForUi(context)}")
+        appendLine("enable_battery_ring=${PrefsBridge.readEnableBatteryRingForUi(context)}")
+        appendLine("battery_percent_position=${PrefsBridge.readBatteryPercentPositionForUi(context)}")
+        appendLine("remove_app_card_limit=${PrefsBridge.readRemoveAppCardLimitForUi(context)}")
         appendLine("fix_rear_screen_apply=${PrefsBridge.readFixRearScreenApplyForUi(context)}")
-        appendLine("enable_swipe_panel=${PrefsBridge.readEnableSwipePanelForUi(context)}")
+        appendLine("face_enrollment_compat=${PrefsBridge.readFaceEnrollmentCompatForUi(context)}")
         appendLine("disable_rear_screen_cover=${PrefsBridge.readDisableRearScreenCoverForUi(context)}")
         appendLine("disable_double_tap_wake=${PrefsBridge.readDisableDoubleTapWakeForUi(context)}")
         appendLine("double_tap_wake_disabled_packages=${PrefsBridge.readDoubleTapWakeDisabledPackagesForUi(context)}")
+        appendLine("double_tap_sleep_disabled_packages=${PrefsBridge.readDoubleTapSleepDisabledPackagesForUi(context)}")
+        appendLine("music_widget_whitelist_packages=${PrefsBridge.readMusicWidgetWhitelistPackagesForUi(context)}")
         appendLine("theme_settings_shortcut=${PrefsBridge.readThemeSettingsShortcutForUi(context)}")
-        appendLine("pickup_island_selection=${PrefsBridge.readPickupIslandSelectionForUi(context)}")
+        appendLine("rear_video_resume=${PrefsBridge.readRearVideoResumeForUi(context)}")
+        appendLine("rear_video_unlock_limits=${PrefsBridge.readRearVideoUnlockLimitsForUi(context)}")
+        appendLine("rear_video_keep_audio=${PrefsBridge.readRearVideoKeepAudioForUi(context)}")
+        appendLine("enable_rear_lyric=${PrefsBridge.readEnableRearLyricForUi(context)}")
+        appendLine("rear_lyric_in_aod=${PrefsBridge.readRearLyricInAodForUi(context)}")
+        appendLine("super_lyric_status=${SuperLyricAvailability.detect(context).name}")
+        appendLine("super_lyric_server_api=${SuperLyricAvailability.serverApiVersion()}")
         appendLine("floating_nav_bar=${PrefsBridge.readFloatingNavBar(context)}")
         appendLine("liquid_glass=${PrefsBridge.readLiquidGlass(context)}")
+        appendLine("ui_style=${hook.HyperBackscreen.ui.util.ThemePrefs.getUiStyle(context)}")
+        appendLine("bottom_bar_blur=${PrefsBridge.readBottomBarBlur(context)}")
+        appendLine("show_function_count=${PrefsBridge.readShowFunctionCount(context)}")
+        appendLine("check_updates=${PrefsBridge.readCheckUpdates(context)}")
         appendLine("launcher_icon_hidden=${LauncherIconController.isHidden(context)}")
         appendLine("${RearDisplayCompatibility.BUILTIN_PRESENTATION_PROPERTY}=${RearDisplayCompatibility.builtinPresentationValue() ?: "unknown"}")
         appendLine("rear_display_hidden_warning=${RearDisplayCompatibility.isBuiltinPresentationDisabled()}")
     }
+
+    private fun buildAppearanceReport(context: Context): String = buildString {
+        val config = context.resources.configuration
+        val metrics = context.resources.displayMetrics
+        val theme = ThemePrefs.getThemeMode(context)
+        val systemDark = config.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        val locales = context.getSystemService(LocaleManager::class.java)
+        appendLine("theme_mode=${theme.name}")
+        appendLine("theme_mode_index=${theme.index}")
+        appendLine("system_dark=$systemDark")
+        appendLine("effective_dark=${theme.resolve(systemDark)}")
+        appendLine("dynamic_colors=${theme.usesDynamicColors}")
+        appendLine("key_color=${"%08X".format(ThemePrefs.getKeyColor(context))}")
+        appendLine("palette_style=${ThemePrefs.getPaletteStyle(context)}")
+        appendLine("color_spec=${ThemePrefs.getColorSpec(context)}")
+        appendLine("ui_style=${ThemePrefs.getUiStyle(context)}")
+        appendLine("page_scale=${ThemePrefs.getPageScale(context)}")
+        appendLine("top_bar_blur=${ThemePrefs.getTopBarBlur(context)}")
+        appendLine("swipe_back=${ThemePrefs.getSwipeBack(context)}")
+        appendLine("application_locales=${locales?.applicationLocales?.toLanguageTags().orEmpty().ifEmpty { "follow_system" }}")
+        appendLine("system_locales=${locales?.systemLocales?.toLanguageTags() ?: "unknown"}")
+        appendLine("effective_locales=${config.locales.toLanguageTags()}")
+        appendLine("font_scale=${config.fontScale}")
+        appendLine("density_dpi=${metrics.densityDpi}")
+        appendLine("screen_width_dp=${config.screenWidthDp}")
+        appendLine("screen_height_dp=${config.screenHeightDp}")
+        appendLine("orientation=${config.orientation}")
+        appendLine("layout_direction=${config.layoutDirection}")
+        appendLine("floating_nav_bar=${PrefsBridge.readFloatingNavBar(context)}")
+        appendLine("liquid_glass=${PrefsBridge.readLiquidGlass(context)}")
+        appendLine("ui_style=${hook.HyperBackscreen.ui.util.ThemePrefs.getUiStyle(context)}")
+        appendLine("bottom_bar_blur=${PrefsBridge.readBottomBarBlur(context)}")
+        appendLine("show_function_count=${PrefsBridge.readShowFunctionCount(context)}")
+        appendLine("check_updates=${PrefsBridge.readCheckUpdates(context)}")
+        appendLine("launcher_icon_hidden=${LauncherIconController.isHidden(context)}")
+    }
+
+    private fun collectAiIndex(relativePath: String): String = runRootCommand(
+        "user_id=\$(am get-current-user 2>/dev/null); " +
+            "case \"\$user_id\" in ''|*[!0-9]*) echo 'CURRENT_USER_UNAVAILABLE'; exit 1;; esac; " +
+            "f=\"/data/system/theme_magic/users/\$user_id/$relativePath\"; " +
+            "if [ ! -f \"\$f\" ]; then echo \"MISSING: \$f\"; " +
+            "elif [ ! -r \"\$f\" ]; then echo \"UNREADABLE: \$f\"; " +
+            "else bytes=\$(wc -c < \"\$f\"); " +
+            "if [ \"\$bytes\" -gt $MAX_AI_INDEX_BYTES ]; then echo \"TOO_LARGE: \$f bytes=\$bytes limit=$MAX_AI_INDEX_BYTES\"; " +
+            "else head -c ${MAX_AI_INDEX_BYTES + 1} \"\$f\"; fi; fi",
+        MAX_AI_INDEX_BYTES + 1024,
+    )
 
     private fun buildHookStatus(lsposedLog: String): String {
         val statusLines = lsposedLog.lineSequence().filter { line ->
@@ -184,43 +371,6 @@ internal object FeedbackLogExporter {
         }
     }
 
-    /**
-     * 取件码功能的现场快照：当前选择记录 + 小爱作用域里的 Hook 标记 + 最近的取件码日志。
-     * 远程排查「开关不生效 / 背屏卡片不更新」时，看这一个文件就能判断卡在哪一步。
-     */
-    private fun buildPickupState(context: Context, lsposedLog: String, logcat: String): String {
-        val selection = runCatching {
-            PrefsBridge.readPickupIslandSelectionForUi(context)
-        }.getOrDefault("")
-        val markers = listOf(
-            "Pickup card hook installed",
-            "Pickup card hook targets unavailable",
-            "Pickup confirmation hook installed",
-            "Pickup notification refresh hook installed",
-            "Unable to install pickup card hook",
-        )
-        val pickupLines = logcat.lineSequence().filter { it.contains("Pickup") }.toList().takeLast(40)
-        return buildString {
-            appendLine("# 取件码（PickupCodes）状态")
-            appendLine("pickup_island_selection=${selection.ifEmpty { "(empty)" }}")
-            appendLine("pickup_island_selection_length=${selection.length}")
-            appendLine()
-            appendLine("## 小爱作用域内的 Hook 标记（来自 mibackscreen-lsposed.log）")
-            markers.forEach { marker ->
-                val hits = lsposedLog.lineSequence().filter { it.contains(marker) }.toList()
-                appendLine("$marker=${hits.size}")
-                hits.takeLast(2).forEach { appendLine("  $it") }
-            }
-            appendLine()
-            appendLine("## 最近的取件码日志（来自 mibackscreen-logcat.log，最多 40 行）")
-            if (pickupLines.isEmpty()) {
-                appendLine("(none)")
-            } else {
-                pickupLines.forEach { appendLine(it) }
-            }
-        }
-    }
-
     private fun collectLsposedLog(): String = runRootCommand(
         "files=\$(ls -tr /data/adb/lspd/log/modules_*.log 2>/dev/null | tail -n 5); " +
             "for f in \$files; do grep 'hook.HyperBackscreen,MiBackscreen' \"\$f\"; done " +
@@ -231,7 +381,7 @@ internal object FeedbackLogExporter {
     private fun collectLogcat(): String = runRootCommand(
         // 全量 logcat 在日志较多的设备上可能超过采集超时；限制为各缓冲区最近 20000 行。
         "logcat -b all -d -v threadtime -t 20000 2>/dev/null " +
-            "| grep -Eai 'MiBackscreen|subscreencenter|SubScreen|MainPanel|PersistenceManager|RearScreen|rear_screen|theme_rear_widget|theme_magic|MAML|\\.mrc|AndroidRuntime' " +
+            "| grep -Eai 'MiBackscreen|subscreencenter|SubScreen|MainPanel|PersistenceManager|RearScreen|rear_screen|theme_rear_widget|theme_magic|MAML|\\.mrc|AndroidRuntime|personalassistant|Personal assistant|BackScreenStore|appcard|AI_GENERATED_APP|rearScreenAiApp|AIWallpaper|AI wallpaper|AI合照|合照|保护壳|phonecase|DIY|diy|native/page/v3|request_flag|Theme request diagnostic|Peeko|Lumi|自定义形象|mibackscreen_18_personalization' " +
             "| tail -c $MAX_LOGCAT_OUTPUT_BYTES",
         MAX_LOGCAT_OUTPUT_BYTES,
     )
@@ -247,7 +397,7 @@ internal object FeedbackLogExporter {
             "echo; echo '=== related secure settings ==='; settings --user \"\$user_id\" list secure 2>/dev/null | grep -Eai 'rear|sub.?screen|back.?screen' || echo 'No matching secure settings'; " +
             "echo; echo '=== related system settings ==='; settings --user \"\$user_id\" list system 2>/dev/null | grep -Eai 'rear|sub.?screen|back.?screen' || echo 'No matching system settings'; " +
             "echo; echo '=== related global settings ==='; settings list global 2>/dev/null | grep -Eai 'rear|sub.?screen|back.?screen|theme|maml' || echo 'No matching global settings'; " +
-            "for f in \"\$base/subscreencenter/config/user_pref.json\" \"\$base/subscreencenter/config/widget.json\" \"\$base/rearScreen/runtime.json\"; do " +
+            "for f in \"\$base/subscreencenter/config/user_pref.json\" \"\$base/subscreencenter/config/widget.json\" \"\$base/subscreencenter/config/appInfo.json\" \"\$base/rearScreen/runtime.json\"; do " +
             "echo; echo \"=== file: \$f ===\"; " +
             "if [ -f \"\$f\" ]; then stat -c 'path=%n size=%s modified=%y mode=%a owner=%U:%G' \"\$f\" 2>&1; sha256sum \"\$f\" 2>&1; cat \"\$f\" 2>&1; echo; else echo 'MISSING'; fi; " +
             "done; " +
@@ -261,7 +411,7 @@ internal object FeedbackLogExporter {
             "[ -n \"\$user_id\" ] || user_id=0; " +
             "base=\"/data/system/theme_magic/users/\$user_id\"; " +
             "echo '=== filesystem ==='; df -h \"\$base\" 2>&1; " +
-            "for root in \"\$base/rearScreen\" \"\$base/subscreencenter/config\"; do " +
+            "for root in \"\$base/mibackscreen_18\" \"\$base/rearScreen\" \"\$base/rearScreenAiApp_Theme\" \"\$base/back_screen_card\" \"\$base/subscreencenter/config\" \"/product/media/rearscreen/appcard\" \"/system/media/rearscreen/appcard\"; do " +
             "echo; echo \"=== manifest: \$root ===\"; " +
             "if [ -d \"\$root\" ]; then find \"\$root\" -maxdepth 5 -type d 2>/dev/null | while IFS= read -r d; do stat -c '%n|type=dir|modified=%y|mode=%a|owner=%U:%G' \"\$d\" 2>&1; done; else echo 'MISSING'; fi; " +
             "echo; echo \"=== files: \$root ===\"; " +
@@ -286,7 +436,7 @@ internal object FeedbackLogExporter {
             "echo '=== resource probe ==='; date '+generated_at=%Y-%m-%d %H:%M:%S %z'; echo \"current_user=\$user_id\"; " +
             "print_path() { p=\"\$1\"; if [ -e \"\$p\" ]; then ls -ldZ \"\$p\" 2>&1; stat -c 'path=%n type=%F size=%s modified=%y mode=%a owner=%U:%G' \"\$p\" 2>&1; else echo \"MISSING: \$p\"; fi; }; " +
             "echo; echo '=== parent directories ==='; " +
-            "for p in /data /data/system /data/system/theme /data/system/theme/rearScreen /data/system/theme/rearScreenWhite /data/system/theme/rights /data/system/theme_magic /data/system/theme_magic/users \"/data/system/theme_magic/users/\$user_id\" \"\$base\" \"\$base/rearScreen\" \"\$base/subscreencenter\" \"\$base/subscreencenter/config\"; do print_path \"\$p\"; done; " +
+            "for p in /data /data/system /data/system/theme /data/system/theme/rearScreen /data/system/theme/rearScreenWhite /data/system/theme/rights /data/system/theme_magic /data/system/theme_magic/users \"/data/system/theme_magic/users/\$user_id\" \"\$base\" \"\$base/mibackscreen_18\" \"\$base/mibackscreen_18/appcard\" \"\$base/mibackscreen_18/precust_theme\" \"\$base/mibackscreen_18/template\" \"\$base/mibackscreen_18/template/normal\" \"\$base/mibackscreen_18/template/default\" \"\$base/rearScreen\" \"\$base/rearScreenAiApp_Theme\" \"\$base/back_screen_card\" \"\$base/subscreencenter\" \"\$base/subscreencenter/config\" /product/media/rearscreen /product/media/rearscreen/appcard /system/media/rearscreen /system/media/rearscreen/appcard /product/etc/precust_theme/theme/.data/content/rearscreen /product/etc/precust_theme/theme/.data/meta/rearscreen /product/etc/precust_theme/theme/.data/preview/theme /product/etc/precust_theme/theme/.data/rights/theme ${Constants.AI_MATE_PEEKO_PREVIEW_PATH} ${Constants.AI_MATE_LUMI_PREVIEW_PATH}; do print_path \"\$p\"; done; " +
             "settings --user \"\$user_id\" get secure theme_rear_widget 2>/dev/null > \"\$tmp\"; " +
             "for f in \"\$base/subscreencenter/config/widget.json\" \"\$base/rearScreen/runtime.json\"; do [ -f \"\$f\" ] && cat \"\$f\" >> \"\$tmp\"; done; " +
             "if [ -d \"\$base/rearScreen\" ]; then find \"\$base/rearScreen\" -maxdepth 2 -type f -name editConfig 2>/dev/null | sort | tail -n 80 | while IFS= read -r f; do echo \"\$f\" >> \"\$tmp\"; cat \"\$f\" >> \"\$tmp\"; done; fi; " +
@@ -315,7 +465,7 @@ internal object FeedbackLogExporter {
             "if [ -d \"\$root\" ]; then ls -lZ \"\$root\" 2>&1; else echo 'MISSING'; fi; " +
             "done; " +
             "theme_root=\"/storage/emulated/\$user_id/Android/data/com.android.thememanager/files/MIUI/theme/.data\"; " +
-            "for root in \"\$theme_root/content/rearscreen\" \"\$theme_root/meta/rearscreen\" \"\$theme_root/preview/theme\"; do " +
+            "for root in \"\$theme_root/content/rearscreen\" \"\$theme_root/meta/rearscreen\" \"\$theme_root/preview/theme\" \"/data/system/theme_magic/users/\$user_id/rearScreenAiApp_Theme\" \"/data/system/theme_magic/users/\$user_id/back_screen_card\"; do " +
             "echo; echo \"=== theme cache manifest: \$root ===\"; " +
             "if [ -d \"\$root\" ]; then find \"\$root\" -maxdepth 3 -type f 2>/dev/null | sort | tail -n 500 | while IFS= read -r f; do stat -c '%n|size=%s|modified=%y|mode=%a|owner=%U:%G' \"\$f\" 2>&1; done; else echo 'MISSING'; fi; " +
             "done; " +
@@ -330,12 +480,24 @@ internal object FeedbackLogExporter {
             "echo; echo '=== compatibility properties ==='; getprop vendor.display.builtin_presentation 2>&1 | sed 's/^/vendor.display.builtin_presentation=/'; " +
             "echo; echo '=== build properties ==='; getprop 2>/dev/null | grep -Eai 'ro\\.product|ro\\.build\\.|ro\\.system\\.|ro\\.vendor\\.|ro\\.miui|ro\\.hyperos|persist\\.sys\\.|persist\\.miui|persist\\.hyperos' | sort; " +
             "echo; echo '=== storage ==='; df -h /data /data/system /data/system/theme /data/system/theme_magic 2>&1; " +
+            "echo; echo '=== mibackscreen addon module ==='; " +
+            "if [ -x /data/adb/ksu/bin/ksud ]; then /data/adb/ksu/bin/ksud module list 2>&1 | grep -A20 -B2 'mibackscreen_18_personalization\\|MiBackscreen' || true; else echo 'ksud unavailable'; fi; " +
+            "for f in /data/adb/modules/mibackscreen_18_personalization/module.prop /data/adb/modules/mibackscreen_18_personalization/disable; do echo; echo \"--- \$f ---\"; if [ -e \"\$f\" ]; then cat \"\$f\" 2>&1; else echo 'MISSING'; fi; done; " +
+            "state=/data/adb/mibackscreen_18_personalization_state; " +
+            "echo; echo '=== mibackscreen KSU runtime state ==='; " +
+            "if [ -d \"\$state\" ]; then ls -lZ \"\$state\" 2>&1; " +
+            "for f in \"\$state\"/*.log \"\$state\"/appcard_owned_ids; do [ -f \"\$f\" ] || continue; echo; echo \"--- \$f (tail) ---\"; tail -c 65536 \"\$f\" 2>&1; done; " +
+            "else echo \"MISSING: \$state (module never ran, or an old module version without state logging)\"; fi; " +
+            "echo; echo '=== mibackscreen resource dir expected by the app ==='; " +
+            "res=/data/system/theme_magic/users/\$(am get-current-user 2>/dev/null)/mibackscreen_18; " +
+            "if [ -d \"\$res\" ]; then echo \"PRESENT: \$res\"; else echo \"MISSING: \$res\"; fi; " +
+            "echo; echo '=== rear resource mounts ==='; mount 2>/dev/null | grep -E 'media/rearscreen|precust_theme/theme/.data' || echo 'No MiBackscreen resource mounts'; " +
             "echo; echo '=== related packages ==='; " +
-            "for pkg in ${Constants.TARGET_PACKAGE} ${Constants.THEME_STORE_PACKAGE} ${Constants.MODULE_PACKAGE}; do " +
+            "for pkg in ${Constants.TARGET_PACKAGE} ${Constants.THEME_STORE_PACKAGE} ${Constants.PERSONAL_ASSISTANT_PACKAGE} ${Constants.MODULE_PACKAGE}; do " +
             "echo; echo \"--- package: \$pkg ---\"; " +
             "dumpsys package \"\$pkg\" 2>/dev/null | grep -Eai 'Package \\[|versionName|versionCode|codePath|resourcePath|dataDir|userId=|pkgFlags|privateFlags|enabled=|stopped=|firstInstallTime|lastUpdateTime|installerPackageName|targetSdk|uses-permission|granted=true' | head -n 220 || echo 'No package dump'; " +
             "done; " +
-            "echo; echo '=== related processes ==='; ps -A -o USER,PID,PPID,NAME,ARGS 2>/dev/null | grep -E 'subscreencenter|thememanager|HyperBackscreen' || ps -A 2>/dev/null | grep -E 'subscreencenter|thememanager|HyperBackscreen' || echo 'No related process'; " +
+            "echo; echo '=== related processes ==='; ps -A -o USER,PID,PPID,NAME,ARGS 2>/dev/null | grep -E 'subscreencenter|thememanager|personalassistant|voiceassist|HyperBackscreen' || ps -A 2>/dev/null | grep -E 'subscreencenter|thememanager|personalassistant|voiceassist|HyperBackscreen' || echo 'No related process'; " +
             "} | tail -c $MAX_SYSTEM_DIAGNOSTICS_OUTPUT_BYTES",
         MAX_SYSTEM_DIAGNOSTICS_OUTPUT_BYTES,
     )
@@ -357,7 +519,17 @@ internal object FeedbackLogExporter {
         if (!destination.exists() && !destination.mkdirs()) {
             return DatabaseSnapshot(emptyList(), "Failed to create database staging directory.\n")
         }
-        val databaseNames = listOf("rearScreen.db", "rearScreen.db-wal", "rearScreen.db-shm")
+        val databaseNames = listOf(
+            "rearScreen.db",
+            "rearScreen.db-wal",
+            "rearScreen.db-shm",
+            "rearScreenAiApp.db",
+            "rearScreenAiApp.db-wal",
+            "rearScreenAiApp.db-shm",
+            "ai_database.db",
+            "ai_database.db-wal",
+            "ai_database.db-shm",
+        )
         val stagedNames = databaseNames.flatMap { name ->
             listOf("credential-$name", "device-$name")
         }
@@ -374,7 +546,7 @@ internal object FeedbackLogExporter {
             "user_id=\$(am get-current-user 2>/dev/null); " +
                 "[ -n \"\$user_id\" ] || user_id=0; " +
                 "dest=$destinationPath; " +
-                "for name in rearScreen.db rearScreen.db-wal rearScreen.db-shm; do " +
+                "for name in rearScreen.db rearScreen.db-wal rearScreen.db-shm rearScreenAiApp.db rearScreenAiApp.db-wal rearScreenAiApp.db-shm ai_database.db ai_database.db-wal ai_database.db-shm; do " +
                 "src=\"/data/user/\$user_id/com.android.thememanager/databases/\$name\"; " +
                 "if [ -f \"\$src\" ]; then cat \"\$src\" > \"\$dest/credential-\$name\"; fi; " +
                 "src=\"/data/user_de/\$user_id/com.android.thememanager/databases/\$name\"; " +
@@ -387,12 +559,32 @@ internal object FeedbackLogExporter {
                 "if [ ! -f \"\$db\" ]; then echo 'MISSING: rearScreen.db'; " +
                 "elif command -v sqlite3 >/dev/null 2>&1; then " +
                 "sqlite3 -header -separator '|' \"\$db\" \"PRAGMA user_version; SELECT resId,applyId,resName,position,applyTime,updateTime,isDownload,isThirdParties,supportAon,resLocalPath,resSnapshotPath,rightPath,metaPath,metaSnapshotPath,mamlEditConfigPath,snapshotPreviewPath FROM rearScreenMine ORDER BY position DESC;\" 2>&1; " +
+                "else echo 'sqlite3 unavailable; inspect the included database snapshot.'; fi; " +
+                "echo; echo '=== rearScreenAiApp database schema ==='; " +
+                "db=\"/data/user/\$user_id/com.android.thememanager/databases/rearScreenAiApp.db\"; " +
+                "if [ ! -f \"\$db\" ]; then db=\"/data/user_de/\$user_id/com.android.thememanager/databases/rearScreenAiApp.db\"; fi; " +
+                "if [ ! -f \"\$db\" ]; then echo 'MISSING: rearScreenAiApp.db'; " +
+                "elif command -v sqlite3 >/dev/null 2>&1; then " +
+                "sqlite3 -header -separator '|' \"\$db\" \"PRAGMA user_version; SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name;\" 2>&1; " +
+                "else echo 'sqlite3 unavailable; inspect the included database snapshot.'; fi; " +
+                "echo; echo '=== ai_database schema ==='; " +
+                "db=\"/data/user/\$user_id/com.android.thememanager/databases/ai_database.db\"; " +
+                "if [ ! -f \"\$db\" ]; then db=\"/data/user_de/\$user_id/com.android.thememanager/databases/ai_database.db\"; fi; " +
+                "if [ ! -f \"\$db\" ]; then echo 'MISSING: ai_database.db'; " +
+                "elif command -v sqlite3 >/dev/null 2>&1; then " +
+                "sqlite3 -header -separator '|' \"\$db\" \"PRAGMA user_version; SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name;\" 2>&1; " +
                 "else echo 'sqlite3 unavailable; inspect the included database snapshot.'; fi " +
                 "| tail -c $MAX_DATABASE_REPORT_OUTPUT_BYTES",
             MAX_DATABASE_REPORT_OUTPUT_BYTES,
         )
         val files = destination.listFiles()
-            ?.filter { it.isFile && it.name.contains("rearScreen.db") && it.length() > 0L }
+            ?.filter { file ->
+                file.isFile &&
+                    file.length() > 0L &&
+                    (file.name.contains("rearScreen.db") ||
+                        file.name.contains("rearScreenAiApp.db") ||
+                        file.name.contains("ai_database.db"))
+            }
             ?.sortedBy { it.name }
             .orEmpty()
         val report = buildString {
@@ -407,12 +599,14 @@ internal object FeedbackLogExporter {
 
     private fun runRootCommand(command: String, maxOutputBytes: Int): String {
         val readerExecutor = Executors.newSingleThreadExecutor()
+        var activeProcess: Process? = null
         return try {
             // Android 的应用数据隔离会让普通 su 继承应用挂载命名空间，看不到主题商店数据库。
             // KernelSU/Magisk 的 -M 会切到全局挂载命名空间，同时仍保留 root 权限。
             val process = ProcessBuilder("su", "-M", "-c", command)
                 .redirectErrorStream(true)
                 .start()
+            activeProcess = process
             val outputFuture = readerExecutor.submit<ByteArray> {
                 process.inputStream.use { input ->
                     val output = TailBuffer(maxOutputBytes)
@@ -440,6 +634,7 @@ internal object FeedbackLogExporter {
         } catch (error: Throwable) {
             "Collection failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}\n"
         } finally {
+            activeProcess?.destroyForcibly()
             readerExecutor.shutdownNow()
         }
     }

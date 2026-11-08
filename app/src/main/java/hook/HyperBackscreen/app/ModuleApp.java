@@ -7,20 +7,52 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import hook.HyperBackscreen.bridge.PrefsBridge;
+import hook.HyperBackscreen.bridge.DiagnosticLogStore;
+import hook.HyperBackscreen.common.BackgroundTasks;
+import hook.HyperBackscreen.ui.about.FeedbackLogExporter;
 import io.github.libxposed.service.XposedService;
 import io.github.libxposed.service.XposedServiceHelper;
 
 public class ModuleApp extends Application {
     @Nullable
     private static volatile XposedService service;
+    @Nullable
+    private static volatile XposedService readyService;
 
     private static final CopyOnWriteArrayList<Runnable> serviceListeners = new CopyOnWriteArrayList<>();
 
     @Nullable
     public static XposedService getService() {
         return service;
+    }
+
+    public static boolean isPreferenceServiceReady() {
+        XposedService current = service;
+        return current != null && readyService == current;
+    }
+
+    /** Provider/Binder worker only: wait for binding AND preference reconciliation, without polling. */
+    @Nullable
+    public static XposedService awaitReadyService() {
+        XposedService ready = readyService;
+        if (ready != null) return ready;
+        CountDownLatch bound = new CountDownLatch(1);
+        Runnable listener = () -> { if (readyService != null) bound.countDown(); };
+        addServiceListener(listener);
+        try {
+            // 冷启动时服务绑定 + 偏好对齐可能超过 1 秒，等太短会让面板第一次写入被误判失败。
+            if (readyService == null) bound.await(3, TimeUnit.SECONDS);
+            return readyService;
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            return null;
+        } finally {
+            removeServiceListener(listener);
+        }
     }
 
     /**
@@ -48,18 +80,25 @@ public class ModuleApp extends Application {
     public void onCreate() {
         super.onCreate();
         final Context appContext = getApplicationContext();
+        // 缓存目录里只放导出产物，启动时清一次过期/残留件，避免「不导出就永远不清理」。
+        BackgroundTasks.execute(() -> FeedbackLogExporter.purgeStaleArchives(appContext));
         XposedServiceHelper.registerListener(new XposedServiceHelper.OnServiceListener() {
             @Override
             public void onServiceBind(@NonNull XposedService s) {
+                readyService = null;
                 service = s;
+                DiagnosticLogStore.recordLocalAsync(appContext, "preference_service connected");
                 // 服务就绪后对齐本地与远程偏好，并通知 UI 刷新开关状态
                 PrefsBridge.syncOnServiceAvailable(appContext, s);
+                readyService = s;
                 notifyServiceListeners();
             }
 
             @Override
             public void onServiceDied(@NonNull XposedService s) {
+                readyService = null;
                 service = null;
+                DiagnosticLogStore.recordLocalAsync(appContext, "preference_service disconnected");
                 notifyServiceListeners();
             }
         });
