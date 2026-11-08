@@ -157,6 +157,8 @@ public final class PrefsBridge {
     public static final String DEFAULT_DOUBLE_TAP_WAKE_DISABLED_PACKAGES = "";
     /** 背屏音乐控件白名单默认空：完全沿用背屏中心内置（云控）名单。 */
     public static final String DEFAULT_MUSIC_WIDGET_WHITELIST_PACKAGES = "";
+    /** 背屏小部件默认不加任何页面。 */
+    public static final String DEFAULT_REAR_APP_WIDGETS = "";
     /** 按应用禁用背屏双击熄屏的名单默认空：系统原逻辑不变。 */
     public static final String DEFAULT_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES = "";
     public static final boolean DEFAULT_THEME_SETTINGS_SHORTCUT = true;
@@ -245,6 +247,7 @@ public final class PrefsBridge {
         BACKUP_STRING_DEFAULTS.put(
                 Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES,
                 DEFAULT_MUSIC_WIDGET_WHITELIST_PACKAGES);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_REAR_APP_WIDGETS, DEFAULT_REAR_APP_WIDGETS);
     }
 
     private PrefsBridge() {
@@ -944,6 +947,9 @@ public final class PrefsBridge {
                 // 包名列表：按同一套编码重新规范化，非法项直接丢掉。
                 return hook.HyperBackscreen.common.PackageListCodec.encode(
                         hook.HyperBackscreen.common.PackageListCodec.parse(value));
+            case Constants.KEY_REAR_APP_WIDGETS:
+                return hook.HyperBackscreen.common.RearWidgetList.encode(
+                        hook.HyperBackscreen.common.RearWidgetList.parse(value));
             default:
                 return null;
         }
@@ -1137,6 +1143,15 @@ public final class PrefsBridge {
 
     public static void writeMusicWidgetWhitelistPackagesFromUi(@NonNull Context context, @NonNull String packages) {
         writeStringFromUi(context, Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES, packages);
+    }
+
+    @NonNull
+    public static String readRearAppWidgetsForUi(@NonNull Context context) {
+        return readStringForUi(context, Constants.KEY_REAR_APP_WIDGETS, DEFAULT_REAR_APP_WIDGETS);
+    }
+
+    public static void writeRearAppWidgetsFromUi(@NonNull Context context, @NonNull String components) {
+        writeStringFromUi(context, Constants.KEY_REAR_APP_WIDGETS, components);
     }
 
     public static boolean readThemeSettingsShortcutForUi(@NonNull Context context) {
@@ -1378,6 +1393,12 @@ public final class PrefsBridge {
                 module,
                 Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES,
                 DEFAULT_MUSIC_WIDGET_WHITELIST_PACKAGES);
+    }
+
+    /** 背屏中心小部件页 Hook 用：用户选中的小部件列表原始串（未解析）。 */
+    @NonNull
+    public static String readRearAppWidgetsForHook(@NonNull XposedModule module) {
+        return readStringForHook(module, Constants.KEY_REAR_APP_WIDGETS, DEFAULT_REAR_APP_WIDGETS);
     }
 
     /**
@@ -1647,6 +1668,7 @@ public final class PrefsBridge {
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_REAR_APP_WIDGETS);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_IDLE);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_CHARGING);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_LOW);
@@ -1736,6 +1758,7 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES,
                     DEFAULT_MUSIC_WIDGET_WHITELIST_PACKAGES);
+            syncStringKey(localPrefs, remotePrefs, Constants.KEY_REAR_APP_WIDGETS, DEFAULT_REAR_APP_WIDGETS);
             syncStringKey(
                     localPrefs,
                     remotePrefs,

@@ -98,6 +98,8 @@ import hook.HyperBackscreen.ui.function.FunctionPage
 import hook.HyperBackscreen.ui.function.RearDoubleTapPage
 import hook.HyperBackscreen.ui.function.RearCastPage
 import hook.HyperBackscreen.ui.function.RearMusicPage
+import hook.HyperBackscreen.ui.function.RearWidgetPickerPage
+import hook.HyperBackscreen.ui.function.RearWidgetsPage
 import hook.HyperBackscreen.ui.function.RearScreenTimingPage
 import hook.HyperBackscreen.ui.home.HomePage
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -530,6 +532,11 @@ internal fun HomeScreen(
                         onBack = { navigateBackFrom(page) }
                     )
                     HomeRoute.RearScreenRecord -> RearScreenRecordPage(onBack = { navigateBackFrom(page) })
+                    HomeRoute.RearWidgets -> RearWidgetsPage(
+                        onAddClick = { openDetail(page, HomeRoute.RearWidgetPicker) },
+                        onBack = { navigateBackFrom(page) }
+                    )
+                    HomeRoute.RearWidgetPicker -> RearWidgetPickerPage(onBack = { navigateBackFrom(page) })
                     // 功能页已不放入口；路由只追加不删，保留它让旧版本保存的返回栈仍能恢复到这一页。
                     HomeRoute.RearCast -> RearCastPage(
                         onRearScreenTimingClick = { openDetail(page, HomeRoute.RearScreenTiming) },
@@ -575,6 +582,7 @@ internal fun HomeScreen(
                         onSettingsClick = { openDetail(page, HomeRoute.Settings) },
                         onRearDoubleTapClick = { openDetail(page, HomeRoute.RearDoubleTap) },
                         onRearMusicClick = { openDetail(page, HomeRoute.RearMusic) },
+                        onRearWidgetsClick = { openDetail(page, HomeRoute.RearWidgets) },
                         onRearScreenRecordClick = { openDetail(page, HomeRoute.RearScreenRecord) },
                         onLicenseClick = { openDetail(page, HomeRoute.License) },
                         onDonateClick = { openDetail(page, HomeRoute.Donate) },
@@ -679,6 +687,7 @@ private fun MainTabPage(
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onRearDoubleTapClick: () -> Unit,
     onRearMusicClick: () -> Unit,
+    onRearWidgetsClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit,
     onBatteryColorClick: () -> Unit,
     onRearScreenTimingClick: () -> Unit,
@@ -786,6 +795,7 @@ private fun MainTabPage(
                             onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                             onRearDoubleTapClick = onRearDoubleTapClick,
                             onRearMusicClick = onRearMusicClick,
+                            onRearWidgetsClick = onRearWidgetsClick,
                             onRearScreenRecordClick = onRearScreenRecordClick,
                             onBatteryColorClick = onBatteryColorClick,
                             onRearScreenTimingClick = onRearScreenTimingClick,
@@ -854,6 +864,7 @@ private fun MainContent(
     onSettingsClick: () -> Unit,
     onRearDoubleTapClick: () -> Unit,
     onRearMusicClick: () -> Unit,
+    onRearWidgetsClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit,
     onLicenseClick: () -> Unit,
     onDonateClick: () -> Unit,
@@ -962,6 +973,7 @@ private fun MainContent(
                 onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                 onRearDoubleTapClick = onRearDoubleTapClick,
                 onRearMusicClick = onRearMusicClick,
+                onRearWidgetsClick = onRearWidgetsClick,
                 onRearScreenRecordClick = onRearScreenRecordClick,
                 onBatteryColorClick = onBatteryColorClick,
                 onRearScreenTimingClick = onRearScreenTimingClick,
