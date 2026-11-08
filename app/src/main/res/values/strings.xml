@@ -312,7 +312,7 @@
     <!-- 背屏录屏 -->
     <string name="rear_record_title">Rear screen recording</string>
     <string name="rear_record_entry_summary">Record the rear screen with root and save it to the gallery</string>
-    <string name="rear_record_hint">Requires root. While recording, the rear screen is woken every few seconds to keep it on. Recording stops automatically after 3 minutes; leaving this page or sending the app to the background also stops and saves it.</string>
+    <string name="rear_record_hint">Requires root, up to 3 minutes. Recording continues after you leave this page; stop it from the notification or the Control Center tile.</string>
     <string name="rear_record_state_idle">Ready to record</string>
     <string name="rear_record_state_recording">Recording</string>
     <string name="rear_record_idle_summary">Videos are saved to Movies/MiBackscreen</string>
@@ -327,6 +327,8 @@
     <string name="rear_record_failed_start">Could not start recording</string>
     <string name="rear_record_failed_empty">Nothing was recorded, so nothing was saved (the rear screen may not have turned on)</string>
     <string name="rear_record_failed_save">Could not save to the gallery</string>
+    <string name="rear_record_notification_title">Recording the rear screen</string>
+    <string name="rear_record_tile_start_blocked">Recording can\'t start right now. Start it from the Rear screen recording page in the module</string>
     <string name="rear_double_tap_title">Rear double-tap</string>
     <string name="rear_double_tap_summary_none">No apps selected, feature off</string>
     <string name="rear_double_tap_summary_counts">Wake blocked for %1$d · sleep blocked for %2$d</string>

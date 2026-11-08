@@ -307,7 +307,7 @@
     <!-- 背屏录屏 -->
     <string name="rear_record_title">背屏录屏</string>
     <string name="rear_record_entry_summary">用 root 录制背屏画面并保存到相册</string>
-    <string name="rear_record_hint">需要 root 权限。录制期间每隔几秒唤醒一次背屏保持亮屏；最长录制 3 分钟，到时自动停止。离开本页或切到后台也会停止并保存。</string>
+    <string name="rear_record_hint">需要 root，最长 3 分钟。离开本页会继续录，可在通知或控制中心磁贴停止。</string>
     <string name="rear_record_state_idle">准备就绪</string>
     <string name="rear_record_state_recording">录制中</string>
     <string name="rear_record_idle_summary">视频保存到 Movies/MiBackscreen</string>
@@ -322,6 +322,8 @@
     <string name="rear_record_failed_start">录屏启动失败</string>
     <string name="rear_record_failed_empty">没有录到画面，未保存（背屏可能没有亮起）</string>
     <string name="rear_record_failed_save">保存到相册失败</string>
+    <string name="rear_record_notification_title">正在录制背屏</string>
+    <string name="rear_record_tile_start_blocked">现在无法开始录制，请到模块的「背屏录屏」页面开始</string>
     <string name="rear_double_tap_title">背屏双击</string>
     <string name="rear_double_tap_summary_none">未选择应用，功能未启用</string>
     <string name="rear_double_tap_summary_counts">亮屏拦截 %1$d 个应用 · 熄屏拦截 %2$d 个应用</string>
