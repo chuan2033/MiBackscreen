@@ -23,6 +23,7 @@ import hook.HyperBackscreen.hook.target.TargetMembers;
 import hook.HyperBackscreen.hook.target.TargetResolver;
 import hook.HyperBackscreen.hook.appindex.SubscreenAppIndex;
 import hook.HyperBackscreen.hook.assistant.PersonalAssistantHooks;
+import hook.HyperBackscreen.hook.subscreen.RearAppWidgetHooks;
 import hook.HyperBackscreen.hook.subscreen.RearLyricHooks;
 import hook.HyperBackscreen.hook.subscreen.RearVideoHooks;
 import hook.HyperBackscreen.hook.subscreen.SubScreenCenterHooks;
@@ -67,7 +68,10 @@ public class ModuleMain extends XposedModule {
     private final PersonalAssistantHooks personalAssistantHooks = new PersonalAssistantHooks(this);
     private final RearVideoHooks rearVideoHooks = new RearVideoHooks(this);
     private final RearLyricHooks rearLyricHooks = new RearLyricHooks(this);
+    private final RearAppWidgetHooks rearAppWidgetHooks = new RearAppWidgetHooks(this);
     private final RearVideoImportHooks rearVideoImportHooks = new RearVideoImportHooks(this);
+    private final hook.HyperBackscreen.hook.settings.SettingsEntryHooks settingsEntryHooks =
+            new hook.HyperBackscreen.hook.settings.SettingsEntryHooks(this);
 
     @Override
     public void onModuleLoaded(@NonNull ModuleLoadedParam param) {
@@ -107,6 +111,11 @@ public class ModuleMain extends XposedModule {
                     });
         }
 
+        if (Constants.SETTINGS_PACKAGE.equals(packageName)) {
+            settingsEntryHooks.installOnce(param.getClassLoader());
+            return;
+        }
+
         if (Constants.PERSONAL_ASSISTANT_PACKAGE.equals(packageName)) {
             if (personalAssistantHooksInstalled) return;
             synchronized (this) {
@@ -143,9 +152,10 @@ public class ModuleMain extends XposedModule {
                     subScreenCenterHooks.installRearScreenSelectionSyncHook(param.getClassLoader());
                     subScreenCenterHooks.installAutoWallpaperRotationHooks(param.getClassLoader());
                     subScreenCenterHooks.installMusicWidgetWhitelistHooks(param.getClassLoader());
-                    // 以下两项各自吞掉异常，失败只影响自己。
+                    // 以下几项各自吞掉异常，失败只影响自己。
                     rearVideoHooks.install(param.getClassLoader());
                     rearLyricHooks.install(param.getClassLoader());
+                    rearAppWidgetHooks.install(param.getClassLoader());
                     hooksInstalled = true;
                     log(Log.INFO, Constants.LOG_TAG, "Hooks installed for " + Constants.TARGET_PACKAGE);
                 } catch (Throwable throwable) {

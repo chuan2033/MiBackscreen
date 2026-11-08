@@ -9,6 +9,9 @@ import android.content.pm.PackageManager
  *
  * SuperLyric 的 system 作用域生效后会把服务 Binder 放进每个应用进程（包括模块 App）的 ServiceManager 缓存，
  * 所以在这里能拿到，背屏中心里也一定能拿到。有 Binder 调用，调用方放后台线程。
+ *
+ * 4.2 起服务按调用方裁剪：模块 App 是第三方应用，只能拿到清单 meta-data 声明的那一代（4.0 库合并进来的是 40 →
+ * 只有 v4）；背屏中心是系统应用，两代都有。所以这里检测到 V4 时，背屏中心一定也走 V4。
  */
 internal enum class SuperLyricAvailability {
     /** 没装 SuperLyric。 */
@@ -39,6 +42,9 @@ internal enum class SuperLyricAvailability {
             SuperLyricBackend.LEGACY -> LEGACY
             SuperLyricBackend.NONE -> if (installed) SERVICE_UNAVAILABLE else NOT_INSTALLED
         }
+
+        /** v4 服务端实现的 API 版本（4.2 为 40）；3.x 服务端或拿不到服务时为 0。有 Binder 调用。 */
+        fun serverApiVersion(): Int = runCatching { com.hchen.superlyricapi.SuperLyric.serverApiVersion() }.getOrDefault(0)
 
         @SuppressLint("PrivateApi", "DiscouragedPrivateApi")
         private fun lookupService(name: String): Any? = runCatching {

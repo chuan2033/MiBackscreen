@@ -66,6 +66,7 @@ class ModulePreferencesSnapshotTest {
             Constants.KEY_FIX_REAR_SCREEN_APPLY to true,
             Constants.KEY_DISABLE_REAR_SCREEN_COVER to true,
             Constants.KEY_THEME_SETTINGS_SHORTCUT to false,
+            Constants.KEY_SETTINGS_ENTRY to "bottom",
             Constants.KEY_DISABLE_DOUBLE_TAP_WAKE to true,
             Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES to "selected.package",
         ))
@@ -78,6 +79,7 @@ class ModulePreferencesSnapshotTest {
             fixRearScreenApply = true,
             disableRearScreenCover = true,
             themeSettingsShortcut = false,
+            settingsEntry = "bottom",
             disableDoubleTapWake = true,
             doubleTapWakeDisabledPackages = "selected.package",
             enable18ProFeatures = false,

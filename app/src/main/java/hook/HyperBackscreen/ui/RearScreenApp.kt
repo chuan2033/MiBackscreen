@@ -1,5 +1,6 @@
 package hook.HyperBackscreen.ui
 
+import hook.HyperBackscreen.ui.components.AppDialog
 import hook.HyperBackscreen.model.AutoWallpaperInterval
 import hook.HyperBackscreen.model.AutoWallpaperOrder
 import hook.HyperBackscreen.model.RearScreenOffTimeout
@@ -12,6 +13,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.DialogButtonRow
 import hook.HyperBackscreen.ui.theme.LocalAppColors
+import hook.HyperBackscreen.ui.theme.LocalUiStyle
+import hook.HyperBackscreen.ui.theme.LocalThemeState
+import hook.HyperBackscreen.ui.theme.ThemeState
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import hook.HyperBackscreen.ui.theme.styledColorScheme
 import hook.HyperBackscreen.ui.theme.appColors
 import android.graphics.Color
 import android.content.Context
@@ -44,6 +51,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import hook.HyperBackscreen.R
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.Box
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import hook.HyperBackscreen.ui.components.LocalRootBackdrop
 import hook.HyperBackscreen.app.ModuleApp
 import hook.HyperBackscreen.bridge.PrefsBridge
 import hook.HyperBackscreen.bridge.ModulePreferencesSnapshot
@@ -62,17 +76,12 @@ import hook.HyperBackscreen.ui.function.RearMediaSwitches
 import hook.HyperBackscreen.ui.util.AppLanguage
 import hook.HyperBackscreen.ui.util.RearDisplayCompatibility
 import hook.HyperBackscreen.ui.util.RearScreenTimeoutSync
-import hook.HyperBackscreen.ui.util.ThemePrefs
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.darkColorScheme
-import top.yukonga.miuix.kmp.theme.lightColorScheme
-import top.yukonga.miuix.kmp.theme.platformDynamicColors
-import top.yukonga.miuix.kmp.window.WindowDialog
 
 @Composable
 internal fun RearScreenApp() {
@@ -202,10 +211,12 @@ internal fun RearScreenApp() {
     var pendingUpdate by remember { mutableStateOf<UpdateInfo?>(null) }
     var downloadFailed by remember { mutableStateOf(false) }
     var disableRearScreenCover by remember { mutableStateOf(initialPrefs.disableRearScreenCover) }
-    var themeMode by remember {
-        mutableStateOf(ThemePrefs.getThemeMode(context))
-    }
+    // 主题相关设置（颜色模式、Monet 强调色、界面风格、页面缩放等）集中在 ThemeState，主题页直接读写它。
+    val themeState = remember { ThemeState(context) }
+    val themeMode = themeState.themeMode
+    val uiStyle = themeState.uiStyle
     var themeSettingsShortcut by remember { mutableStateOf(initialPrefs.themeSettingsShortcut) }
+    var settingsEntry by remember { mutableStateOf(initialPrefs.settingsEntry) }
     var disableDoubleTapWake by remember { mutableStateOf(initialPrefs.disableDoubleTapWake) }
     var doubleTapWakeDisabledPackages by remember {
         mutableStateOf(initialPrefs.doubleTapWakeDisabledPackages)
@@ -310,6 +321,7 @@ internal fun RearScreenApp() {
                 faceEnrollmentCompat = values.faceEnrollmentCompat
                 keepRearScreenOnInGame = values.keepRearScreenOnInGame
                 themeSettingsShortcut = values.themeSettingsShortcut
+                settingsEntry = values.settingsEntry
                 disableRearScreenCover = values.disableRearScreenCover
                 disableDoubleTapWake = values.disableDoubleTapWake
                 doubleTapWakeDisabledPackages = values.doubleTapWakeDisabledPackages
@@ -365,13 +377,8 @@ internal fun RearScreenApp() {
         }
     }
 
-    val appColors = if (themeMode.usesDynamicColors) {
-        platformDynamicColors(isDark)
-    } else if (isDark) {
-        darkColorScheme()
-    } else {
-        lightColorScheme()
-    }
+    val baseColors = themeState.baseColors(isDark)
+    val appColors = styledColorScheme(baseColors, uiStyle, isDark, themeMode.usesDynamicColors)
 
     /**
      * 恢复配置只写了偏好；按「恢复前后有变化的键」补上与逐项切换时相同的副作用，
@@ -391,6 +398,9 @@ internal fun RearScreenApp() {
             sendAutoWallpaperSync(context, AutoWallpaperInterval.fromPref(after.autoWallpaperIntervalMinutes))
         }
         // 歌词开关不重启背屏中心，和手动切换一样只发同步广播。
+        if (after.rearAppWidgets != before.rearAppWidgets) {
+            hook.HyperBackscreen.ui.function.RearWidgetSelection.reload(context)
+        }
         if (after.enableRearLyric != before.enableRearLyric) {
             sendRearLyricSync(context, Constants.KEY_ENABLE_REAR_LYRIC, after.enableRearLyric)
         }
@@ -410,6 +420,7 @@ internal fun RearScreenApp() {
         }
         if (after.faceEnrollmentCompat != before.faceEnrollmentCompat) scopes += Constants.THEME_STORE_PACKAGE
         if (after.themeSettingsShortcut != before.themeSettingsShortcut) scopes += Constants.THEME_STORE_PACKAGE
+        if (after.settingsEntry != before.settingsEntry) scopes += Constants.SETTINGS_PACKAGE
         if (after.enableAppCard != before.enableAppCard) scopes += Constants.TARGET_PACKAGE
         if (after.musicWidgetWhitelistPackages != before.musicWidgetWhitelistPackages) {
             scopes += Constants.TARGET_PACKAGE
@@ -461,13 +472,34 @@ internal fun RearScreenApp() {
         }
     }
     MiuixTheme(colors = appColors) {
-      val projectColors = remember(appColors, themeMode.usesDynamicColors) {
-          appColors(appColors, themeMode.usesDynamicColors)
+      val projectColors = remember(appColors, themeMode.usesDynamicColors, uiStyle) {
+          appColors(appColors, themeMode.usesDynamicColors, uiStyle)
+      }
+      // 页面缩放：和 KernelSU 一样直接缩放 Compose 的 density，字体缩放保持系统设置。
+      val systemDensity = LocalDensity.current
+      val scaledDensity = remember(systemDensity, themeState.pageScale) {
+          Density(systemDensity.density * themeState.pageScale, systemDensity.fontScale)
       }
       CompositionLocalProvider(
           LocalUiFeedback provides feedback,
-          LocalAppColors provides projectColors
+          LocalAppColors provides projectColors,
+          LocalUiStyle provides uiStyle,
+          LocalThemeState provides themeState,
+          LocalDensity provides scaledDensity
       ) {
+      // 根 Scaffold：所有覆盖层弹窗 / 玻璃下拉都挂到这里的全屏宿主上（在下面的采样层之外，不会采样成环）。
+      // 透明底、不吃 inset，对页面布局没有影响。根 backdrop 记录整个导航内容，玻璃弹窗和下拉从这里取模糊。
+      val rootSurface = MiuixTheme.colorScheme.surface
+      val rootBackdrop = rememberLayerBackdrop {
+          drawRect(rootSurface)
+          drawContent()
+      }
+      Scaffold(
+          containerColor = androidx.compose.ui.graphics.Color.Transparent,
+          contentWindowInsets = WindowInsets(0, 0, 0, 0)
+      ) { _ ->
+      CompositionLocalProvider(LocalRootBackdrop provides rootBackdrop) {
+        Box(Modifier.fillMaxSize().layerBackdrop(rootBackdrop)) {
         HomeScreen(
             enableBatteryRing = enableBatteryRing,
             onEnableBatteryRingChange = { value ->
@@ -734,16 +766,39 @@ internal fun RearScreenApp() {
                 // 手动重启：不依赖刚改的设置，服务未连接也照常执行。
                 refreshScopes(*selected.toTypedArray(), allowSystemReboot = true, afterPreferenceWrite = false)
             },
-            themeMode = themeMode,
-            onThemeModeChange = { newMode ->
-                ThemePrefs.setThemeMode(context, newMode)
-                themeMode = newMode
-            },
             themeSettingsShortcut = themeSettingsShortcut,
             onThemeSettingsShortcutChange = { enabled ->
                 themeSettingsShortcut = enabled
                 PrefsBridge.writeThemeSettingsShortcutFromUi(context, enabled)
                 refreshScopes(Constants.THEME_STORE_PACKAGE)
+            },
+            settingsEntry = settingsEntry,
+            onSettingsEntryChange = { position ->
+                settingsEntry = position
+                PrefsBridge.writeSettingsEntryFromUi(context, position)
+                val service = ModuleApp.getService()
+                val inScope = runCatching { service?.scope?.contains(Constants.SETTINGS_PACKAGE) }.getOrNull()
+                if (position != "off" && service != null && inScope == false) {
+                    // 系统设置不在作用域里：让 LSPosed 弹出授权，批准后重启设置让入口出现。
+                    runCatching {
+                        service.requestScope(
+                            listOf(Constants.SETTINGS_PACKAGE),
+                            object : io.github.libxposed.service.XposedService.OnScopeEventListener {
+                                override fun onScopeRequestApproved(approved: List<String>) {
+                                    scope.launch { refreshScopes(Constants.SETTINGS_PACKAGE) }
+                                }
+
+                                override fun onScopeRequestFailed(message: String) {
+                                    scope.launch { feedback.show(resources.getString(R.string.config_module_entry_scope_failed)) }
+                                }
+                            }
+                        )
+                        feedback.show(resources.getString(R.string.config_module_entry_scope_request))
+                    }.onFailure { feedback.show(resources.getString(R.string.config_module_entry_scope_failed)) }
+                } else {
+                    // 设置首页在进入时重建列表，重启一次设置进程让新位置立即生效。
+                    refreshScopes(Constants.SETTINGS_PACKAGE)
+                }
             },
             onBackupPreferences = {
                 scope.launch(Dispatchers.IO) {
@@ -831,8 +886,7 @@ internal fun RearScreenApp() {
                 }
             }
         )
-
-      }
+        }
         UpdateDialog(
             update = pendingUpdate,
             downloadFailed = downloadFailed,
@@ -845,7 +899,7 @@ internal fun RearScreenApp() {
             onDismiss = { pendingUpdate = null; downloadFailed = false }
         )
 
-        WindowDialog(
+        AppDialog(
             show = showRearDisplayWarning,
             title = stringResource(R.string.compat_rear_display_hidden_title),
             onDismissRequest = { showRearDisplayWarning = false }
@@ -866,7 +920,7 @@ internal fun RearScreenApp() {
             }
         }
 
-        WindowDialog(
+        AppDialog(
             show = showRestoreConfirm,
             title = stringResource(R.string.config_restore_confirm_title),
             summary = pendingRestore?.let { info ->
@@ -890,6 +944,9 @@ internal fun RearScreenApp() {
                 }
             )
         }
+      }
+      }
+      }
     }
 }
 

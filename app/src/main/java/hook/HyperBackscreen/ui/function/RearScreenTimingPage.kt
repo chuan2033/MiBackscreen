@@ -1,5 +1,6 @@
 package hook.HyperBackscreen.ui.function
 
+import hook.HyperBackscreen.ui.components.AppDialog
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.DetailPageScaffold
@@ -22,9 +23,8 @@ import hook.HyperBackscreen.ui.components.AnimatedPreferenceVisibility
 import hook.HyperBackscreen.ui.components.CardBlock
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
-import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
+import hook.HyperBackscreen.ui.components.AppDropdownPreference
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
-import top.yukonga.miuix.kmp.window.WindowDialog
 
 /**
  * 「息屏与定时」二级页：管背屏什么时候灭、多久灭、多久换一次壁纸。
@@ -58,7 +58,7 @@ internal fun RearScreenTimingPage(
     ) {
         item(key = "sleep") {
             CardBlock(pressFeedbackType = PressFeedbackType.None) {
-                WindowDropdownPreference(
+                AppDropdownPreference(
                     items = RearScreenOffTimeout.entries.map { stringResource(it.labelRes) },
                     selectedIndex = rearScreenOffTimeout.ordinal,
                     title = stringResource(R.string.rear_screen_off_timeout_title),
@@ -84,7 +84,7 @@ internal fun RearScreenTimingPage(
         }
         item(key = "schedule") {
             CardBlock(pressFeedbackType = PressFeedbackType.None) {
-                WindowDropdownPreference(
+                AppDropdownPreference(
                     items = AutoWallpaperInterval.entries.map { stringResource(it.labelRes) },
                     selectedIndex = autoWallpaperInterval.ordinal,
                     title = stringResource(R.string.auto_wallpaper_interval_title),
@@ -97,7 +97,7 @@ internal fun RearScreenTimingPage(
                 AnimatedPreferenceVisibility(
                     visible = autoWallpaperInterval != AutoWallpaperInterval.OFF
                 ) {
-                    WindowDropdownPreference(
+                    AppDropdownPreference(
                         items = AutoWallpaperOrder.entries.map { stringResource(it.labelRes) },
                         selectedIndex = autoWallpaperOrder.ordinal,
                         title = stringResource(R.string.auto_wallpaper_order_title),
@@ -149,7 +149,7 @@ internal fun RearScreenTimingPage(
     }
 
     val editing = editingSchedule
-    WindowDialog(
+    AppDialog(
         show = showScheduleDialog && editing != null,
         title = when (editing) {
             ScheduleTimeField.START -> stringResource(R.string.rear_screen_schedule_start_title)

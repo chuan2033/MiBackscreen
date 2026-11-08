@@ -1,5 +1,6 @@
 package hook.HyperBackscreen.ui.updater
 
+import hook.HyperBackscreen.ui.components.AppDialog
 import hook.HyperBackscreen.ui.components.DialogButtonRow
 import hook.HyperBackscreen.ui.theme.currentAppColors
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,7 +27,6 @@ import androidx.compose.ui.unit.sp
 import hook.HyperBackscreen.R
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
 
 /** 检测到新版本时的弹窗：标题 + 更新内容 + 「取消」「下载」。 */
 @Composable
@@ -36,7 +36,7 @@ fun UpdateDialog(
     onDownload: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    WindowDialog(
+    AppDialog(
         show = update != null,
         title = stringResource(R.string.update_available_title),
         onDismissRequest = onDismiss

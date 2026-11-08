@@ -81,12 +81,23 @@ public final class Constants {
      * 背屏中心当成「支持的音乐应用」，播放时显示背屏音乐卡片。空 = 完全沿用宿主内置名单。
      */
     public static final String KEY_MUSIC_WIDGET_WHITELIST_PACKAGES = "music_widget_whitelist_packages";
+    /** 背屏小部件：用户选中的 AppWidget 提供方（ComponentName 扁平串，一行一个），见 RearWidgetList。 */
+    public static final String KEY_REAR_APP_WIDGETS = "rear_app_widgets";
     /**
      * 按应用禁用背屏「双击熄屏」（包名列表，PackageListCodec 编码）。与上面的双击唤醒名单
      * 互不相干：那份管「熄屏时双击不亮」，这份管「亮屏时双击不灭」。
      */
     public static final String KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES = "double_tap_sleep_disabled_packages";
     public static final String KEY_THEME_SETTINGS_SHORTCUT = "theme_settings_shortcut";
+    /** 系统「设置」首页里的模块入口位置：off / top / middle / bottom。 */
+    public static final String KEY_SETTINGS_ENTRY = "settings_entry";
+    public static final String SETTINGS_PACKAGE = "com.android.settings";
+    /** 系统设置首页 Activity 与它的条目列表；条目类来自 settingslib，类名与字段都不混淆。 */
+    public static final String SETTINGS_MIUI_SETTINGS_CLASS = "com.android.settings.MiuiSettings";
+    public static final String SETTINGS_HEADER_ADAPTER_CLASS = "com.android.settings.MiuiSettings$HeaderAdapter";
+    public static final String SETTINGS_HEADER_VIEW_HOLDER_CLASS = "com.android.settings.MiuiSettings$HeaderViewHolder";
+    public static final String SETTINGS_HEADER_CLASS =
+            "com.android.settingslib.miuisettings.preference.PreferenceActivity$Header";
     /**
      * 背屏视频壁纸续播（背屏中心）：重开播放器时从上次的位置接着播，不再每次亮屏从头开始。
      * 视频三项都只在宿主进程启动时决定是否安装 Hook（关着就完全不挂），所以改完要重启对应作用域；
@@ -118,6 +129,9 @@ public final class Constants {
      */
     public static final String ACTION_SYNC_REAR_LYRIC =
             MODULE_PACKAGE + ".action.SYNC_REAR_LYRIC";
+    /** 背屏小部件列表变化：extra {@link #EXTRA_PREFERENCE_VALUE} 为新的列表串，背屏中心即时重排页面。 */
+    public static final String ACTION_SYNC_REAR_WIDGETS =
+            MODULE_PACKAGE + ".action.SYNC_REAR_WIDGETS";
     public static final String EXTRA_PREFERENCE_KEY = "preference_key";
     public static final String EXTRA_INTERVAL_MINUTES = "interval_minutes";
     public static final String PANEL_DIAGNOSTIC_METHOD_APPEND = "append_diagnostic";
@@ -521,6 +535,11 @@ public final class Constants {
     public static final int SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_DARK_BACKGROUND = 0xFF2B2B2F;
     // 预览图里图标占短边的比例。
     public static final float SUBSCREEN_LAUNCHER_ENTRY_PREVIEW_ICON_RATIO = 0.62f;
+    /** 智能助理里「背屏应用卡详情」页；类名和 onCreate 都不混淆。 */
+    public static final String PERSONAL_ASSISTANT_BACKSCREEN_DETAIL_ACTIVITY_CLASS =
+            "com.miui.personalassistant.backscreen.detail.view.BackScreenDetailActivity";
+    /** 智能助理自带的 Glide；get / clearMemory / clearDiskCache 是公开 API，不混淆。 */
+    public static final String PERSONAL_ASSISTANT_GLIDE_CLASS = "com.bumptech.glide.Glide";
     public static final String PERSONAL_ASSISTANT_COMMON_PARAMS_CLASS =
             "com.miui.personalassistant.network.util.a";
     public static final String PERSONAL_ASSISTANT_ENVIRONMENT_SIGNAL_METHOD = "a";
