@@ -68,6 +68,8 @@ public class ModuleMain extends XposedModule {
     private final RearVideoHooks rearVideoHooks = new RearVideoHooks(this);
     private final RearLyricHooks rearLyricHooks = new RearLyricHooks(this);
     private final RearVideoImportHooks rearVideoImportHooks = new RearVideoImportHooks(this);
+    private final hook.HyperBackscreen.hook.settings.SettingsEntryHooks settingsEntryHooks =
+            new hook.HyperBackscreen.hook.settings.SettingsEntryHooks(this);
 
     @Override
     public void onModuleLoaded(@NonNull ModuleLoadedParam param) {
@@ -105,6 +107,11 @@ public class ModuleMain extends XposedModule {
                         }
                         return result;
                     });
+        }
+
+        if (Constants.SETTINGS_PACKAGE.equals(packageName)) {
+            settingsEntryHooks.installOnce(param.getClassLoader());
+            return;
         }
 
         if (Constants.PERSONAL_ASSISTANT_PACKAGE.equals(packageName)) {

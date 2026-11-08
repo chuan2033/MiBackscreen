@@ -6,6 +6,8 @@ import static hook.HyperBackscreen.hook.util.HookReflection.invokeNoArg;
 import static hook.HyperBackscreen.hook.util.HookReflection.readUtf8;
 
 import android.content.Context;
+import android.content.SharedPreferences;
+import android.os.Bundle;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -35,6 +37,8 @@ public final class PersonalAssistantHooks {
     }
 
     public void installPersonalAssistantStoreHooks(@NonNull ClassLoader classLoader) {
+        installPanelCardPreviewRefresh(classLoader);
+
         Class<?> commonParamsClass = findClass(
                 Constants.PERSONAL_ASSISTANT_COMMON_PARAMS_CLASS,
                 classLoader);
@@ -115,6 +119,79 @@ public final class PersonalAssistantHooks {
             );
         }
     }
+
+    /**
+     * 「我的应用卡」点进 MiBackscreen 卡片后，详情页由智能助理显示预览图。它用 Glide 按<b>文件路径</b>
+     * 缓存图片（没有带修改时间的签名），而模块每次面板设置变化都在同一路径重画预览 PNG，
+     * 所以列表里的小卡片已经是新面板，详情页却一直拿缓存里的旧图。
+     *
+     * <p>这里在详情页创建前比较模块两张预览图的「修改时间 + 大小」，和上次记下的不一样就清掉
+     * 智能助理的 Glide 内存缓存和磁盘缓存，让它重新读文件。Glide 的缓存键算不出来，只能整体清；
+     * 但只在预览图真的变过、并且用户打开了应用卡详情时才清一次，代价是其它卡片缩略图重新解码一遍。
+     */
+    private void installPanelCardPreviewRefresh(@NonNull ClassLoader classLoader) {
+        Class<?> detailActivity = findClass(
+                Constants.PERSONAL_ASSISTANT_BACKSCREEN_DETAIL_ACTIVITY_CLASS, classLoader);
+        if (detailActivity == null) {
+            module.log(Log.WARN, Constants.LOG_TAG, "Personal assistant hook target missing: "
+                    + Constants.PERSONAL_ASSISTANT_BACKSCREEN_DETAIL_ACTIVITY_CLASS);
+            return;
+        }
+        module.hookMethodIfPresent(
+                detailActivity,
+                "onCreate",
+                new Class[]{Bundle.class},
+                Constants.PERSONAL_ASSISTANT_BACKSCREEN_DETAIL_ACTIVITY_CLASS + "#onCreate",
+                chain -> {
+                    if (chain.getThisObject() instanceof Context context) {
+                        refreshStalePanelCardPreview(context, classLoader);
+                    }
+                    return chain.proceed();
+                }
+        );
+    }
+
+    private void refreshStalePanelCardPreview(@NonNull Context context, @NonNull ClassLoader classLoader) {
+        try {
+            String stamp = previewStamp(Constants.MODULE_PANEL_CARD_PREVIEW_LIGHT)
+                    + "|" + previewStamp(Constants.MODULE_PANEL_CARD_PREVIEW_DARK);
+            SharedPreferences prefs = context.getSharedPreferences(PANEL_PREVIEW_PREFS, Context.MODE_PRIVATE);
+            if (stamp.equals(prefs.getString(PANEL_PREVIEW_STAMP_KEY, null))) return;
+
+            Class<?> glideClass = findClass(Constants.PERSONAL_ASSISTANT_GLIDE_CLASS, classLoader);
+            if (glideClass == null) return;
+            Object glide = glideClass.getMethod("get", Context.class).invoke(null, context);
+            if (glide == null) return;
+            // clearMemory 必须在主线程（onCreate 就在主线程）；clearDiskCache 必须在后台线程。
+            glideClass.getMethod("clearMemory").invoke(glide);
+            Method clearDiskCache = glideClass.getMethod("clearDiskCache");
+            Thread clearer = new Thread(() -> {
+                try {
+                    clearDiskCache.invoke(glide);
+                } catch (Throwable error) {
+                    module.log(Log.WARN, Constants.LOG_TAG, "Glide disk cache clear failed", error);
+                }
+            }, "MiBackscreen-GlideClear");
+            clearer.start();
+            // 等磁盘缓存清完再让详情页去加载，否则它可能抢先读到旧缓存；缓存只有几 MB，通常几十毫秒。
+            clearer.join(PANEL_PREVIEW_CLEAR_WAIT_MILLIS);
+            prefs.edit().putString(PANEL_PREVIEW_STAMP_KEY, stamp).apply();
+            module.log(Log.INFO, Constants.LOG_TAG,
+                    "Cleared personal assistant image cache for updated panel card preview");
+        } catch (Throwable error) {
+            module.log(Log.WARN, Constants.LOG_TAG, "Panel card preview refresh failed", error);
+        }
+    }
+
+    @NonNull
+    private static String previewStamp(@NonNull String path) {
+        File file = new File(path);
+        return file.isFile() ? file.lastModified() + ":" + file.length() : "-";
+    }
+
+    private static final String PANEL_PREVIEW_PREFS = "mibackscreen_panel_card_preview";
+    private static final String PANEL_PREVIEW_STAMP_KEY = "stamp";
+    private static final long PANEL_PREVIEW_CLEAR_WAIT_MILLIS = 800L;
 
     @Nullable
     private Object parsePersonalAssistantPreset(

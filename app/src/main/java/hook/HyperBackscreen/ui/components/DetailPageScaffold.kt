@@ -1,6 +1,7 @@
 package hook.HyperBackscreen.ui.components
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -94,6 +95,7 @@ internal fun DetailPageScaffold(
             }
         }
     ) { paddingValues ->
+        CompositionLocalProvider(LocalPageBackdrop provides backdrop) {
         Column(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
             if (pinnedHeader != null) {
                 Spacer(Modifier.height(paddingValues.calculateTopPadding()))
@@ -105,9 +107,12 @@ internal fun DetailPageScaffold(
                     .weight(1f)
                     .scrollEndHaptic()
                     .overScrollVertical()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .padding(horizontal = 12.dp),
+                    .nestedScroll(scrollBehavior.nestedScrollConnection),
+                // 左右留白放进 contentPadding 而不是给列表本身加 padding：列表边界会裁掉卡片阴影，
+                // 留白在列表外时 Mochi 的卡片阴影左右两侧被切成一条竖直的灰边。
                 contentPadding = PaddingValues(
+                    start = 12.dp,
+                    end = 12.dp,
                     top = if (pinnedHeader != null) 0.dp else paddingValues.calculateTopPadding()
                 )
             ) {
@@ -119,6 +124,7 @@ internal fun DetailPageScaffold(
                     Spacer(Modifier.height(HomeUiTokens.DetailListBottomSpacing).navigationBarsPadding())
                 }
             }
+        }
         }
     }
 }
