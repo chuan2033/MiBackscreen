@@ -106,12 +106,12 @@
     <string name="log_failed">Failed to generate log</string>
     <string name="log_share_title">Share log</string>
     <string name="home_disable_long_press_title">Disable rear screen long press to switch wallpaper</string>
-    <string name="home_remove_wallpaper_limit_title">Remove rear screen wallpaper count limit</string>
+    <string name="home_remove_wallpaper_limit_title">Remove wallpaper count limit</string>
     <string name="home_remove_app_card_limit_title">Remove app card count limit</string>
-    <string name="home_fix_apply_title">Fix rear screen wallpaper apply failure</string>
-    <string name="home_fix_apply_summary">Requires the theme crack module to be used together</string>
+    <string name="home_fix_apply_title">Fix wallpaper apply failure</string>
+    <string name="home_fix_apply_summary">Requires the theme crack module</string>
     <string name="face_enrollment_compat_title">Fix face enrollment compatibility</string>
-    <string name="face_enrollment_compat_summary">Turn on when AI Companion asks you to enroll a face</string>
+    <string name="face_enrollment_compat_summary">Turn on when AI Companion enrolls a face</string>
     <string name="home_status_activated">Activated</string>
     <string name="home_status_inactive">Not active</string>
     <string name="home_status_inactive_summary">Enable the module in LSPosed, then restart the scope</string>
@@ -334,21 +334,27 @@
     <string name="rear_double_tap_sleep_section">Rear screen on: block double-tap to sleep</string>
     <string name="rear_double_tap_choose_apps">Choose apps</string>
     <string name="rear_video_resume_title">Resume video wallpaper</string>
-    <string name="rear_video_resume_summary">Continue from where it stopped when the rear screen wakes, leaves always-on display or returns from another rear app; switching wallpapers starts over. Some wallpapers are designed to replay on every wake</string>
+    <string name="rear_video_resume_summary">Continue from where it stopped after waking</string>
     <string name="rear_video_unlock_limits_title">Remove video wallpaper limits</string>
-    <string name="rear_video_unlock_limits_summary">Custom rear videos are no longer trimmed to 6 s or compressed to 30 fps / 1080p, and the trim page is skipped; HDR, Dolby Vision and non-MP4 / MOV files are still rejected. Videos at 1080p or below are recommended</string>
+    <string name="rear_video_unlock_limits_summary">Use the original video instead of trimming to 6 s at 30 fps / 1080p</string>
     <string name="rear_video_keep_audio_title">Keep video wallpaper sound</string>
-    <string name="rear_video_keep_audio_summary">Newly set rear videos keep their audio track and play at media volume without interrupting music. Videos set earlier must be picked again to have sound</string>
+    <string name="rear_video_keep_audio_summary">Plays at media volume; re-pick videos set earlier</string>
     <string name="rear_lyric_title">Rear screen live lyrics</string>
-    <string name="rear_lyric_summary">While music plays, the title line on the rear music card shows the current lyric and the artist line shows “Title - Artist”. Requires SuperLyric, enabled in LSPosed for System Framework and your music apps, then a reboot</string>
+    <string name="rear_lyric_summary">Show the current lyric on the music card title line. Requires SuperLyric</string>
     <string name="rear_lyric_status_label" translatable="false">SuperLyric</string>
     <string name="rear_lyric_in_aod_title">Show lyrics on rear AOD</string>
-    <string name="rear_lyric_in_aod_summary">Keep showing the current lyric while the rear screen is in always-on display. The rear screen refreshes once per lyric line, using slightly more battery</string>
+    <string name="rear_lyric_in_aod_summary">Uses slightly more battery</string>
     <string name="rear_lyric_status_checking">Checking…</string>
     <string name="rear_lyric_status_v4">Connected · 4.x</string>
     <string name="rear_lyric_status_legacy">Connected · 3.x</string>
     <string name="rear_lyric_status_unavailable">Service inactive</string>
     <string name="rear_lyric_status_not_installed">Not installed</string>
+    <string name="rear_lyric_setup_hint">In LSPosed, enable SuperLyric for System Framework and your music apps, then reboot</string>
+    <string name="rear_music_title">Rear music</string>
+    <string name="rear_music_section_card">Music card</string>
+    <string name="rear_music_section_lyric">Live lyrics</string>
+    <string name="rear_music_summary_lyric_on">Live lyrics on</string>
+    <string name="rear_music_summary_lyric_off">Live lyrics off</string>
     <!-- 应用投放到背屏 / 拉回主屏 -->
     <string name="panel_tile_rear_cast">Cast</string>
     <string name="panel_tile_rear_cast_to_rear">To rear</string>
@@ -366,7 +372,6 @@
     <string name="rear_cast_toast_to_rear">Moved to the rear screen: %1$s</string>
     <string name="rear_cast_toast_to_main">Moved back to the main screen: %1$s</string>
     <string name="rear_cast_title">Cast apps to the rear screen</string>
-    <string name="rear_cast_entry_summary">Move the current app to the rear screen and back, from a Control Center tile or the rear panel</string>
     <string name="rear_cast_section_usage">How to use</string>
     <string name="rear_cast_tile_usage_title">Control Center tile</string>
     <string name="rear_cast_tile_usage_summary">Edit Control Center and add the \"Cast to rear\" tile. Tap it to move the app you are using on the main screen to the rear screen; when an app is already on the rear screen, tap it again to bring that app back to the main screen.</string>
