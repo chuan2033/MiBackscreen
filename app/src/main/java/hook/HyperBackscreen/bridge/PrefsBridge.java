@@ -160,6 +160,8 @@ public final class PrefsBridge {
     /** 按应用禁用背屏双击熄屏的名单默认空：系统原逻辑不变。 */
     public static final String DEFAULT_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES = "";
     public static final boolean DEFAULT_THEME_SETTINGS_SHORTCUT = true;
+    /** 系统设置里的模块入口默认不加：要把系统设置加进作用域，由用户主动选位置。 */
+    public static final String DEFAULT_SETTINGS_ENTRY = "off";
     /** 背屏视频壁纸三项增强默认全关：会改变官方壁纸「每次亮屏重播」的设计、放开导入限制、让背屏出声。 */
     public static final boolean DEFAULT_REAR_VIDEO_RESUME = false;
     public static final boolean DEFAULT_REAR_VIDEO_UNLOCK_LIMITS = false;
@@ -226,6 +228,7 @@ public final class PrefsBridge {
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES, DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_AUTO_WALLPAPER_ORDER, DEFAULT_AUTO_WALLPAPER_ORDER);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_REAR_SCREEN_OFF_TIMEOUT, DEFAULT_REAR_SCREEN_OFF_TIMEOUT);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_SETTINGS_ENTRY, DEFAULT_SETTINGS_ENTRY);
         BACKUP_STRING_DEFAULTS.put(
                 Constants.KEY_REAR_SCREEN_SCHEDULE_START,
                 DEFAULT_REAR_SCREEN_SCHEDULE_START);
@@ -933,6 +936,8 @@ public final class PrefsBridge {
                         : null;
             case Constants.KEY_REAR_SCREEN_SCHEDULE_MODE:
                 return normalizeRearScreenScheduleMode(value);
+            case Constants.KEY_SETTINGS_ENTRY:
+                return normalizeSettingsEntry(value).equals(value) ? value : null;
             case Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES:
             case Constants.KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES:
             case Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES:
@@ -1140,6 +1145,27 @@ public final class PrefsBridge {
 
     public static void writeThemeSettingsShortcutFromUi(@NonNull Context context, boolean enabled) {
         writeFromUi(context, Constants.KEY_THEME_SETTINGS_SHORTCUT, enabled);
+    }
+
+    @NonNull
+    public static String readSettingsEntryForUi(@NonNull Context context) {
+        return normalizeSettingsEntry(readStringForUi(context, Constants.KEY_SETTINGS_ENTRY, DEFAULT_SETTINGS_ENTRY));
+    }
+
+    public static void writeSettingsEntryFromUi(@NonNull Context context, @NonNull String position) {
+        writeStringFromUi(context, Constants.KEY_SETTINGS_ENTRY, normalizeSettingsEntry(position));
+    }
+
+    /** 系统设置首页的模块入口位置（off / top / middle / bottom）。 */
+    @NonNull
+    public static String readSettingsEntryForHook(@NonNull XposedModule module) {
+        return normalizeSettingsEntry(readStringForHook(module, Constants.KEY_SETTINGS_ENTRY, DEFAULT_SETTINGS_ENTRY));
+    }
+
+    @NonNull
+    static String normalizeSettingsEntry(@Nullable String value) {
+        if ("top".equals(value) || "middle".equals(value) || "bottom".equals(value)) return value;
+        return DEFAULT_SETTINGS_ENTRY;
     }
 
     public static boolean readRearVideoResumeForUi(@NonNull Context context) {
@@ -1651,6 +1677,10 @@ public final class PrefsBridge {
             flushUiStringPreference(
                     localPrefs,
                     remotePrefs,
+                    Constants.KEY_SETTINGS_ENTRY);
+            flushUiStringPreference(
+                    localPrefs,
+                    remotePrefs,
                     Constants.KEY_REAR_SCREEN_SCHEDULE_START);
             flushUiStringPreference(
                     localPrefs,
@@ -1796,6 +1826,11 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_REAR_SCREEN_OFF_TIMEOUT,
                     DEFAULT_REAR_SCREEN_OFF_TIMEOUT);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_SETTINGS_ENTRY,
+                    DEFAULT_SETTINGS_ENTRY);
             syncStringKey(
                     localPrefs,
                     remotePrefs,

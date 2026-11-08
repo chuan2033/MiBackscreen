@@ -1,5 +1,6 @@
 package hook.HyperBackscreen.ui.home
 
+import hook.HyperBackscreen.ui.components.AppDialog
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -57,7 +58,7 @@ import hook.HyperBackscreen.ui.util.currentHyperOSVersion
 import hook.HyperBackscreen.ui.util.currentPackageVersion
 import hook.HyperBackscreen.ui.util.currentSystemVersion
 import hook.HyperBackscreen.ui.util.RootAccess
-import hook.HyperBackscreen.ui.theme.HomeUiTokens
+import hook.HyperBackscreen.ui.theme.currentUiStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runInterruptible
@@ -65,7 +66,6 @@ import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
 import hook.HyperBackscreen.app.ModuleApp
-import top.yukonga.miuix.kmp.window.WindowDialog
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -173,7 +173,7 @@ internal fun HomePage(
                 .padding(bottom = 12.dp)
                 .background(
                     MiuixTheme.colorScheme.errorContainer,
-                    RoundedCornerShape(HomeUiTokens.CardCornerRadius)
+                    RoundedCornerShape(currentUiStyle.cardCorner)
                 )
                 .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp)
                 .semantics { liveRegion = LiveRegionMode.Polite },
@@ -211,7 +211,7 @@ internal fun HomePage(
         }
     )
 
-    WindowDialog(
+    AppDialog(
         show = showScopeDialog,
         title = stringResource(R.string.scope_status_title),
         summary = stringResource(R.string.scope_status_summary),

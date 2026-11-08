@@ -11,6 +11,12 @@ import hook.HyperBackscreen.ui.function.countEnabledFunctions
 import hook.HyperBackscreen.ui.function.countFunctionGroups
 import hook.HyperBackscreen.ui.navigation.HomeNavigationPolicy
 import hook.HyperBackscreen.ui.navigation.HomeRoute
+import hook.HyperBackscreen.ui.components.AppDialog
+import hook.HyperBackscreen.ui.components.LocalPageBackdrop
+import hook.HyperBackscreen.ui.config.ThemePage
+import hook.HyperBackscreen.ui.theme.LocalThemeState
+import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
+import androidx.compose.ui.platform.LocalLayoutDirection
 import hook.HyperBackscreen.ui.home.ActivationState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -42,6 +48,7 @@ import androidx.compose.foundation.pager.PagerDefaults.flingBehavior
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -62,7 +69,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.ui.util.AppLanguage
-import hook.HyperBackscreen.ui.util.ThemeMode
 import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.ui.about.AboutPage
 import hook.HyperBackscreen.ui.about.AppUpdatePage
@@ -135,7 +141,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
-import top.yukonga.miuix.kmp.window.WindowDialog
 
 private data class NavigationTabItem(
     val tab: HomeNavigationPolicy.Tab,
@@ -296,10 +301,10 @@ internal fun HomeScreen(
     onMusicWidgetWhitelistPickerClosed: () -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
     onRestartScopes: (List<String>) -> Unit,
-    themeMode: ThemeMode,
-    onThemeModeChange: (ThemeMode) -> Unit,
     themeSettingsShortcut: Boolean,
     onThemeSettingsShortcutChange: (Boolean) -> Unit,
+    settingsEntry: String,
+    onSettingsEntryChange: (String) -> Unit,
     onBackupPreferences: () -> Unit,
     onRestorePreferences: () -> Unit,
     batteryColorIdle: String,
@@ -404,6 +409,13 @@ internal fun HomeScreen(
             backdropColor = navBackdropColor
         )
     }
+    // 全屏横滑返回（移植自 KernelSU 的「横移返回手势」）：要在 NavDisplay 的构建 lambda 外读，
+    // NavDisplay 只在构建 lambda 变化时重建 entry，值得由 lambda 捕获才会跟着开关更新。
+    val swipeBackDirection = when {
+        LocalThemeState.current?.swipeBack != true -> null
+        LocalLayoutDirection.current == LayoutDirection.Rtl -> NavSwipeDirection.RightToLeft
+        else -> NavSwipeDirection.LeftToRight
+    }
     Box(Modifier.fillMaxSize()) {
     NavDisplay(
         backStack = backStack,
@@ -412,7 +424,7 @@ internal fun HomeScreen(
         transition = CardStackNavTransition,
         effects = navEffects
     ) {
-        entry<HomeRoute> { page ->
+        entry<HomeRoute>(swipeDismiss = swipeBackDirection) { page ->
             // A covered entry stays alive for back navigation, but must not expose hidden controls.
             Box(
                 modifier = Modifier.fillMaxSize().then(
@@ -421,26 +433,30 @@ internal fun HomeScreen(
             ) {
                 when (page) {
                     HomeRoute.Settings -> SettingsPage(
+                        appLanguage = appLanguage,
+                        enableAppCard = enableAppCard,
+                        launcherIconHidden = launcherIconHidden,
+                        onThemeClick = { openDetail(page, HomeRoute.Theme) },
+                        onAppLanguageChange = onAppLanguageChange,
+                        onEnableAppCardChange = onEnableAppCardChange,
+                        onLauncherIconHiddenChange = onLauncherIconHiddenChange,
+                        themeSettingsShortcut = themeSettingsShortcut,
+                        onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
+                        settingsEntry = settingsEntry,
+                        onSettingsEntryChange = onSettingsEntryChange,
+                        onBackupPreferences = onBackupPreferences,
+                        onRestorePreferences = onRestorePreferences,
+                        onBack = { navigateBackFrom(page) }
+                    )
+                    HomeRoute.Theme -> ThemePage(
                         floatingNavBar = floatingNavBar,
                         liquidGlass = liquidGlass,
                         bottomBarBlur = bottomBarBlur,
                         showFunctionCount = showFunctionCount,
-                        appLanguage = appLanguage,
-                        enableAppCard = enableAppCard,
-                        launcherIconHidden = launcherIconHidden,
                         onFloatingNavBarChange = onFloatingNavBarChange,
                         onLiquidGlassChange = onLiquidGlassChange,
                         onBottomBarBlurChange = onBottomBarBlurChange,
                         onShowFunctionCountChange = onShowFunctionCountChange,
-                        onAppLanguageChange = onAppLanguageChange,
-                        onEnableAppCardChange = onEnableAppCardChange,
-                        onLauncherIconHiddenChange = onLauncherIconHiddenChange,
-                        themeMode = themeMode,
-                        onThemeModeChange = onThemeModeChange,
-                        themeSettingsShortcut = themeSettingsShortcut,
-                        onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
-                        onBackupPreferences = onBackupPreferences,
-                        onRestorePreferences = onRestorePreferences,
                         onBack = { navigateBackFrom(page) }
                     )
                     HomeRoute.License -> LicensePage(onBack = { navigateBackFrom(page) })
@@ -564,10 +580,10 @@ internal fun HomeScreen(
                         onDonateClick = { openDetail(page, HomeRoute.Donate) },
                         onAppUpdateClick = { openDetail(page, HomeRoute.AppUpdate) },
                         onRestartScopes = onRestartScopes,
-                        themeMode = themeMode,
-                        onThemeModeChange = onThemeModeChange,
                         themeSettingsShortcut = themeSettingsShortcut,
                         onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
+                        settingsEntry = settingsEntry,
+                        onSettingsEntryChange = onSettingsEntryChange,
                         onBatteryColorClick = { openDetail(page, HomeRoute.BatteryColor) },
                         onRearScreenTimingClick = { openDetail(page, HomeRoute.RearScreenTiming) },
                         rearMedia = rearMedia,
@@ -596,24 +612,17 @@ internal fun HomeScreen(
 
 @Composable
 private fun SettingsPage(
-    floatingNavBar: Boolean,
-    liquidGlass: Boolean,
-    bottomBarBlur: Boolean,
-    showFunctionCount: Boolean,
     appLanguage: AppLanguage,
     enableAppCard: Boolean,
     launcherIconHidden: Boolean,
-    onFloatingNavBarChange: (Boolean) -> Unit,
-    onLiquidGlassChange: (Boolean) -> Unit,
-    onBottomBarBlurChange: (Boolean) -> Unit,
-    onShowFunctionCountChange: (Boolean) -> Unit,
+    onThemeClick: () -> Unit,
     onAppLanguageChange: (AppLanguage) -> Unit,
     onEnableAppCardChange: (Boolean) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
-    themeMode: ThemeMode,
-    onThemeModeChange: (ThemeMode) -> Unit,
     themeSettingsShortcut: Boolean,
     onThemeSettingsShortcutChange: (Boolean) -> Unit,
+    settingsEntry: String,
+    onSettingsEntryChange: (String) -> Unit,
     onBackupPreferences: () -> Unit,
     onRestorePreferences: () -> Unit,
     onBack: () -> Unit
@@ -625,24 +634,17 @@ private fun SettingsPage(
     ) {
         item {
             ConfigPage(
-                floatingNavBar = floatingNavBar,
-                liquidGlass = liquidGlass,
-                bottomBarBlur = bottomBarBlur,
-                showFunctionCount = showFunctionCount,
                 appLanguage = appLanguage,
                 enableAppCard = enableAppCard,
                 launcherIconHidden = launcherIconHidden,
-                onFloatingNavBarChange = onFloatingNavBarChange,
-                onLiquidGlassChange = onLiquidGlassChange,
-                onBottomBarBlurChange = onBottomBarBlurChange,
-                onShowFunctionCountChange = onShowFunctionCountChange,
+                onThemeClick = onThemeClick,
                 onAppLanguageChange = onAppLanguageChange,
                 onEnableAppCardChange = onEnableAppCardChange,
                 onLauncherIconHiddenChange = onLauncherIconHiddenChange,
-                themeMode = themeMode,
-                onThemeModeChange = onThemeModeChange,
                 themeSettingsShortcut = themeSettingsShortcut,
                 onThemeSettingsShortcutChange = onThemeSettingsShortcutChange,
+                settingsEntry = settingsEntry,
+                onSettingsEntryChange = onSettingsEntryChange,
                 onBackupPreferences = onBackupPreferences,
                 onRestorePreferences = onRestorePreferences
             )
@@ -668,7 +670,6 @@ private fun MainTabPage(
     doubleTapWakeDisabledPackages: String,
     doubleTapSleepDisabledPackages: String,
     musicWidgetWhitelistPackages: String,
-    themeMode: ThemeMode,
     onDonateClick: () -> Unit,
     onDisableLongPressChange: (Boolean) -> Unit,
     onRemoveWallpaperLimitChange: (Boolean) -> Unit,
@@ -735,6 +736,7 @@ private fun MainTabPage(
             }
         }
     ) { innerPadding ->
+        CompositionLocalProvider(LocalPageBackdrop provides backdrop) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -746,9 +748,11 @@ private fun MainTabPage(
                     .fillMaxSize()
                     .scrollEndHaptic()
                     .overScrollVertical()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .padding(horizontal = 12.dp),
+                    .nestedScroll(scrollBehavior.nestedScrollConnection),
+                // 左右留白放进 contentPadding：给列表本身加 padding 会把卡片阴影在两侧裁出竖直灰边。
                 contentPadding = PaddingValues(
+                    start = 12.dp,
+                    end = 12.dp,
                     top = innerPadding.calculateTopPadding()
                 )
             ) {
@@ -805,6 +809,7 @@ private fun MainTabPage(
                 }
             }
         }
+        }
     }
 }
 
@@ -854,10 +859,10 @@ private fun MainContent(
     onDonateClick: () -> Unit,
     onAppUpdateClick: () -> Unit,
     onRestartScopes: (List<String>) -> Unit,
-    themeMode: ThemeMode,
-    onThemeModeChange: (ThemeMode) -> Unit,
     themeSettingsShortcut: Boolean,
     onThemeSettingsShortcutChange: (Boolean) -> Unit,
+    settingsEntry: String,
+    onSettingsEntryChange: (String) -> Unit,
     onBatteryColorClick: () -> Unit,
     onRearScreenTimingClick: () -> Unit,
     rearMedia: RearMediaSwitches,
@@ -948,7 +953,6 @@ private fun MainContent(
                 doubleTapWakeDisabledPackages = doubleTapWakeDisabledPackages,
                 doubleTapSleepDisabledPackages = doubleTapSleepDisabledPackages,
                 musicWidgetWhitelistPackages = musicWidgetWhitelistPackages,
-                themeMode = themeMode,
                 onDonateClick = onDonateClick,
                 onDisableLongPressChange = onDisableLongPressChange,
                 onRemoveWallpaperLimitChange = onRemoveWallpaperLimitChange,
@@ -1077,7 +1081,7 @@ private fun MainContent(
             }
     }
 
-    WindowDialog(
+    AppDialog(
         show = showRestartDialog,
         title = stringResource(R.string.restart_title),
         onDismissRequest = { showRestartDialog = false },
