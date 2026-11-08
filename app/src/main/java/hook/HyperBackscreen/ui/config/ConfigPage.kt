@@ -2,78 +2,74 @@ package hook.HyperBackscreen.ui.config
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
-import hook.HyperBackscreen.ui.components.AnimatedPreferenceVisibility
 import hook.HyperBackscreen.ui.components.CardBlock
+import hook.HyperBackscreen.ui.theme.LocalThemeState
+import hook.HyperBackscreen.ui.theme.keyColorOptions
+import hook.HyperBackscreen.ui.theme.UiStyle
 import hook.HyperBackscreen.ui.util.AppLanguage
-import hook.HyperBackscreen.ui.util.ThemeMode
 import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
-import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
+import hook.HyperBackscreen.ui.components.AppDropdownPreference
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 @Composable
 internal fun ConfigPage(
-    floatingNavBar: Boolean,
-    liquidGlass: Boolean,
-    bottomBarBlur: Boolean,
     appLanguage: AppLanguage,
-    checkUpdates: Boolean,
-    enableSwipePanel: Boolean,
+    enableAppCard: Boolean,
     launcherIconHidden: Boolean,
-    onFloatingNavBarChange: (Boolean) -> Unit,
-    onLiquidGlassChange: (Boolean) -> Unit,
-    onBottomBarBlurChange: (Boolean) -> Unit,
+    onThemeClick: () -> Unit,
     onAppLanguageChange: (AppLanguage) -> Unit,
-    onCheckUpdatesChange: (Boolean) -> Unit,
-    onEnableSwipePanelChange: (Boolean) -> Unit,
+    onEnableAppCardChange: (Boolean) -> Unit,
     onLauncherIconHiddenChange: (Boolean) -> Unit,
-    themeMode: ThemeMode,
-    onThemeModeChange: (ThemeMode) -> Unit,
     themeSettingsShortcut: Boolean,
-    onThemeSettingsShortcutChange: (Boolean) -> Unit
+    onThemeSettingsShortcutChange: (Boolean) -> Unit,
+    settingsEntry: String,
+    onSettingsEntryChange: (String) -> Unit,
+    onBackupPreferences: () -> Unit,
+    onRestorePreferences: () -> Unit
 ) {
+    val context = LocalContext.current
+
     SmallTitle(text = stringResource(R.string.config_module_settings_title), insideMargin = PaddingValues(16.dp, 8.dp))
     CardBlock(pressFeedbackType = PressFeedbackType.None) {
-        WindowDropdownPreference(
+        // 模块入口只选一处：妙享背屏里的入口，或系统「设置」首页的顶部 / 中部 / 底部。
+        val entryPositions = listOf("top", "middle", "bottom")
+        AppDropdownPreference(
             items = listOf(
                 stringResource(R.string.config_module_entry_disabled),
-                stringResource(R.string.config_module_entry_theme_settings)
+                stringResource(R.string.config_module_entry_theme_settings),
+                stringResource(R.string.config_module_entry_settings_top),
+                stringResource(R.string.config_module_entry_settings_middle),
+                stringResource(R.string.config_module_entry_settings_bottom)
             ),
-            selectedIndex = if (themeSettingsShortcut) 1 else 0,
+            selectedIndex = when {
+                settingsEntry in entryPositions -> 2 + entryPositions.indexOf(settingsEntry)
+                themeSettingsShortcut -> 1
+                else -> 0
+            },
             title = stringResource(R.string.config_module_entry_title),
             onSelectedIndexChange = { index ->
-                onThemeSettingsShortcutChange(index == 1)
+                val position = if (index >= 2) entryPositions[index - 2] else "off"
+                if ((index == 1) != themeSettingsShortcut) onThemeSettingsShortcutChange(index == 1)
+                if (position != settingsEntry) onSettingsEntryChange(position)
             }
+        )
+        ArrowPreference(
+            title = stringResource(R.string.config_enable_app_card_title),
+            summary = stringResource(R.string.config_enable_app_card_summary),
+            onClick = { onEnableAppCardChange(true) }
         )
         SwitchPreference(
             checked = launcherIconHidden,
             onCheckedChange = onLauncherIconHiddenChange,
             title = stringResource(R.string.config_hide_launcher_icon)
         )
-        SwitchPreference(
-            checked = checkUpdates,
-            onCheckedChange = onCheckUpdatesChange,
-            title = stringResource(R.string.config_check_updates_title),
-            summary = if (checkUpdates) {
-                stringResource(R.string.config_check_updates_summary_on)
-            } else {
-                stringResource(R.string.config_check_updates_summary_off)
-            }
-        )
-        SwitchPreference(
-            checked = enableSwipePanel,
-            onCheckedChange = onEnableSwipePanelChange,
-            title = stringResource(R.string.config_swipe_panel_title),
-            summary = if (enableSwipePanel) {
-                stringResource(R.string.config_swipe_panel_summary_on)
-            } else {
-                stringResource(R.string.config_swipe_panel_summary_off)
-            }
-        )
-        WindowDropdownPreference(
+        AppDropdownPreference(
             items = listOf(
                 stringResource(R.string.config_language_default),
                 stringResource(R.string.config_language_chinese),
@@ -81,11 +77,6 @@ internal fun ConfigPage(
             ),
             selectedIndex = appLanguage.index,
             title = stringResource(R.string.config_language_title),
-            summary = when (appLanguage) {
-                AppLanguage.SYSTEM -> stringResource(R.string.config_language_default)
-                AppLanguage.CHINESE -> stringResource(R.string.config_language_chinese)
-                AppLanguage.ENGLISH -> stringResource(R.string.config_language_english)
-            },
             onSelectedIndexChange = { index ->
                 onAppLanguageChange(AppLanguage.fromIndex(index))
             }
@@ -94,40 +85,51 @@ internal fun ConfigPage(
 
     SmallTitle(text = stringResource(R.string.config_appearance_title), insideMargin = PaddingValues(16.dp, 8.dp))
     CardBlock(pressFeedbackType = PressFeedbackType.None) {
-        WindowDropdownPreference(
-            items = listOf(
-                stringResource(R.string.config_theme_mode_system),
-                stringResource(R.string.config_theme_mode_light),
-                stringResource(R.string.config_theme_mode_dark),
-                stringResource(R.string.config_theme_mode_monet_system),
-                stringResource(R.string.config_theme_mode_monet_light),
-                stringResource(R.string.config_theme_mode_monet_dark)
-            ),
-            selectedIndex = themeMode.index,
-            title = stringResource(R.string.config_theme_mode_title),
-            onSelectedIndexChange = { index ->
-                onThemeModeChange(ThemeMode.fromIndex(index))
-            }
-        )
-        SwitchPreference(
-            checked = floatingNavBar,
-            onCheckedChange = onFloatingNavBarChange,
-            title = stringResource(R.string.config_floating_bar_title),
-            summary = stringResource(R.string.config_floating_bar_summary)
-        )
-        AnimatedPreferenceVisibility(visible = floatingNavBar) {
-            SwitchPreference(
-                checked = liquidGlass,
-                onCheckedChange = onLiquidGlassChange,
-                title = stringResource(R.string.config_liquid_glass_title),
-                summary = stringResource(R.string.config_liquid_glass_summary)
-            )
-        }
-        SwitchPreference(
-            checked = bottomBarBlur,
-            onCheckedChange = onBottomBarBlurChange,
-            title = stringResource(R.string.config_bottom_bar_blur_title),
-            summary = stringResource(R.string.config_bottom_bar_blur_summary)
+        // 颜色、Monet 强调色、界面风格、底栏与手势都收进「主题」页（移植自 KernelSU），这里只给入口和当前状态。
+        ArrowPreference(
+            title = stringResource(R.string.theme_title),
+            summary = themeSummary(),
+            onClick = onThemeClick
         )
     }
+
+    SmallTitle(text = stringResource(R.string.config_backup_title), insideMargin = PaddingValues(16.dp, 8.dp))
+    CardBlock(pressFeedbackType = PressFeedbackType.None) {
+        ArrowPreference(
+            title = stringResource(R.string.config_backup_action_title),
+            summary = stringResource(R.string.config_backup_action_summary, PreferencesBackup.FILE_NAME),
+            onClick = onBackupPreferences
+        )
+        ArrowPreference(
+            title = stringResource(R.string.config_restore_action_title),
+            summary = stringResource(R.string.config_restore_action_summary, PreferencesBackup.FILE_NAME),
+            onClick = onRestorePreferences
+        )
+    }
+}
+
+/** 「主题」入口的摘要：明暗 · Monet / 强调色 · 界面风格。 */
+@Composable
+private fun themeSummary(): String {
+    val state = LocalThemeState.current ?: return ""
+    val brightness = stringResource(
+        when (state.themeMode.brightnessIndex) {
+            1 -> R.string.config_theme_mode_light
+            2 -> R.string.config_theme_mode_dark
+            else -> R.string.config_theme_mode_system
+        }
+    )
+    val color = if (state.monet) {
+        keyColorOptions.firstOrNull { it.argb == state.keyColor }?.let { stringResource(it.labelRes) }
+            ?: stringResource(R.string.theme_monet_short)
+    } else {
+        null
+    }
+    val style = stringResource(
+        when (state.uiStyle) {
+            UiStyle.DEFAULT -> R.string.config_ui_style_default
+            UiStyle.MOCHI -> R.string.config_ui_style_mochi
+        }
+    )
+    return listOfNotNull(brightness, color, style).joinToString(" · ")
 }

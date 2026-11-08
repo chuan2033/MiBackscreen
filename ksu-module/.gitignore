@@ -1,0 +1,8 @@
+# 二进制产物与逆向分析材料只留在本地，不进公开仓库：
+# - analysis/：智能助理 APK 与反编译出的类，属于小米的代码
+# - archive/ 与 out/*.zip：打包了 ROM 里的背屏主题资源，交付走 GitHub Release 附件
+analysis/
+archive/
+out/*.zip
+out/*.apk
+out/screenshots/

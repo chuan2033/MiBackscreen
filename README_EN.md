@@ -1,311 +1,141 @@
-# MiBackscreen
+<p align="center">
+  <img src="icon.png" alt="MiBackscreen" width="140">
+</p>
+<h1  align="center">MiBackscreen</h1>
 
-[中文](README.md) · [项目主页](https://github.com/chuan2033/MiBackscreen)
+<p  align="center">
+  <a href="./README.md">中文</a> · <a href="https://github.com/chuan2033/MiBackscreen">Project</a>
+</p>
 
-A Xiaomi rear-screen (backscreen) LSPosed module built on the Modern Xposed API 102. It completes wallpaper management, backscreens protection, and a quick settings panel for HyperOS rear screens.
+<p  align="center">
+ A Xiaomi rear-screen module using Modern Xposed. The `feat/18pro-max-rear-screen` branch adapts newer Rear Screen Center, Theme Manager and Personal Assistant app-card hosts. Neither the branch name nor a device identity sent in requests establishes hardware compatibility.
+</p>
 
-Current local version: `1.1.4 (8)`.
+<p  align="center">
+  <a href="https://github.com/chuan2033/MiBackscreen/releases"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/chuan2033/MiBackscreen?display_name=release"></a>
+ <a href="https://github.com/chuan2033/MiBackscreen/stargazers"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/chuan2033/MiBackscreen?style=flat"></a>
+ <a href="https://github.com/chuan2033/MiBackscreen/issues"><img alt="GitHub Issues" src="https://img.shields.io/github/issues/chuan2033/MiBackscreen"></a>
+  <a href="https://developer.android.com/"><img src="https://img.shields.io/badge/Android-16%2B-3DDC84?logo=android&logoColor=white" alt="Android"></a>
+ <a href="https://github.com/LSPosed/LSPosed"><img src="https://img.shields.io/badge/Framework-LSPosed%20%2F%20Xposed-5C6BC0" alt="Framework"></a>
+</p>
 
----
+## Features and defaults
 
-## Overview
+| Feature | Default | Behavior |
+| --- | --- | --- |
+| Rear-screen battery ring | Off | Shows battery level around the Xiaomi 17 Pro Max camera contour in 1% steps; green while charging, red below 20% when not charging, otherwise white |
+| 18 Pro features | On | Controls AI rear-screen entries, 18 Pro device and download request parameters, rear-screen app-card unlocking, Personal Assistant store adaptation and AI app-card index synchronization |
+| Disable long-press wallpaper editing | On | Prevents entering the rear-screen editor |
+| Timed rear-screen wallpaper rotation | Off | Cycles through the list every 1, 5 or 15 minutes; counts down while AOD is visible, pauses while Smart Display hides the rear screen, and switches once when an overdue screen becomes visible |
+| Remove wallpaper limit | On | Removes Theme Manager's 15-wallpaper limit |
+| Rear-screen app cards / remove card limit | On / On | Adds MiBackscreen to the stock swipe-up list; tap it to open the quick panel |
+| Fix wallpaper application | Off | Repairs resource access and application state; confirmed selection and cancelled edits remain distinct |
+| Disable rear-screen protection prompt | Off | Blocks the prompt asking users to turn off the front screen first |
+| Disable double-tap wake per app | Off, empty list | Open the app picker from Features; disabling retains the list and matching uses current front-screen activities |
+| Rear screen sleep timer | System default | Sleep after 1 / 3 / 5 / 10 / 30 minutes or stay always on; rear screen only, front-screen timeout unchanged |
+| Keep rear screen always on while gaming | Off | The system turns the rear screen off in landscape games; keeps it always on when enabled. Increases power use and heat |
+| Rear screen schedule | Off | Keeps the rear screen off (black) or dozing in a daily window, ignoring notifications and double taps, and restores it afterwards |
+| Configuration backup / restore | — | Exports every switch, color, position and level to `MiBackscreen-config.json` in the storage root; reads it back for migration or replication |
+| Face enrollment compatibility | Off | Turn on when AI Companion asks you to enroll a face; independent of the wallpaper fix above |
+| Theme Manager module entry | On | Adds an entry to the rear-screen settings page |
 
-- Remove the 15-wallpaper limit on the rear screen, and fix theme-store wallpaper application failures with state synchronization.
-- Block the rear-screen protection prompt, and support per-app disabling of double-tap-to-wake.
-- Inject an upward-swipe quick panel into the rear-screen center.
-- Recognize multiple delivery pickup codes in XiaoAi memory-island cards, group them by station, and choose which codes remain visible on the island card.
-- The module app provides appearance settings (color mode / floating bottom bar / liquid glass) and module settings (entry point / hide icon).
+Appearance settings include system/light/dark themes, dynamic colors, standard or floating navigation, and liquid glass. Floating navigation and liquid glass default off; bottom-bar blur and launch-time update checks default on.
 
-## Features
+Functions includes an "18 Pro features" switch. Changing it requests a force-stop of Rear Screen Center, Theme Manager and Personal Assistant; reopening them refreshes their capabilities. When off, hosts use their original entry and capability checks. Downloaded and applied content and add-on resources remain. Long press and count limits still follow their own switches. Disable the add-on in KSU/Magisk and reboot to remove its resource mounts.
 
-### Rear-screen center (com.xiaomi.subscreencenter)
+The battery ring is calibrated for the 976 x 596 popsicle rear display. It starts at the bottom center and passes the right, top and left centers before closing at 100%. Colors come from SystemUI battery resources when available. The battery progress line is drawn over the existing wallpaper. Changing the switch refreshes Rear Screen Center. The drawing layer is released when leaving the rear launcher, and transitions stop while its window is hidden.
 
-- Disable long-press wallpaper switching on the rear screen.
-- Upward-swipe quick settings panel.
+The Functions tab shows an enabled-function count (1–12) by default and hides the badge when all functions are off. Each function switch counts once, including the battery ring, timed wallpaper rotation, the rear-screen sleep timer (and schedule), face enrollment compatibility, the gaming keep-on switch, 18 Pro features and the double-tap wake master switch in the app picker; selected apps do not add to the count. Hide it through Settings → Appearance → Show enabled function count. All three navigation styles support the badge.
 
-### System process (system)
+Open the quick panel through the stock MiBackscreen card; swipe up from its bottom to close it. Its three switches control long press, wallpaper limits and app-card limits; failed writes roll back. Offline changes in the module app remain pending until the LSPosed service reconnects. Pending does not mean applied in the host.
 
-- Disable the rear-screen protection prompt ("press the power button to turn off the front screen before using the rear screen").
-- Per-app disabling of double-tap-to-wake, intercepted by the current front-screen foreground app package name.
+## Requirements and installation
 
-### Theme store (com.android.thememanager)
+- Minimum Android API 36 and an LSPosed / compatible framework supporting Modern Xposed. Module metadata declares minimum API 101 and target API 102; the code depends on API 102.
+- Historical device tests used Xiaomi 17 Pro Max (popsicle / 2509FPN0BC), Android 17 / API 37, HyperOS 4, and a 976 × 596 rear display. These results do not establish full compatibility across devices or firmware.
+- Hooks depend on host classes and method signatures; recheck after system or host updates.
+- Theme Manager includes AI rear-screen resource and face-enrollment-count compatibility paths. Failed face queries return unknown. The complete pet-wallpaper application flow still needs device validation.
 
-- Remove the 15-wallpaper limit.
-- Fix rear-screen wallpaper application failures and handle wallpaper state synchronization.
-- Quick entry on the Mi Share rear-screen page.
+Install the APK, enable the module in your framework, select all four scopes below, then reboot to load all hooks:
 
-### Module app
+| Scope | Purpose |
+| --- | --- |
+| `system` | Protection prompt, per-app double-tap wake interception, rear-screen sleep timer, gaming keep-on and scheduled off |
+| `com.xiaomi.subscreencenter` | Long press, timed wallpaper rotation, app cards, quick panel and confirmed wallpaper-selection sync |
+| `com.android.thememanager` | Wallpaper limits/application, settings entry, AI rear screen and face-count compatibility |
+| `com.miui.personalassistant` | Rear-screen app-card store request adaptation |
 
-- Appearance: color mode (follow system / light / dark), floating bottom bar, and the liquid glass toggle shown only after the floating bottom bar is enabled.
-- Module settings: module entry (disabled / Mi Share rear screen), hide desktop icon, rear-screen swipe-up panel.
-- The About page includes a donation entry (AfDian link and QR code).
+“Activated” means the module service is connected; it does not confirm every hook works. Settings take effect when hooks next read them. Some wallpaper/app-card switches also request stopping affected hosts, requiring root and reopening the app. APK updates require reloading affected hosts; system-hook updates require a device reboot. “Restart scopes” lists System, Rear Screen, Theme Store and Personal Assistant. Selecting “System” and pressing “Confirm” runs a root device reboot. Including app scopes still sends only one reboot command. Selecting only apps stops those apps; automatic refreshes from ordinary setting switches never reboot the phone.
 
-- The home "Feature Settings" aggregates all rear-screen features, with a restart entry at the top right.
-- After enabling "disable double-tap-to-wake per app", enter the "New app" sub-page and check apps to disable by package name.
-- Bottom navigation keeps only "Home" and "About"; the gear on the About page opens the "Settings" sub-page (Appearance / Module settings).
-- "Fix rear-screen wallpaper application failure" also syncs state: after applying a wallpaper, the settings-page preview updates; after a confirmed switch in the rear-screen editor, `theme_rear_widget` and the theme-store database sync to the current rear-screen state (init / refresh / cancel-edit do not trigger; already-consistent state is not rewritten).
-
-## Module scopes
-
-| Package                       | Purpose                                   |
-| ----------------------------- | ---------------------------------------- |
-| `system`                      | Rear-screen protection prompt, double-tap-to-wake interception |
-| `com.xiaomi.subscreencenter`  | Long-press interception, quick panel     |
-| `com.android.thememanager`    | Wallpaper limit, wallpaper fix, settings entry |
-| `com.miui.voiceassist`        | Pickup-code recognition, island-card click and refresh |
-
-Minimum Android version is API 36.
-
-## Requirements & compatibility
-
-- Android API 36 or above.
-- LSPosed / compatible Xposed environment, Modern Xposed API 102.
-- Target rear screen `976 × 596px` (HyperOS 4).
-- The feedback package's database collection depends on the Root implementation's `su -M`; both KernelSU and Magisk provide this flag.
-- If `vendor.display.builtin_presentation=0` is detected, the module app warns that hidden rear-display / anti-screen-sharing modules may cause rear-screen screenshot failures or black custom wallpapers.
-- `k2.s`, `Z1.t`, `Z1.v`, `yp31`, `o5`, `ol`, etc. are host R8 names and must be re-verified after system app updates.
-- The system-process hooks depend on `DualScreenCoverManager`, `PowerManagerServiceImpl`, and the current foreground task field, and must be re-confirmed after system updates.
-- The Mi Share rear-screen quick entry depends on the theme store's `com.rearScreen.RearScreenSettingActivity`, `EntryConfig`, and the `user_guide` / `serve_assistant` controller keys.
-- Permission directory fields must pass absolute-path validation; do not treat the non-path string `qp5l=incallshow` as a directory again.
-- The quick panel depends on `SubScreenLauncher`, `notification_panel`, and `smart_assistant_panel`.
-- `298px` is the fixed fallback for the current target device; other rear screens prefer `DisplayCutout`.
-- The system gesture exclusion zone occupies the bottom 30%; re-evaluate conflicts when adding new stock gestures.
-- `textureBlur` must not be placed in the same `layerBackdrop` sampling subtree, otherwise a sampling loop may form and trigger a native crash.
-- Frosted glass and liquid glass increase GPU overhead.
-
-## Installation
-
-1. Download the latest APK from [Releases](https://github.com/chuan2033/MiBackscreen/releases) and install it.
-2. Enable `MiBackscreen` in LSPosed.
-3. Check the scopes: `system`, `com.xiaomi.subscreencenter`, `com.android.thememanager`, `com.miui.voiceassist`.
-4. Reboot the phone; when only debugging the rear-screen center or theme store, you can also restart the corresponding scope process separately.
-5. Open the module app and confirm the module is activated.
-
-Force-stopping a scope process from within the app requires root.
-
-## Usage
-
-- Rear-screen swipe-up gesture: start with one finger below 70% of the screen height, swipe up more than `32dp` to open the panel; swipe down or tap the close button to exit, and a back-key event reaching `SubScreenLauncher` also closes it.
-- When disabling double-tap-to-wake per app, the system-recorded foreground package name and the candidate Activity package name from the running tasks are both read, covering the scenario where a game briefly jumps to an SDK/login page after launch and the foreground package name changes.
-- Generate the feedback log immediately after reproducing the issue; do not re-apply wallpapers or restart the rear-screen center / theme store beforehand.
-
-### Pickup codes
-
-- After XiaoAi remembers a delivery notification containing multiple pickup codes, tap the pickup island card to open the pickup-code page.
-- Codes are grouped by station; each station can independently choose which codes appear on the island card.
-- A new recognition batch does not intentionally reuse the previous batch's page data, and confirming pickup closes the current page.
-
-## Quick panel
-
-### Gesture
-
-- Start with one finger below 70% of the screen height.
-- Swipe up more than `32dp` to open the panel.
-- Swipe down or tap the close button at the top right to exit.
-- A back-key event reaching `SubScreenLauncher` also closes the panel.
-
-The bottom 30% is set as a system gesture exclusion zone. While the panel is shown, touch events are sent directly to the window content via `Window.superDispatchTouchEvent()`, bypassing Xiaomi Launcher's gesture handling. When the native `notification_panel` or `smart_assistant_panel` is visible, the quick panel is not triggered.
-
-### Layout constraints
-
-The target rear screen is `976 × 596px`, with the camera area on the left `x=0..296px` spanning the full height.
-
-| Item                 | Constraint                                         |
-| -------------------- | -------------------------------------------------- |
-| Panel background     | Covers the entire rear screen                      |
-| Text, switches, etc. | Start from `x=298px`                               |
-| System cutout available | `safeInsetLeft + 2px`, no less than 298px on target |
-| System cutout unavailable | Fall back to 298px only on sub-screens `900..1050 × 500..700px` |
-| Title text size      | `19sp`                                             |
-| Feature title size   | `16sp`                                             |
-| Status text size     | `13sp`                                             |
-
-### Config write
-
-Hooks read LSPosed `RemotePreferences`, preference group `module_config`.
-
-The quick panel runs in `com.xiaomi.subscreencenter`; the write path is:
-
-```text
-SwipePanelHost
-  -> ContentResolver.call()
-  -> PreferenceBridgeProvider
-  -> local cache
-  -> XposedService RemotePreferences
-```
-
-`PreferenceBridgeProvider` is protected by `android.permission.MANAGE_ACTIVITY_TASKS` and only allows writing the following keys:
-
-- `disable_long_press_edit`
-- `remove_wallpaper_limit`
-
-Pending values are kept when the remote service is temporarily unavailable and retried after recovery. On a failed write request, the panel switch rolls back.
-
-## Build from source
-
-Requirements:
-
-- JDK 21
-- Android SDK 37
-- Android Build Tools 37.0.0
-- Gradle 9.6.0
-
-Debug:
-
-```powershell
-.\gradlew.bat :app:assembleDebug --offline --console=plain
-```
-
-Drop `--offline` on the first build without a local cache. APK output:
-
-```text
-app/build/outputs/apk/debug/app-debug.apk
-```
-
-Release:
-
-```powershell
-.\gradlew.bat :app:assembleRelease --offline --console=plain
-```
-
-Artifact:
-
-```text
-app/build/outputs/apk/release/app-release.apk
-```
-
-## Debugging
-
-Unified log tag `MiBackscreen`:
-
-```powershell
-adb logcat -s MiBackscreen
-```
-
-Key logs:
-
-| Log                                              | Meaning                                  |
-| ------------------------------------------------ | ---------------------------------------- |
-| `System hooks installed`                         | System-process hook installed            |
-| `Hooks installed for com.xiaomi.subscreencenter` | Rear-screen hook installed               |
-| `Theme store hooks installed`                    | Theme-store hook installed               |
-| `MiBackscreen theme settings entry inserted ...` | Mi Share rear-screen quick entry inserted |
-| `Rear screen cover skipped`                      | Rear-screen protection prompt intercepted |
-| `Rear double-tap wake skipped ...`               | Rear double-tap wake intercepted by app list |
-| `Swipe panel gesture hook installed`             | Quick-panel gesture hook installed       |
-| `Long press hook target resolved: k2.s`          | Matched HyperOS 4 long-press target      |
-| `Swipe-up drag started`                           | Swipe-up detected, panel drag started    |
-| `Panel drag started: safeLeft=298px`             | Panel mounted, content offset correct    |
-| `Panel opened after drag`                        | Panel expanded                           |
-| `Panel switch saved: ...`                         | Panel config written                     |
-| `Promoted current rear wallpaper: ...`           | Repeated wallpaper promoted to top of settings |
-| `Rear selection commit requested: ...`           | User confirmed wallpaper switch          |
-| `Synced rear selection to Settings: ...`         | Rear selection synced to Secure Settings |
-| `Rear selection already synchronized: ...`       | State already consistent, no rewrite     |
-| `Synced Theme DB to rear selection: ...`         | Theme-store DB synced to current rear screen |
-| `Hook target missing: ...`                        | Host version mismatch with current hook target |
-
-Launch the Launcher on the secondary screen:
-
-```powershell
-adb shell am start --display 1 -n com.xiaomi.subscreencenter/.SubScreenLauncher
-```
+A warning about `vendor.display.builtin_presentation=0` indicates that rear-display hiding / anti-screen-sharing modules may interfere with rear-screen screenshots or custom wallpapers.
 
 ## Feedback
 
-Submit feedback in [Issues](https://github.com/chuan2033/MiBackscreen/issues) and include:
+Immediately after reproduction, open Home → Logs and generate a ZIP before reapplying wallpapers or restarting hosts. Closing the progress card does not cancel the task. Share manually when ready; failures can be retried and nothing is sent automatically.
 
-1. LSPosed module log (Settings → Log → Verbose log).
-2. Device model, system version, and module version.
-3. Steps to reproduce.
-4. Expected vs. actual behavior.
-5. Relevant screenshots.
+Schema 7 includes device/host versions, settings, hook status, filtered logs, system diagnostics, resource paths and metadata, editConfig text, and Theme Manager's `rearScreen.db` with WAL/SHM copies. It also includes both AI app-card indexes with an ID comparison, local/remote/pending preference snapshots, appearance settings, and persistent events for panel lifecycle and preference synchronization. The AI database contributes schema information only. Wallpaper image/video bytes are not copied. Archives may contain app selections and other private information; inspect them before sharing.
 
-The module app's "About → Feedback → Log" generates a ZIP feedback package and invokes the system share sheet (timing per Usage above).
+Complete collection requires root and a `su -M` implementation. Reports record permission failures, timeouts and missing files; a generated ZIP does not guarantee complete collection. Submit reproduction steps, expected/actual behavior, versions and relevant screenshots through [Issues](https://github.com/chuan2033/MiBackscreen/issues), attaching a reviewed archive when needed.
 
-The feedback package uses `feedback_schema=2` and includes:
+## Build
 
-- Versions of the device, system, module, and scope apps.
-- Module switch states and hook installation states.
-- `theme_rear_widget`, `user_pref.json`, `widget.json`, and `runtime.json`.
-- Rear-screen resource manifest, permission file manifest, and the current `app.log`.
-- Filtered system logcat, module local logs, and LSPosed module logs.
-- Theme store's `rearScreen.db`, `rearScreen.db-wal`, and `rearScreen.db-shm`.
+Use JDK 21, Android SDK 37 and Build Tools 37.0.0. The wrapper pins Gradle 9.6.0; [app/build.gradle](app/build.gradle) is the version authority. Configure `JAVA_HOME` and `sdk.dir` in ignored `local.properties`, then run:
 
-Database collection enters the global mount namespace via `su -M`; otherwise Android app data isolation may keep the Root process from seeing the theme store's private directory. Only the most recent 20000 lines of logcat are read to avoid export timeouts from excessive logs. The feedback package contains wallpaper resource paths and system logs — be mindful of privacy before sharing publicly.
-
-## Code structure
-
-```text
-app/src/main/java/hook/HyperBackscreen/
-├─ app/
-│  └─ ModuleApp.java
-├─ bridge/
-│  ├─ PrefsBridge.java
-│  └─ PreferenceBridgeProvider.java
-├─ common/
-│  ├─ AppPickerFilter.java
-│  ├─ Constants.java
-│  ├─ PackageListCodec.java
-│  └─ RearScreenWakeMatcher.java
-├─ hook/
-│  ├─ ModuleMain.java
-│  └─ SettingsEntryPlacement.java
-└─ ui/
-   ├─ RearScreenApp.kt
-   ├─ HomeScreen.kt
-   ├─ HomeNavigationPolicy.java
-   ├─ SwipePanelHost.kt
-   ├─ MiuixStyleSwitch.kt
-   ├─ about/
-   │  └─ FeedbackLogExporter.kt
-   ├─ config/
-   │  ├─ AppPickerPage.kt
-   │  └─ ConfigPage.kt
-   ├─ home/
-   ├─ components/
-   ├─ animation/
-   ├─ liquid/
-   ├─ theme/
-   └─ util/
+```powershell
+.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --offline --console=plain
+.\gradlew.bat :app:assembleRelease --offline --console=plain
 ```
 
-Module boundaries:
+On Linux / macOS use `./gradlew` instead of `.\gradlew.bat` with the same arguments.
 
-- `ModuleMain`: installs hooks, identifies rear-screen gestures, system rear-screen protection, and double-tap-to-wake interception.
-- `SwipePanelHost`: creates and destroys the native panel injected into the rear-screen Activity.
-- `PrefsBridge`: unified read/write entry for the module app, hooks, and remote preferences.
-- `PackageListCodec` / `RearScreenWakeMatcher`: handle list parsing and matching for per-app double-tap-to-wake disabling.
-- `PreferenceBridgeProvider`: handles restricted writes initiated from the rear-screen process.
-- `FeedbackLogExporter`: generates the feedback ZIP containing host state, logs, and the theme-store database.
-- `RearScreenApp` / `HomeScreen` / `HomeNavigationPolicy` / `AppPickerPage`: the module app's Compose UI, home navigation policy, and app picker page.
+Without cached dependencies or the wrapper distribution, remove `--offline` and prepare dependencies online. Debug output: `app/build/outputs/apk/debug/app-debug.apk`.
 
-UI conventions:
+Release enables R8 and resource shrinking. Signed output is `app/build/outputs/apk/release/app-release.apk`; without signing it is `app-release-unsigned.apk`. Signing reads `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_PASSWORD` and optional `RELEASE_KEY_ALIAS` (default: `hyperbackscreen`) from `local.properties` or matching environment variables. Relative key paths resolve from `app/`; absent an explicit path, the build checks `app/release-key.jks`. An explicitly configured key with incomplete settings fails the build. Available signing credentials also sign Debug without enabling minification; otherwise Debug uses its default certificate. Updating an installed app requires the same signing certificate.
 
-- Secondary-page transitions (Settings / License / App picker) all go through `HomeScreen.kt`'s `AnimatedContent.transitionSpec`: `tween(300, FastOutSlowInEasing)` + enter `fadeIn`. Deterministic and overshoot-free, matching the miuix push-page feel. Do not switch the slideIn/slideOut `animationSpec` back to the Compose default spring, or the transition will float / overshoot and look broken.
-- The top-bar blur uses `BlurredBar` (miuix `textureBlur`, 25f / surface 0.8f), mounted outside the `layerBackdrop` subtree. SoundMan's progressive blur needs the Kyant `com.kyant.backdrop` library + a custom AGSL shader; it is not adopted yet, keeping pure miuix.
+After a successful build, validate hook behavior on the target device and host versions.
 
-## Disclaimer
+## Repository layout
 
-- This module modifies system rear-screen, system UI, and theme-store behavior; assess the risk yourself.
-- Compatibility may differ across system versions, firmware versions, and Xposed environments.
-- Some hook points may need re-adaptation after system framework, system UI, or theme-store updates.
-- The author is not responsible for malfunctions or device risks caused by using this module.
+```
+app/                         LSPosed module (app + hooks in one APK)
+  src/main/java/hook/HyperBackscreen/
+    app/                     Application: binds the Xposed service, reconciles preferences
+    bridge/                  Preference bridge (app ↔ scopes), providers, diagnostic log
+    common/                  Constants and pure logic shared by app and hooks
+    model/                   Preference value types (sleep timer, wallpaper rotation, schedule)
+    hook/                    Hook entry ModuleMain (dispatch only)
+      system/                system_server: sleep timer, double-tap wake, schedule, gaming keep-on
+      subscreen/             Rear Screen Center: long press, app-card limit, panel entry, rotation
+      appindex/              appInfo.json app-card index I/O, cross-process lock, module card
+      theme/                 Theme Manager: download/device adaptation, settings entry, apply repair
+      assistant/             Personal Assistant: rear-screen app-card store
+      target/                DexKit structural lookup (obfuscated names change per host build)
+      util/                  Reflection and file helpers
+    panel/                   Quick panel injected into Rear Screen Center (native views)
+    batteryring/             Rear battery ring: geometry, layout, colors and injected view
+    ui/                      Module app Compose UI, one package per page
+  src/debug/                 Debug-only host probe
+  src/test/                  Unit tests mirroring the main packages
+ksu-module/                  Rear-screen add-on resource module (KernelSU / Magisk)
+  packaging/                 Module scripts and WebUI
+  tools/                     Build, validation and device diagnostic scripts
+docs/release-notes/          Release notes
+```
 
-## Tech stack & acknowledgements
+## Add-on resource module
 
-Project license: [GPL-3.0](LICENSE).
+`ksu-module/` is the companion KernelSU / Magisk module that syncs 18 Pro Max rear-screen personalization and app-card resources to the device. Resources are extracted from a ROM at build time; the repository only keeps scripts. Folders containing Xiaomi files (`analysis/`, `archive/`, `out/*.zip`) stay local, and the packaged zip ships as a Release attachment. See [ksu-module/README.md](ksu-module/README.md) for building and validation.
 
-| Project                                                       | License    | Purpose                          |
-| ------------------------------------------------------------- | ---------- | -------------------------------- |
-| [compose-miuix-ui/miuix](https://github.com/compose-miuix-ui/miuix) | Apache-2.0 | Compose UI, theme, switch visuals |
-| [AndroidX Activity Compose](https://developer.android.com/jetpack/androidx/releases/activity) | Apache-2.0 | Compose Activity                 |
-| [Modern Xposed API](https://github.com/libxposed/api)         | Apache-2.0 | LSPosed module API               |
-| [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) | Apache-2.0 | Liquid glass upstream            |
-| [KernelSU](https://github.com/tiann/KernelSU)                 | GPL-3.0    | Floating bottom bar reference    |
+## License and acknowledgements
 
-Acknowledgements: thanks to the open-source projects miuix, Modern Xposed API, AndroidLiquidGlass, and KernelSU.
+[GPL-3.0](LICENSE). This module changes system and host behavior; compatibility can vary by firmware.
 
-## License
+The table below lists major sources. The app's Open Source Licenses page groups runtime dependencies and adapted sources, including Kotlin / kotlinx, JetBrains Compose, Material Color Utilities, Poko, annotation libraries, Guava and libxposed service interfaces. The catalog is maintained in [LicensePage.kt](app/src/main/java/hook/HyperBackscreen/ui/about/LicensePage.kt).
 
-See [LICENSE](LICENSE).
+| Project | License | Use |
+| --- | --- | --- |
+| [Miuix](https://github.com/compose-miuix-ui/miuix) | Apache-2.0 | Compose UI, navigation and blur |
+| [AndroidX](https://developer.android.com/jetpack/androidx) | Apache-2.0 | Activity, Compose and lifecycle |
+| [Modern Xposed](https://central.sonatype.com/artifact/io.github.libxposed/api/102.0.0) | Apache-2.0 | Hook API |
+| [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) | Apache-2.0 | Source for local glass effects |
+| [KernelSU](https://github.com/tiann/KernelSU) | GPL-3.0 | Floating navigation reference |

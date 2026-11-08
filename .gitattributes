@@ -1,0 +1,25 @@
+# 仓库里一律存 LF。附加资源模块的 sh 脚本在设备上由 busybox ash 执行，混进 CRLF 会直接失败。
+* text=auto eol=lf
+
+# Windows 批处理在 cmd 里需要 CRLF（run_check.bat 带 chcp 65001 和中文，LF 会解析出错）。
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.jar binary
+*.jks binary
+*.keystore binary
+*.apk binary
+*.zip binary
+*.so binary
+*.ttf binary
+*.otf binary
+*.mrc binary
+*.mrm binary
+*.mra binary

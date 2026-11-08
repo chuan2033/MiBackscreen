@@ -6,6 +6,8 @@ import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Process;
+import android.os.Binder;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -27,6 +29,12 @@ public final class PreferenceBridgeProvider extends ContentProvider {
     public Bundle call(@NonNull String method, @Nullable String arg, @Nullable Bundle extras) {
         Bundle result = new Bundle();
         Context context = getContext();
+        // 权限 MANAGE_ACTIVITY_TASKS 除系统应用外桌面（最近任务角色）也持有，再按调用方包名收窄：
+        // 只接受背屏中心（快捷面板所在进程）和模块自己。
+        if (!isTrustedCaller(context)) {
+            result.putBoolean(Constants.EXTRA_PREFERENCE_ACCEPTED, false);
+            return result;
+        }
         if (Constants.PANEL_DIAGNOSTIC_METHOD_APPEND.equals(method)) {
             String message = extras != null
                     ? extras.getString(Constants.EXTRA_DIAGNOSTIC_MESSAGE)
@@ -36,6 +44,28 @@ public final class PreferenceBridgeProvider extends ContentProvider {
                     && !message.isBlank()
                     && DiagnosticLogStore.appendLocal(context.getApplicationContext(), message);
             result.putBoolean(Constants.EXTRA_PREFERENCE_ACCEPTED, accepted);
+            return result;
+        }
+
+        if (Constants.PANEL_PREFERENCE_METHOD_SET_STRING.equals(method)) {
+            String value = extras != null ? extras.getString(Constants.EXTRA_PREFERENCE_VALUE) : null;
+            String normalized = PrefsBridge.normalizePanelStringValue(arg, value);
+            boolean applied = context != null
+                    && normalized != null
+                    && PrefsBridge.applyPanelStringPreference(context.getApplicationContext(), arg, normalized);
+            if (applied && Constants.KEY_REAR_SCREEN_OFF_TIMEOUT.equals(arg)) {
+                // 与主 App 改档位时一样，把系统设置 subscreen_display_time 也同步过去（需要 root）。
+                // 用规范化后的值，和写进偏好的保持一致；同步排不进队列也不影响这次写入已成功。
+                try {
+                    hook.HyperBackscreen.ui.util.RearScreenTimeoutSync.INSTANCE.apply(
+                            hook.HyperBackscreen.model.RearScreenOffTimeout.Companion.fromPref(normalized));
+                } catch (RuntimeException error) {
+                    Log.w(TAG, "Rear screen timeout sync skipped", error);
+                }
+            }
+            result.putBoolean(Constants.EXTRA_PREFERENCE_ACCEPTED, applied);
+            Log.d(TAG, "Panel string preference " + arg + "=" + value
+                    + (applied ? " applied" : " rejected"));
             return result;
         }
 
@@ -53,12 +83,23 @@ public final class PreferenceBridgeProvider extends ContentProvider {
         }
 
         boolean value = extras.getBoolean(Constants.EXTRA_PREFERENCE_VALUE, false);
-        boolean staged = PrefsBridge.stagePanelPreference(context.getApplicationContext(), arg, value);
-        boolean flushed = staged && PrefsBridge.flushPanelPreference(context.getApplicationContext(), arg);
-        result.putBoolean(Constants.EXTRA_PREFERENCE_ACCEPTED, staged);
+        boolean applied = PrefsBridge.applyPanelPreference(context.getApplicationContext(), arg, value);
+        result.putBoolean(Constants.EXTRA_PREFERENCE_ACCEPTED, applied);
         Log.d(TAG, "Panel preference " + arg + "=" + value
-                + (flushed ? " saved" : " queued"));
+                + (applied ? " applied" : " rejected"));
         return result;
+    }
+
+    private static boolean isTrustedCaller(@Nullable Context context) {
+        if (context == null) return false;
+        int uid = Binder.getCallingUid();
+        if (uid == Process.myUid()) return true;
+        String[] packages = context.getPackageManager().getPackagesForUid(uid);
+        if (packages == null) return false;
+        for (String name : packages) {
+            if (Constants.TARGET_PACKAGE.equals(name)) return true;
+        }
+        return false;
     }
 
     @Nullable

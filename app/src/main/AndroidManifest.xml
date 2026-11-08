@@ -2,7 +2,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- 模块 → 宿主（背屏中心）同步广播的签名级权限：宿主只接收持有它的发送方（即模块自己）。 -->
+    <permission
+        android:name="${applicationId}.permission.SYNC_HOST"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="${applicationId}.permission.SYNC_HOST" />
+
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 背屏录屏：录制期间用前台服务托住进程（root screenrecord，不走 MediaProjection，所以是 specialUse）。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
@@ -22,20 +32,13 @@
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.MiBackscreen">
+            android:theme="@style/Theme.MiBackscreen"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="de.robv.android.xposed.category.MODULE_SETTINGS" />
             </intent-filter>
         </activity>
-
-        <activity
-            android:name=".ui.pickup.PickupCodesActivity"
-            android:exported="true"
-            android:excludeFromRecents="true"
-            android:launchMode="singleTask"
-            android:label="@string/pickup_title"
-            android:theme="@style/Theme.MiBackscreen" />
 
         <activity-alias
             android:name=".LauncherAlias"
@@ -51,11 +54,56 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- 控制中心「投到背屏」磁贴：点一下在主屏与背屏之间移动当前应用（执行者在 system_server）。 -->
+        <service
+            android:name=".tile.RearCastTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_rear_cast"
+            android:label="@string/rear_cast_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
+        <!-- 控制中心「背屏录屏」磁贴：点一下开始，再点一下停止并保存。 -->
+        <service
+            android:name=".tile.RearRecordTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_rear_record"
+            android:label="@string/rear_record_title"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
+        <service
+            android:name=".ui.recorder.RearRecordService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Records the rear display with root screenrecord while the user is away from the app" />
+        </service>
+
         <provider
             android:name=".bridge.PreferenceBridgeProvider"
             android:authorities="${applicationId}.PanelPreferences"
             android:exported="true"
             android:permission="android.permission.MANAGE_ACTIVITY_TASKS" />
+
+        <provider
+            android:name=".bridge.FaceEnrollmentProvider"
+            android:authorities="${applicationId}.FaceEnrollment"
+            android:exported="true"
+            android:permission="android.permission.WRITE_SECURE_SETTINGS" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

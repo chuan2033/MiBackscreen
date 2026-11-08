@@ -1,9 +1,9 @@
 package hook.HyperBackscreen.ui.updater
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
+import hook.HyperBackscreen.ui.components.AppDialog
+import hook.HyperBackscreen.ui.components.DialogButtonRow
+import hook.HyperBackscreen.ui.theme.currentAppColors
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -11,37 +11,39 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import hook.HyperBackscreen.R
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
 
 /** 检测到新版本时的弹窗：标题 + 更新内容 + 「取消」「下载」。 */
 @Composable
 fun UpdateDialog(
     update: UpdateInfo?,
+    downloadFailed: Boolean = false,
     onDownload: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    WindowDialog(
+    AppDialog(
         show = update != null,
         title = stringResource(R.string.update_available_title),
         onDismissRequest = onDismiss
     ) {
         update?.let { info ->
-            val body = remember(info) { updateBody(info) }
+            val codeBackground = currentAppColors.codeBackground
+            val body = remember(info, codeBackground) { updateBody(info, codeBackground) }
             Text(
                 text = body,
                 modifier = Modifier
@@ -52,66 +54,96 @@ fun UpdateDialog(
                 style = MiuixTheme.textStyles.body1
             )
         }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            TextButton(
-                text = stringResource(R.string.update_cancel),
-                modifier = Modifier.weight(1f).height(48.dp),
-                onClick = onDismiss
-            )
-            Button(
-                modifier = Modifier.weight(1f).height(48.dp),
-                onClick = onDownload,
-                colors = ButtonDefaults.buttonColorsPrimary(),
-                content = { Text(stringResource(R.string.update_download)) }
+        if (downloadFailed) {
+            Text(
+                text = stringResource(R.string.activity_open_failed),
+                modifier = Modifier.padding(top = 8.dp),
+                color = MiuixTheme.colorScheme.error,
             )
         }
+        DialogButtonRow(
+            modifier = Modifier.padding(top = 12.dp),
+            secondaryText = stringResource(R.string.update_cancel),
+            onSecondary = onDismiss,
+            primaryText = stringResource(if (downloadFailed) R.string.common_retry else R.string.update_download),
+            onPrimary = onDownload
+        )
     }
 }
 
 /** 版本号加粗，正文按 Markdown 的常用子集渲染（标题/加粗/行内代码/列表）。 */
-private fun updateBody(info: UpdateInfo): AnnotatedString = buildAnnotatedString {
+private fun updateBody(info: UpdateInfo, codeBackground: Color): AnnotatedString = buildAnnotatedString {
     withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 17.sp)) {
         append("v")
         append(info.versionName)
     }
     append("\n\n")
-    append(updateNotes(info.notes))
+    append(updateNotes(info.notes, codeBackground))
 }
 
 private val HEADING = Regex("^(#{1,6})\\s+(.*)$")
 private val BULLET = Regex("^[-*]\\s+(.*)$")
+private val ORDERED = Regex("^(\\d+)[.)]\\s+(.*)$")
+private val HORIZONTAL_RULE = Regex("^\\s*(-{3,}|\\*{3,}|_{3,})\\s*$")
+private val QUOTE = Regex("^>\\s?(.*)$")
+private val TABLE_ROW = Regex("^\\|(.+)\\|$")
 private val LINK = Regex("\\[([^\\]]+)]\\([^)]*\\)")
-private val INLINE = Regex("\\*\\*(.+?)\\*\\*|`([^`]+)`")
+private val INLINE = Regex("\\*\\*(.+?)\\*\\*|`([^`]+)`|(?<!\\*)\\*([^*]+)\\*(?!\\*)")
 
-/** 逐行转换 Markdown；空行保留为段落间隔。 */
-private fun updateNotes(markdown: String): AnnotatedString = buildAnnotatedString {
+/** 列表项的悬挂缩进：折行后与文字对齐，不让第二行顶到圆点下面。 */
+private fun listParagraphStyle() = ParagraphStyle(
+    textIndent = TextIndent(firstLine = 0.sp, restLine = 24.sp),
+    lineHeight = 21.sp
+)
+
+/** 空行只做段落分隔，压到半行高，否则标题上下会空出一大片。 */
+private val SpacerLine = ParagraphStyle(lineHeight = 8.sp)
+
+/** 逐行转换 Markdown：标题、列表、引用、分隔线、表格与行内样式。 */
+internal fun updateNotes(markdown: String, codeBackground: Color): AnnotatedString = buildAnnotatedString {
     var first = true
+    var lastWasBlank = false
     markdown.lineSequence().forEach { raw ->
+        val line = LINK.replace(raw.trim(), "$1")
+        val blank = line.isEmpty()
+        // 连续空行按 Markdown 语义只算一个段落分隔，不然空行会叠出一大片。
+        if (blank && lastWasBlank) return@forEach
         if (!first) append('\n')
         first = false
-        val line = LINK.replace(raw.trim(), "$1")
+        lastWasBlank = blank
         when {
-            line.isEmpty() -> Unit
+            blank -> withStyle(SpacerLine) { append(" ") }
+            HORIZONTAL_RULE.matches(line) -> withStyle(ParagraphStyle(lineHeight = 20.sp)) {
+                append("────────────────────")
+            }
             else -> {
                 val heading = HEADING.find(line)
-                if (heading != null) {
-                    withStyle(headingStyle(heading.groupValues[1].length)) {
-                        appendInline(heading.groupValues[2])
+                val bullet = BULLET.matchEntire(line)
+                val ordered = ORDERED.matchEntire(line)
+                val quote = QUOTE.matchEntire(line)
+                when {
+                    heading != null -> withStyle(ParagraphStyle(lineHeight = 26.sp)) {
+                        withStyle(headingStyle(heading.groupValues[1].length)) {
+                            appendInline(heading.groupValues[2], codeBackground)
+                        }
                     }
-                } else {
-                    val bullet = BULLET.matchEntire(line)
-                    if (bullet != null) {
+                    bullet != null -> withStyle(listParagraphStyle()) {
                         append("•  ")
-                        appendInline(bullet.groupValues[1])
-                    } else {
-                        appendInline(line)
+                        appendInline(bullet.groupValues[1], codeBackground)
                     }
+                    ordered != null -> withStyle(listParagraphStyle()) {
+                        append(ordered.groupValues[1])
+                        append(".  ")
+                        appendInline(ordered.groupValues[2], codeBackground)
+                    }
+                    quote != null -> withStyle(listParagraphStyle()) {
+                        append("│ ")
+                        appendInline(quote.groupValues[1], codeBackground)
+                    }
+                    TABLE_ROW.matches(line) -> withStyle(listParagraphStyle()) {
+                        appendInline(line.trim('|').replace("|", "   "), codeBackground)
+                    }
+                    else -> withStyle(ParagraphStyle(lineHeight = 21.sp)) { appendInline(line, codeBackground) }
                 }
             }
         }
@@ -123,20 +155,28 @@ private fun headingStyle(level: Int) = SpanStyle(
     fontSize = when (level) {
         1 -> 19.sp
         2 -> 17.sp
-        else -> 16.sp
+        else -> 17.sp
     }
 )
 
-/** 行内样式：**加粗** 与 `代码`；其余原样。 */
-private fun AnnotatedString.Builder.appendInline(text: String) {
+/** 行内样式：**加粗**、`代码`、*斜体*；其余原样。 */
+private fun AnnotatedString.Builder.appendInline(text: String, codeBackground: Color) {
     var cursor = 0
     for (match in INLINE.findAll(text)) {
         if (match.range.first > cursor) append(text.substring(cursor, match.range.first))
         val bold = match.groupValues[1]
-        if (bold.isNotEmpty()) {
-            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(bold) }
-        } else {
-            withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) { append(match.groupValues[2]) }
+        val code = match.groupValues[2]
+        val italic = match.groupValues[3]
+        when {
+            bold.isNotEmpty() -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(bold) }
+            code.isNotEmpty() -> withStyle(
+                SpanStyle(
+                    fontFamily = FontFamily.Monospace,
+                    // 底色来自 AppColors（onSurface 派生），深浅色和 Monet 下都协调。
+                    background = codeBackground
+                )
+            ) { append(code) }
+            italic.isNotEmpty() -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(italic) }
         }
         cursor = match.range.last + 1
     }

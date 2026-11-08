@@ -1,35 +1,44 @@
 package hook.HyperBackscreen.ui.config
 
+import top.yukonga.miuix.kmp.window.WindowListPopup
+import top.yukonga.miuix.kmp.basic.ListPopupColumn
+import top.yukonga.miuix.kmp.basic.DropdownImpl
+import top.yukonga.miuix.kmp.basic.PopupPositionProvider
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.More
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import hook.HyperBackscreen.ui.components.DetailPageScaffold
+import hook.HyperBackscreen.ui.theme.HomeUiTokens
+import android.content.pm.ApplicationInfo
+import androidx.annotation.StringRes
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.widget.ImageView
-import androidx.activity.compose.BackHandler
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -37,57 +46,56 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.common.AppPickerFilter
+import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.common.PackageListCodec
-import hook.HyperBackscreen.ui.components.BlurredBar
 import hook.HyperBackscreen.ui.components.CardBlock
 import java.text.Collator
 import java.util.LinkedHashSet
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InputField
-import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
-import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.preference.CheckboxLocation
 import top.yukonga.miuix.kmp.preference.CheckboxPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
-import top.yukonga.miuix.kmp.utils.overScrollVertical
-import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
 private data class InstalledAppItem(
     val label: String,
     val packageName: String,
-    val icon: Drawable?
+    /** 只带 ApplicationInfo、不预先加载图标：图标在列表行可见时才按需加载（见 [AppIcon]）。 */
+    val appInfo: ApplicationInfo?,
+    /** 预装 / 系统更新过的系统应用；游戏基本都是用户应用，按这个拆开列表能短很多。 */
+    val isSystem: Boolean = false
 )
+
+/** 列表筛选：默认只看用户应用；「已选」用来快速复查名单。顺序即分段控件顺序。 */
+private enum class AppFilter(@get:StringRes val labelRes: Int) {
+    USER(R.string.app_picker_filter_user),
+    SYSTEM(R.string.app_picker_filter_system),
+    SELECTED(R.string.app_picker_filter_selected),
+    ALL(R.string.app_picker_filter_all),
+}
 
 @Composable
 internal fun AppPickerPage(
     selectedPackages: String,
     onSelectedPackagesChange: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    // 同一个选择页给多份名单复用：标题与页首说明按名单区分，默认是「双击亮屏黑名单」。
+    @StringRes titleRes: Int = R.string.app_picker_title,
+    @StringRes hintRes: Int = R.string.app_picker_double_tap_hint,
 ) {
     val context = LocalContext.current
-    val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
-    val surfaceColor = MiuixTheme.colorScheme.surface
-    val backdrop = rememberLayerBackdrop {
-        drawRect(surfaceColor)
-        drawContent()
-    }
 
     var query by rememberSaveable { mutableStateOf("") }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var apps by remember { mutableStateOf(emptyList<InstalledAppItem>()) }
     var loading by remember { mutableStateOf(true) }
+    var loadFailed by remember { mutableStateOf(false) }
+    var loadAttempt by remember { mutableIntStateOf(0) }
     val selectedSet = remember(selectedPackages) {
         PackageListCodec.parse(selectedPackages)
     }
@@ -100,104 +108,174 @@ internal fun AppPickerPage(
             .map { InstalledAppItem(it, it, null) }
         (missing + apps).distinctBy { it.packageName }
     }
-    val filteredApps = remember(mergedApps, query) {
-        mergedApps.filter {
-            AppPickerFilter.matches(it.label, it.packageName, query)
-        }
+    var filter by rememberSaveable { mutableStateOf(AppFilter.USER) }
+    // 已选应用置顶，但只按「列表加载完那一刻」的名单排：勾选 / 取消时不重排，
+    // 否则手指下的条目会突然跳走。
+    val pinnedPackages = remember(apps) { selectedSet }
+    val filteredApps = remember(mergedApps, query, filter, selectedSet, pinnedPackages) {
+        mergedApps
+            .filter { app ->
+                when (filter) {
+                    AppFilter.USER -> !app.isSystem
+                    AppFilter.SYSTEM -> app.isSystem
+                    AppFilter.SELECTED -> app.packageName in selectedSet
+                    AppFilter.ALL -> true
+                }
+            }
+            .filter { AppPickerFilter.matches(it.label, it.packageName, query) }
+            .sortedBy { it.packageName !in pinnedPackages }
     }
 
-    BackHandler(onBack = onBack)
-
-    LaunchedEffect(context) {
+    LaunchedEffect(context, loadAttempt) {
         loading = true
-        apps = withContext(Dispatchers.IO) {
-            loadInstalledApps(context)
+        loadFailed = false
+        when (val result = withContext(Dispatchers.IO) {
+            loadAppList { loadInstalledApps(context) }
+        }) {
+            is AppListLoadResult.Loaded -> apps = result.apps
+            is AppListLoadResult.Failed -> {
+                loadFailed = true
+                Log.w(Constants.LOG_TAG, "Unable to load visible applications", result.error)
+            }
         }
         loading = false
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = MiuixTheme.colorScheme.surface,
-        topBar = {
-            BlurredBar(backdrop) {
-                TopAppBar(
-                    title = stringResource(R.string.app_picker_title),
-                    largeTitle = stringResource(R.string.app_picker_title),
-                    color = Color.Transparent,
-                    scrollBehavior = scrollBehavior,
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = MiuixIcons.Back,
-                                contentDescription = stringResource(R.string.common_back),
-                                tint = MiuixTheme.colorScheme.onBackground
-                            )
-                        }
-                    }
-                )
-            }
+    var showFilterMenu by remember { mutableStateOf(false) }
+    val filterLabels = AppFilter.entries.map { entry ->
+        if (entry == AppFilter.SELECTED && selectedSet.isNotEmpty()) {
+            stringResource(entry.labelRes) + " (" + selectedSet.size + ")"
+        } else {
+            stringResource(entry.labelRes)
         }
-    ) { paddingValues ->
-        Box(modifier = Modifier.layerBackdrop(backdrop)) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .scrollEndHaptic()
-                    .overScrollVertical()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .padding(horizontal = 12.dp),
-                contentPadding = PaddingValues(
-                    top = paddingValues.calculateTopPadding()
-                )
-            ) {
-                item {
-                    Spacer(Modifier.height(12.dp))
-                    InputField(
-                        query = query,
-                        onQueryChange = { query = it },
-                        onSearch = {},
-                        expanded = searchExpanded,
-                        onExpandedChange = { searchExpanded = it },
-                        label = stringResource(R.string.app_picker_search_hint),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(12.dp))
-                }
+    }
 
-                when {
-                    loading -> item {
-                        MessageCard(text = stringResource(R.string.app_picker_loading))
-                    }
-                    filteredApps.isEmpty() -> item {
-                        MessageCard(text = stringResource(R.string.app_picker_empty))
-                    }
-                    else -> items(filteredApps, key = { it.packageName }) { app ->
-                        CardBlock(pressFeedbackType = PressFeedbackType.None) {
-                            CheckboxPreference(
-                                title = app.label,
-                                summary = app.packageName,
-                                checked = selectedSet.contains(app.packageName),
-                                onCheckedChange = { checked ->
-                                    val next = LinkedHashSet(selectedSet)
-                                    if (checked) {
-                                        next.add(app.packageName)
-                                    } else {
-                                        next.remove(app.packageName)
-                                    }
-                                    onSelectedPackagesChange(PackageListCodec.encode(next))
-                                },
-                                checkboxLocation = CheckboxLocation.End,
-                                startAction = {
-                                    AppIcon(app)
+    DetailPageScaffold(
+        title = stringResource(titleRes),
+        onBack = onBack,
+        // 筛选收进右上角「更多」菜单：列表顶部不再常驻一排分段按钮。
+        actions = {
+            Box {
+                IconButton(
+                    onClick = { showFilterMenu = true },
+                    holdDownState = showFilterMenu
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.More,
+                        contentDescription = stringResource(R.string.app_picker_filter_menu),
+                        tint = MiuixTheme.colorScheme.onBackground
+                    )
+                }
+                WindowListPopup(
+                    show = showFilterMenu,
+                    alignment = PopupPositionProvider.Align.End,
+                    onDismissRequest = { showFilterMenu = false }
+                ) {
+                    ListPopupColumn {
+                        filterLabels.forEachIndexed { index, label ->
+                            DropdownImpl(
+                                text = label,
+                                optionSize = filterLabels.size,
+                                isSelected = filter.ordinal == index,
+                                index = index,
+                                onSelectedIndexChange = { selectedIndex ->
+                                    AppFilter.entries.getOrNull(selectedIndex)?.let { filter = it }
+                                    showFilterMenu = false
                                 }
                             )
                         }
                     }
                 }
+            }
+        },
+    ) {
+        // 「名单非空即启用、清空即关闭」是隐式规则，在入口页把它说清楚。
+        item(key = "picker_hint") {
+            Text(
+                text = stringResource(hintRes),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+            )
+        }
+        item {
+            InputField(
+                query = query,
+                onQueryChange = { query = it },
+                onSearch = {},
+                expanded = searchExpanded,
+                onExpandedChange = { searchExpanded = it },
+                label = stringResource(R.string.app_picker_search_hint),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(12.dp))
+            // 筛选在右上角菜单里，这里写明当前看的是哪一类、有多少个。
+            if (!loading) {
+                Text(
+                    text = stringResource(
+                        R.string.app_picker_showing,
+                        stringResource(filter.labelRes),
+                        filteredApps.size
+                    ),
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                )
+            }
+        }
 
-                item {
-                    Spacer(Modifier.height(24.dp).navigationBarsPadding())
+        if (loading) {
+            item {
+                MessageCard(text = stringResource(R.string.app_picker_loading))
+            }
+        } else {
+            if (loadFailed || apps.isEmpty()) {
+                item(key = "load_status") {
+                    CardBlock(pressFeedbackType = PressFeedbackType.None) {
+                        Text(
+                            text = stringResource(if (loadFailed) R.string.app_picker_load_failed else R.string.app_picker_unavailable),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                        TextButton(
+                            text = stringResource(R.string.common_retry),
+                            onClick = { loadAttempt++ },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            } else if (selectedSet.any { it !in knownPackages }) {
+                item(key = "visibility_notice") {
+                    MessageCard(text = stringResource(R.string.app_picker_partial))
+                }
+            }
+            if (filteredApps.isEmpty() && (query.isNotBlank() || apps.isNotEmpty())) {
+                item(key = "empty") { MessageCard(text = stringResource(R.string.app_picker_empty)) }
+            }
+            items(filteredApps, key = { it.packageName }) { app ->
+                // 换筛选时条目淡入淡出、留下的条目平滑挪位，而不是整列瞬间替换。
+                CardBlock(
+                    modifier = Modifier.animateItem(),
+                    pressFeedbackType = PressFeedbackType.None
+                ) {
+                    CheckboxPreference(
+                        title = app.label,
+                        summary = app.packageName,
+                        checked = selectedSet.contains(app.packageName),
+                        onCheckedChange = { checked ->
+                            val next = LinkedHashSet(selectedSet)
+                            if (checked) {
+                                next.add(app.packageName)
+                            } else {
+                                next.remove(app.packageName)
+                            }
+                            onSelectedPackagesChange(PackageListCodec.encode(next))
+                        },
+                        checkboxLocation = CheckboxLocation.End,
+                        startAction = {
+                            AppIcon(app)
+                        }
+                    )
                 }
             }
         }
@@ -220,12 +298,22 @@ private fun AppIcon(app: InstalledAppItem) {
     Box(
         modifier = Modifier
             .size(40.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(HomeUiTokens.CornerSmall))
             .background(MiuixTheme.colorScheme.surface),
         contentAlignment = Alignment.Center
     ) {
-        val drawable = app.icon
-        if (drawable != null) {
+        // 按可见行懒加载：只有组合到屏幕上的行才去 PackageManager 取图标，并放进有上限的缓存，
+        // 不再在进入页面时为全部已安装应用（含系统应用）一次性 loadIcon 并整页常驻内存。
+        val context = LocalContext.current
+        val drawable by produceState(AppIconCache.get(app.packageName), app.packageName, app.appInfo) {
+            if (value != null) return@produceState
+            val info = app.appInfo ?: return@produceState
+            value = withContext(Dispatchers.IO) {
+                AppIconCache.load(context.applicationContext.packageManager, info)
+            }
+        }
+        val icon = drawable
+        if (icon != null) {
             AndroidView(
                 factory = { context ->
                     ImageView(context).apply {
@@ -233,8 +321,7 @@ private fun AppIcon(app: InstalledAppItem) {
                     }
                 },
                 update = { view ->
-                    val icon = drawable.constantState?.newDrawable()?.mutate() ?: drawable
-                    view.setImageDrawable(icon)
+                    view.setImageDrawable(icon.constantState?.newDrawable()?.mutate() ?: icon)
                 },
                 modifier = Modifier.fillMaxSize()
             )
@@ -257,9 +344,13 @@ private fun loadInstalledApps(context: Context): List<InstalledAppItem> {
         .filter { it.packageName != context.packageName }
         .map { applicationInfo ->
             val packageName = applicationInfo.packageName
-            val label = applicationInfo.loadLabel(packageManager).toString().ifBlank { packageName }
-            val icon = runCatching { applicationInfo.loadIcon(packageManager) }.getOrNull()
-            InstalledAppItem(label, packageName, icon)
+            val label = try {
+                applicationInfo.loadLabel(packageManager).toString().ifBlank { packageName }
+            } catch (_: RuntimeException) {
+                packageName
+            }
+            val systemFlags = ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP
+            InstalledAppItem(label, packageName, applicationInfo, isSystem = applicationInfo.flags and systemFlags != 0)
         }
         .distinctBy { it.packageName }
         .toList()
@@ -267,5 +358,23 @@ private fun loadInstalledApps(context: Context): List<InstalledAppItem> {
     return apps.sortedWith { left, right ->
         val labelCompare = collator.compare(left.label, right.label)
         if (labelCompare != 0) labelCompare else left.packageName.compareTo(right.packageName)
+    }
+}
+
+/**
+ * 应用图标的进程内缓存：按包名、有条目上限（LRU），翻页回来不必重新加载，
+ * 也不会把几百个应用的图标全部常驻内存。
+ */
+private object AppIconCache {
+    private const val MAX_ENTRIES = 120
+    private val cache = android.util.LruCache<String, Drawable>(MAX_ENTRIES)
+
+    fun get(packageName: String): Drawable? = cache.get(packageName)
+
+    fun load(packageManager: PackageManager, info: ApplicationInfo): Drawable? {
+        cache.get(info.packageName)?.let { return it }
+        val icon = runCatching { info.loadIcon(packageManager) }.getOrNull() ?: return null
+        cache.put(info.packageName, icon)
+        return icon
     }
 }
