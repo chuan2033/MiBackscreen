@@ -656,6 +656,7 @@ private fun MainTabPage(
     enable18ProFeatures: Boolean,
     onEnable18ProFeaturesChange: (Boolean) -> Unit,
     tab: HomeNavigationPolicy.Tab,
+    isCurrentPage: Boolean,
     listState: LazyListState,
     moduleActivated: ActivationState,
     disableLongPress: Boolean,
@@ -755,6 +756,7 @@ private fun MainTabPage(
                     HomeNavigationPolicy.Tab.HOME -> item {
                         HomePage(
                             moduleActivated = moduleActivated,
+                            visible = isCurrentPage,
                             onDonateClick = onDonateClick
                         )
                     }
@@ -930,6 +932,7 @@ private fun MainContent(
                 enable18ProFeatures = enable18ProFeatures,
                 onEnable18ProFeaturesChange = onEnable18ProFeaturesChange,
                 tab = tab,
+                isCurrentPage = page == pagerState.currentPage,
                 listState = when (tab) {
                     HomeNavigationPolicy.Tab.HOME -> homeListState
                     HomeNavigationPolicy.Tab.FUNCTION -> functionListState
