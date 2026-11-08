@@ -20,5 +20,6 @@ internal enum class HomeRoute : NavKey {
     MusicWhitelistAppPicker,
     RearScreenRecord,
     RearDoubleTap,
-    RearCast
+    RearCast,
+    RearMusic
 }
