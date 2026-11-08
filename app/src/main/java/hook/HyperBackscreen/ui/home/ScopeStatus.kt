@@ -82,8 +82,6 @@ internal fun readScopeStatus(service: XposedService?): List<ScopeStatusItem>? {
     return try {
         val scope = service.scope.toSet()
         val targets = service.runningTargets
-        Log.d(TAG, "scope status: scope=$scope targets=" +
-            targets.joinToString { "${it.processName}(${it.state}, v${it.loadedVersionCode})" })
         scopeDefinitions.map { definition ->
             val matched = targets.filter { matchesScope(it.processName, definition.packageName) }
             val state = when {
@@ -101,6 +99,14 @@ internal fun readScopeStatus(service: XposedService?): List<ScopeStatusItem>? {
         Log.w(TAG, "Unable to read scope status", error)
         null
     }
+}
+
+/** 首页可见时轮询作用域状态的间隔。一次是两个很轻的 Binder 调用。 */
+internal const val ScopeStatusPollMillis = 2_000L
+
+/** 轮询时只在状态变化时记一行，不每两秒刷一遍日志。 */
+internal fun logScopeStatusChange(items: List<ScopeStatusItem>?) {
+    Log.d(TAG, "scope status: " + (items?.joinToString { "${it.packageName}=${it.state}" } ?: "unavailable"))
 }
 
 private fun matchesScope(process: String, packageName: String): Boolean {

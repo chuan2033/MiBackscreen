@@ -59,6 +59,7 @@ import hook.HyperBackscreen.ui.util.currentSystemVersion
 import hook.HyperBackscreen.ui.util.RootAccess
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
@@ -73,6 +74,7 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 @Composable
 internal fun HomePage(
     moduleActivated: ActivationState,
+    visible: Boolean = true,
     onDonateClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -97,12 +99,25 @@ internal fun HomePage(
             }
         }
     }
-    // 作用域注入状态：每次回到前台刷新（用户可能刚去 LSPosed 勾选或重启了作用域）。
+    // 作用域注入状态：框架没有「目标进程变化」的回调，只能轮询。首页可见时每隔一会儿读一次，
+    // 应用内重启作用域、宿主自己崩溃重启后圆点跟着变，不用切后台再回来。
+    // 切到别的 Tab、被二级页盖住或 App 退到后台就停（这里用页面自己的生命周期，二级页会让它降到 STARTED）。
     var scopeStatus by remember { mutableStateOf<List<ScopeStatusItem>?>(null) }
     var showScopeDialog by remember { mutableStateOf(false) }
-    LaunchedEffect(lifecycleOwner, moduleActivated) {
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            scopeStatus = withContext(Dispatchers.IO) { readScopeStatus(ModuleApp.getService()) }
+    LaunchedEffect(pageLifecycleOwner, moduleActivated, visible) {
+        if (!visible) return@LaunchedEffect
+        pageLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                val service = ModuleApp.getService()
+                val latest = withContext(Dispatchers.IO) { readScopeStatus(service) }
+                // 偶发的读取失败不把圆点整排撤掉；服务真断开了才清空。
+                val next = latest ?: scopeStatus.takeIf { service != null }
+                if (next != scopeStatus) {
+                    logScopeStatusChange(next)
+                    scopeStatus = next
+                }
+                delay(ScopeStatusPollMillis)
+            }
         }
     }
     val operation = LocalLogExportOperation.current
