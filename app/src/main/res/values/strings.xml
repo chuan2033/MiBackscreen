@@ -438,4 +438,5 @@
     <string name="config_module_entry_settings_bottom">Settings (bottom)</string>
     <string name="config_module_entry_scope_request">Allow the module to hook Settings from the LSPosed notification</string>
     <string name="config_module_entry_scope_failed">Couldn\'t add Settings to the scope; enable it manually in LSPosed</string>
+    <string name="about_version_history_failed">Couldn\'t load releases. Check your connection and try again.</string>
 </resources>
