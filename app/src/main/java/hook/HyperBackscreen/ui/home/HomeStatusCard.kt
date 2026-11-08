@@ -14,7 +14,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import hook.HyperBackscreen.ui.theme.currentAppColors
-import hook.HyperBackscreen.ui.theme.HomeUiTokens
+import hook.HyperBackscreen.ui.theme.currentUiStyle
+import hook.HyperBackscreen.ui.theme.uiStyleCard
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -58,7 +59,6 @@ private val CardHeight = 118.dp
 private val GlyphSize = 116.dp
 private val GlyphOffsetX = 26.dp
 private val GlyphOffsetY = 30.dp
-private val CardCornerRadius = HomeUiTokens.CornerCard
 
 private val DotSize = 7.dp
 private const val ScopeFadeMillis = 220
@@ -107,12 +107,14 @@ internal fun HomeStatusCard(
         label = "statusMark"
     )
 
+    val cardCorner = currentUiStyle.cardCorner
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 12.dp),
+            .padding(bottom = 12.dp)
+            .uiStyleCard(cardCorner),
         insideMargin = PaddingValues(),
-        cornerRadius = CardCornerRadius,
+        cornerRadius = cardCorner,
         colors = CardDefaults.defaultColors(
             color = containerColor,
             contentColor = contentColor
