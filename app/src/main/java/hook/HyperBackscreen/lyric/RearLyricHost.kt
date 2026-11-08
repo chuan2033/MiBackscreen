@@ -383,7 +383,14 @@ internal object RearLyricHost {
                 cardTitle = title,
                 showInAod = aod && isShowInAod(),
             )
-            val progress = if (pushed?.timeline != null) refl.progress(element) else null
+            // 卡片 MediaController 的进度和 v4 帧里的进度快照，取更新的那份外推到现在。
+            val progress = if (pushed?.timeline != null) {
+                ProgressAnchor.freshest(refl.progress(element), pushed.anchor)?.let {
+                    Progress(it.positionAt(SystemClock.elapsedRealtime()), it.speed)
+                }
+            } else {
+                null
+            }
             val line = pushed?.let { RearLyricPolicy.resolveLine(it, progress?.position, title) }
             val text = RearLyricPolicy.lyricToShow(line, state)
             // 发布方只推了全量歌词、不逐句推送时，按时间轴在下一句开始时再刷新。
@@ -395,7 +402,7 @@ internal object RearLyricHost {
             }
             if (hook.HyperBackscreen.BuildConfig.DEBUG) {
                 val trace = "line='${line?.text}' pub=${line?.session?.publisher} paused=${line?.paused} " +
-                    "timeline=${pushed?.timeline?.lines?.size} pos=${progress?.position} " +
+                    "timeline=${pushed?.timeline?.lines?.size} pos=${progress?.position} v4pos=${pushed?.anchor?.position} " +
                     "state=$state stock=${card.stock} -> show='${text}'"
                 if (trace != card.lastTrace) {
                     card.lastTrace = trace
@@ -533,23 +540,21 @@ internal object RearLyricHost {
         }.getOrNull()
 
         /**
-         * 从卡片绑定的 MediaController 取播放进度：PlaybackState 里的位置按距上次更新的时间和速度外推。
-         * 拿不到或位置未知返回 null（只能靠逐句推送）。
+         * 卡片绑定的 MediaController 的进度快照（PlaybackState 里的位置和最后更新时刻），由调用方外推。
+         * 拿不到或位置未知返回 null。
          */
-        fun progress(element: Any): Progress? = runCatching {
+        fun progress(element: Any): ProgressAnchor? = runCatching {
             val controller = musicController.get(element) ?: return@runCatching null
             val media = controller.javaClass.getMethod("getMediaController").invoke(controller)
                 as? android.media.session.MediaController ?: return@runCatching null
             val playback = media.playbackState ?: return@runCatching null
             if (playback.position < 0) return@runCatching null
-            val speed = playback.playbackSpeed
-            val position = if (playback.state == android.media.session.PlaybackState.STATE_PLAYING) {
-                val elapsed = SystemClock.elapsedRealtime() - playback.lastPositionUpdateTime
-                playback.position + (elapsed.coerceAtLeast(0L) * (if (speed > 0f) speed else 1f)).toLong()
-            } else {
-                playback.position
-            }
-            Progress(position, speed)
+            ProgressAnchor(
+                position = playback.position,
+                speed = playback.playbackSpeed,
+                elapsedAt = playback.lastPositionUpdateTime,
+                playing = playback.state == android.media.session.PlaybackState.STATE_PLAYING,
+            )
         }.getOrNull()
 
         /** 元数据里的媒体时长；拿不到返回 -1。 */

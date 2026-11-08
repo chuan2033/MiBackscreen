@@ -296,6 +296,7 @@ internal object FeedbackLogExporter {
         appendLine("enable_rear_lyric=${PrefsBridge.readEnableRearLyricForUi(context)}")
         appendLine("rear_lyric_in_aod=${PrefsBridge.readRearLyricInAodForUi(context)}")
         appendLine("super_lyric_status=${SuperLyricAvailability.detect(context).name}")
+        appendLine("super_lyric_server_api=${SuperLyricAvailability.serverApiVersion()}")
         appendLine("floating_nav_bar=${PrefsBridge.readFloatingNavBar(context)}")
         appendLine("liquid_glass=${PrefsBridge.readLiquidGlass(context)}")
         appendLine("bottom_bar_blur=${PrefsBridge.readBottomBarBlur(context)}")

@@ -5,7 +5,14 @@ package hook.HyperBackscreen.lyric
  * 不依赖 Android / 宿主类，单元测试直接覆盖。
  */
 
-/** SuperLyric 两代服务名。4.x 优先；手机上的 4.1 Release（API 37）其实只提供 3.x 协议。 */
+/**
+ * SuperLyric 两代服务名。4.x 优先。
+ *
+ * - 4.1 Release 只提供 3.x 协议（`super_lyric`）；
+ * - 4.2 起两代都提供，并在 system_server 里按调用方裁剪：系统应用（背屏中心）两代都给，第三方应用（模块 App）
+ *   只给清单 meta-data `superlyricapi_version_code` 对应的那一代（4.0 库自带 40 → 只有 v4）。
+ *   另外 4.2 对没有该 meta-data 的 3.x 接收方只推当前句、不推全量歌词，背屏中心走 3.x 就没有时间轴，所以必须优先 v4。
+ */
 internal object SuperLyricServices {
     const val V4 = "super_lyric.v4"
     const val LEGACY = "super_lyric"
@@ -104,6 +111,39 @@ internal class LyricTimeline private constructor(
     }
 }
 
+/**
+ * 播放进度快照：[position] 是 [elapsedAt]（`SystemClock.elapsedRealtime()` 时钟）那一刻的进度，按 [speed] 外推。
+ * 两个来源：卡片的 MediaController（PlaybackState.lastPositionUpdateTime），以及 v4 帧（收到帧的时刻）。
+ */
+internal data class ProgressAnchor(
+    val position: Long,
+    val speed: Float,
+    val elapsedAt: Long,
+    /** 只有明确在播放（PLAYING）时才外推；暂停 / 缓冲 / 未知都停在快照位置。 */
+    val playing: Boolean,
+) {
+    fun positionAt(now: Long): Long {
+        if (!playing) return position
+        // v4 约定 speed <= 0 表示冻结或未知；已经确定在播放，未知按 1 倍速。
+        val rate = if (speed > 0f) speed else 1f
+        val elapsed = (now - elapsedAt).coerceAtLeast(0L)
+        return position + (elapsed * rate).toLong()
+    }
+
+    companion object {
+        /**
+         * 取更新的那份快照。切歌时 SuperLyric 先推新歌的全量歌词，卡片的 MediaController 进度还停在上一首末尾，
+         * 用旧进度在新歌时间轴上取句会闪一句错的；v4 帧的快照更新，用它。
+         */
+        fun freshest(a: ProgressAnchor?, b: ProgressAnchor?): ProgressAnchor? = when {
+            a == null -> b
+            b == null -> a
+            b.elapsedAt > a.elapsedAt -> b
+            else -> a
+        }
+    }
+}
+
 /** 最近一次收到的歌词行。[paused] 只有 v4 服务端能给（3.x 没有暂停信号，以卡片自己的播放状态为准）。 */
 internal data class LyricLineUpdate(
     val session: LyricSession,
@@ -115,6 +155,8 @@ internal data class LyricLineUpdate(
     val title: String? = null,
     /** 这段会话的完整时间轴（拿到过全量歌词才有）。 */
     val timeline: LyricTimeline? = null,
+    /** v4 帧里的进度快照；3.x 没有。 */
+    val anchor: ProgressAnchor? = null,
 )
 
 /** 宿主 updateAlbum 的三个参数。 */
