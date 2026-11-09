@@ -451,9 +451,10 @@
     <string name="rear_widgets_uninstalled">App uninstalled; will not be shown</string>
     <string name="rear_widgets_remove">Remove</string>
     <string name="rear_widgets_add">Add widget</string>
-    <string name="rear_widgets_hint">Each widget is its own rear screen page after your wallpapers; swipe sideways to see it. Widgets stay clear of the camera area. Up to %1$d; widgets that need setup first are not supported yet.</string>
+    <string name="rear_widgets_hint">Swipe down from the top of the rear screen to see them. Widgets stay clear of the camera area. Up to %1$d; widgets that need setup first are not supported yet.</string>
     <string name="rear_widgets_option_summary">%1$s · %2$d×%3$d</string>
     <string name="rear_widgets_cells">%1$d×%2$d</string>
+    <string name="rear_widgets_cells_fit">%1$d×%2$d · Fits the rear screen</string>
     <string name="rear_widgets_loading">Loading widgets…</string>
     <string name="rear_widgets_already_added">Added</string>
 </resources>

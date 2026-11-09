@@ -85,7 +85,7 @@ internal object RearWidgetSelection {
     }
 }
 
-/** 一个可选的小部件。尺寸按桌面格子估算，只用于展示。 */
+/** 一个可选的小部件。尺寸按桌面格子估算，只用于展示和「适合背屏」提示。 */
 private class WidgetOption(
     val component: ComponentName,
     val label: String,
@@ -93,7 +93,10 @@ private class WidgetOption(
     val cellsWide: Int,
     val cellsHigh: Int,
     val preview: ImageBitmap?,
-)
+) {
+    /** 背屏卡片是横的、不到 220dp 高：两格高以内、宽不小于高的小部件缩小后最清楚。 */
+    val fitsRear: Boolean get() = cellsHigh <= 2 && cellsWide >= cellsHigh
+}
 
 private const val PREVIEW_SIZE_PX = 144
 
@@ -248,7 +251,10 @@ internal fun RearWidgetPickerPage(onBack: () -> Unit) {
                         BasicComponent(
                             title = option.label,
                             summary = if (added) stringResource(R.string.rear_widgets_already_added)
-                            else stringResource(R.string.rear_widgets_cells, option.cellsWide, option.cellsHigh),
+                            else stringResource(
+                                if (option.fitsRear) R.string.rear_widgets_cells_fit else R.string.rear_widgets_cells,
+                                option.cellsWide, option.cellsHigh
+                            ),
                             startAction = { WidgetPreview(option.preview) },
                             enabled = !added,
                             onClick = {
