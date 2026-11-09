@@ -444,9 +444,10 @@
     <string name="rear_widgets_uninstalled">应用已卸载，不会显示</string>
     <string name="rear_widgets_remove">移除</string>
     <string name="rear_widgets_add">添加小部件</string>
-    <string name="rear_widgets_hint">每个小部件是背屏上的一页，排在壁纸后面，左右滑动查看，会自动避开摄像头区域。最多 %1$d 个；需要先配置的小部件暂不支持。</string>
+    <string name="rear_widgets_hint">在背屏顶部往下滑就能看到，自动避开摄像头区域。最多 %1$d 个；需要先配置的小部件暂不支持。</string>
     <string name="rear_widgets_option_summary">%1$s · %2$d×%3$d</string>
     <string name="rear_widgets_cells">%1$d×%2$d</string>
+    <string name="rear_widgets_cells_fit">%1$d×%2$d · 适合背屏</string>
     <string name="rear_widgets_loading">正在读取小部件…</string>
     <string name="rear_widgets_already_added">已添加</string>
 </resources>
