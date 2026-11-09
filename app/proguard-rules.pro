@@ -17,6 +17,9 @@
 -keep class hook.HyperBackscreen.hook.subscreen.RearVideoHooks { *; }
 -keep class hook.HyperBackscreen.hook.subscreen.RearLyricHooks { *; }
 -keep class hook.HyperBackscreen.hook.theme.RearVideoImportHooks { *; }
+-keep class hook.HyperBackscreen.hook.subscreen.RearAppWidgetHooks { *; }
+-keep class hook.HyperBackscreen.hook.subscreen.RearWidgetHostView { *; }
+-keep class hook.HyperBackscreen.hook.settings.SettingsEntryHooks { *; }
 -keep class hook.HyperBackscreen.lyric.** { *; }
 # SuperLyricApi 4.0 编译时用的是 android.os.ServiceManager 的 compileOnly 桩，运行时由系统提供。
 -dontwarn android.os.ServiceManager
