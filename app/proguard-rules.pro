@@ -23,6 +23,11 @@
 -keep class hook.HyperBackscreen.lyric.** { *; }
 # SuperLyricApi 4.0 编译时用的是 android.os.ServiceManager 的 compileOnly 桩，运行时由系统提供。
 -dontwarn android.os.ServiceManager
+# SuperLyricApi 4.0 的 WireCodec 用反射调用 Frame / Lyric / Line / State 等类的私有无参构造来解 v4 帧，
+# 库自带的 consumer rules 只保留了 @Wire 字段，没保留这些构造：R8 会把它们删掉，背屏中心里每一帧都
+# 报「Dropping malformed frame: Cannot instantiate kg0」被丢弃，背屏收不到歌词（debug 不混淆所以正常）。
+# 库很小，整包保留，避免枚举 / 构造 / 字段任何一处再被裁掉。
+-keep class com.hchen.superlyricapi.** { *; }
 -keep class hook.HyperBackscreen.hook.util.HookReflection { *; }
 -keep class hook.HyperBackscreen.bridge.** { *; }
 -keep class hook.HyperBackscreen.common.Constants { *; }
