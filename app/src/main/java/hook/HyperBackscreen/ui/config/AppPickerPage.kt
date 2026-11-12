@@ -84,12 +84,8 @@ internal fun AppPickerPage(
     selectedPackages: String,
     onSelectedPackagesChange: (String) -> Unit,
     onBack: () -> Unit,
-    // 同一个选择页给多份名单复用：标题与页首说明按名单区分，默认是「双击亮屏黑名单」。
+    // 同一个选择页给多份名单复用：标题按名单区分，默认是「双击亮屏黑名单」。
     @StringRes titleRes: Int = R.string.app_picker_title,
-    // 页首说明；为 null 时不显示。
-    @StringRes hintRes: Int? = null,
-    // 是否在列表上方显示「正在显示：某类 · N 个」。
-    showFilterSummary: Boolean = true,
 ) {
     val context = LocalContext.current
 
@@ -212,31 +208,6 @@ internal fun AppPickerPage(
             }
         },
     ) {
-        // 「名单非空即启用、清空即关闭」是隐式规则，在入口页把它说清楚。
-        if (hintRes != null) item(key = "picker_hint") {
-            Text(
-                text = stringResource(hintRes),
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
-                style = MiuixTheme.textStyles.body2,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
-            )
-        }
-        item {
-            // 筛选在右上角菜单里，这里写明当前看的是哪一类、有多少个。
-            if (!loading && showFilterSummary) {
-                Text(
-                    text = stringResource(
-                        R.string.app_picker_showing,
-                        stringResource(filter.labelRes),
-                        filteredApps.size
-                    ),
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-                    style = MiuixTheme.textStyles.body2,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary
-                )
-            }
-        }
-
         if (loading) {
             item {
                 MessageCard(text = stringResource(R.string.app_picker_loading))

@@ -276,7 +276,6 @@
     <string name="app_picker_filter_selected">已选应用</string>
     <string name="app_picker_filter_all">全部应用</string>
     <string name="app_picker_filter_menu">筛选应用</string>
-    <string name="app_picker_showing">正在显示：%1$s · %2$d 个</string>
     <string name="restart_success">停止指令已发送，请重新打开相关应用</string>
     <string name="restart_failed">停止应用失败（可能未获取 root 权限）</string>
     <string name="common_retry">重试</string>
@@ -308,7 +307,6 @@
     <plurals name="music_widget_whitelist_summary_count">
         <item quantity="other">已追加 %1$d 个应用</item>
     </plurals>
-    <string name="music_widget_whitelist_picker_hint">背屏只为内置名单里的音乐应用显示音乐卡片。勾选的应用在播放时也会显示背屏音乐卡片。</string>
     <!-- 背屏录屏 -->
     <string name="rear_record_title">背屏录屏</string>
     <string name="rear_record_entry_summary">用 root 录制背屏画面并保存到相册</string>

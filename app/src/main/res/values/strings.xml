@@ -279,7 +279,6 @@
     <string name="app_picker_filter_selected">Selected apps</string>
     <string name="app_picker_filter_all">All apps</string>
     <string name="app_picker_filter_menu">Filter apps</string>
-    <string name="app_picker_showing">Showing: %1$s · %2$d</string>
     <string name="restart_success">Stop command sent; open the affected app again</string>
     <string name="restart_failed">Could not stop the app (root may be unavailable)</string>
     <string name="common_retry">Retry</string>
@@ -313,7 +312,6 @@
         <item quantity="one">%1$d app added</item>
         <item quantity="other">%1$d apps added</item>
     </plurals>
-    <string name="music_widget_whitelist_picker_hint">The rear screen only shows the music card for music apps on its built-in list. Checked apps will also show the rear music card while playing.</string>
     <!-- 背屏录屏 -->
     <string name="rear_record_title">Rear screen recording</string>
     <string name="rear_record_entry_summary">Record the rear screen with root and save it to the gallery</string>
