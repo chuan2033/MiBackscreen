@@ -187,6 +187,9 @@
 
     <!-- About Page -->
     <string name="about_developer_title">开发者</string>
+    <string name="about_group_title">交流群</string>
+    <string name="about_group_name">官方交流群</string>
+    <string name="about_qq_open_failed">未能打开 QQ，已复制号码 %1$s，请在 QQ 里搜索</string>
     <string name="about_credits_title">引用</string>
     <string name="about_miuix_summary">本项目使用 Miuix UI 组件构建</string>
     <string name="about_miuix_lib">miuix-kotlin-multiplatform (Apache-2.0)</string>

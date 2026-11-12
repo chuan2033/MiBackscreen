@@ -27,6 +27,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.BuildConfig
 import hook.HyperBackscreen.R
+import top.yukonga.miuix.kmp.icon.extended.ContactsCircle
+import top.yukonga.miuix.kmp.icon.extended.Contacts
+import hook.HyperBackscreen.ui.components.LocalUiFeedback
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import hook.HyperBackscreen.ui.components.AboutArrowPreference
 import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
@@ -45,13 +50,42 @@ internal fun AboutPage(
 ) {
     AboutHeader(onVersionClick = onAppUpdateClick)
 
+    val context = LocalContext.current
+    val feedback = LocalUiFeedback.current
+    // 打不开 QQ 时号码已经复制好了，提示用户自己去 QQ 里搜。
+    fun openQq(uri: String, number: String) {
+        if (!openInQq(context, uri, number)) {
+            val message = context.getString(R.string.about_qq_open_failed, number)
+            if (feedback != null) feedback.show(message)
+            else Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // 成员头像按 QQ 号联网获取，点一下直接发起 QQ 临时会话。
     SmallTitle(text = stringResource(R.string.about_developer_title), insideMargin = PaddingValues(16.dp, 8.dp))
     CardBlock(pressFeedbackType = PressFeedbackType.None) {
+        TEAM.forEach { member ->
+            AboutArrowPreference(
+                title = member.name,
+                summary = member.role,
+                startAction = {
+                    AboutAvatar(url = member.avatarUrl, fallback = MiuixIcons.Contacts)
+                },
+                onClick = { openQq(member.chatUri, member.qq) }
+            )
+        }
+    }
+
+    // 交流群：点一下打开 QQ 群名片，加群走 QQ 自己的确认页。
+    SmallTitle(text = stringResource(R.string.about_group_title), insideMargin = PaddingValues(16.dp, 8.dp))
+    CardBlock(pressFeedbackType = PressFeedbackType.None) {
         AboutArrowPreference(
-            title = "Axl_Q",
-            summary = null,
-            url = "https://github.com/chuan2033",
-            avatar = R.drawable.avatar_axlq
+            title = stringResource(R.string.about_group_name),
+            summary = GROUP_QQ,
+            startAction = {
+                AboutAvatar(url = GROUP_AVATAR_URL, fallback = MiuixIcons.ContactsCircle)
+            },
+            onClick = { openQq(GROUP_CARD_URI, GROUP_QQ) }
         )
     }
 
