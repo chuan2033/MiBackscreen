@@ -90,6 +90,7 @@ public final class PrefsBridge {
             Constants.KEY_CHECK_UPDATES,
             Constants.KEY_FLOATING_NAV_BAR,
             Constants.KEY_LIQUID_GLASS,
+            Constants.KEY_BOTTOM_BAR_STYLE,
             Constants.KEY_BOTTOM_BAR_BLUR,
             Constants.KEY_SHOW_FUNCTION_COUNT));
 
@@ -231,6 +232,7 @@ public final class PrefsBridge {
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_AUTO_WALLPAPER_ORDER, DEFAULT_AUTO_WALLPAPER_ORDER);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_REAR_SCREEN_OFF_TIMEOUT, DEFAULT_REAR_SCREEN_OFF_TIMEOUT);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_SETTINGS_ENTRY, DEFAULT_SETTINGS_ENTRY);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BOTTOM_BAR_STYLE, "standard");
         BACKUP_STRING_DEFAULTS.put(
                 Constants.KEY_REAR_SCREEN_SCHEDULE_START,
                 DEFAULT_REAR_SCREEN_SCHEDULE_START);
@@ -851,7 +853,9 @@ public final class PrefsBridge {
         }
         for (Map.Entry<String, String> entry : BACKUP_STRING_DEFAULTS.entrySet()) {
             values.put(entry.getKey(),
-                    readStringForUi(context, entry.getKey(), entry.getValue()));
+                    LOCAL_ONLY_KEYS.contains(entry.getKey())
+                            ? readBottomBarStyle(context)
+                            : readStringForUi(context, entry.getKey(), entry.getValue()));
         }
         return values;
     }
@@ -889,8 +893,22 @@ public final class PrefsBridge {
         for (String key : BACKUP_STRING_DEFAULTS.keySet()) {
             String normalized = normalizeBackupString(key, values.get(key));
             if (normalized == null) continue; // 缺失或非法：保持当前设置，不把脏值写进 Hook
-            writeStringFromUi(context, key, normalized);
+            if (Constants.KEY_BOTTOM_BAR_STYLE.equals(key)) {
+                writeBottomBarStyle(context, normalized);
+            } else if (LOCAL_ONLY_KEYS.contains(key)) {
+                local(context).edit().putString(key, normalized).apply();
+            } else {
+                writeStringFromUi(context, key, normalized);
+            }
             applied++;
+        }
+        if (!values.containsKey(Constants.KEY_BOTTOM_BAR_STYLE)
+                && (values.containsKey(Constants.KEY_FLOATING_NAV_BAR)
+                    || values.containsKey(Constants.KEY_LIQUID_GLASS))) {
+            writeBottomBarStyle(context,
+                    readFloatingNavBar(context)
+                            ? (readLiquidGlass(context) ? "liquid" : "floating")
+                            : "standard");
         }
         return applied;
     }
@@ -941,6 +959,9 @@ public final class PrefsBridge {
                 return normalizeRearScreenScheduleMode(value);
             case Constants.KEY_SETTINGS_ENTRY:
                 return normalizeSettingsEntry(value).equals(value) ? value : null;
+            case Constants.KEY_BOTTOM_BAR_STYLE:
+                return "standard".equals(value) || "floating".equals(value)
+                        || "liquid".equals(value) || "glass".equals(value) ? value : null;
             case Constants.KEY_DOUBLE_TAP_WAKE_DISABLED_PACKAGES:
             case Constants.KEY_DOUBLE_TAP_SLEEP_DISABLED_PACKAGES:
             case Constants.KEY_MUSIC_WIDGET_WHITELIST_PACKAGES:
@@ -1243,6 +1264,39 @@ public final class PrefsBridge {
 
     public static void writeLiquidGlass(@NonNull Context context, boolean enabled) {
         local(context).edit().putBoolean(Constants.KEY_LIQUID_GLASS, enabled).apply();
+    }
+
+    /** 保存底栏样式，同时维护旧版界面设置的读取结果。 */
+    @NonNull
+    public static String readBottomBarStyle(@NonNull Context context) {
+        SharedPreferences prefs = local(context);
+        String stored = prefs.getString(Constants.KEY_BOTTOM_BAR_STYLE, null);
+        String resolved = resolveBottomBarStyle(stored,
+                prefs.getBoolean(Constants.KEY_FLOATING_NAV_BAR, DEFAULT_FLOATING_NAV_BAR),
+                prefs.getBoolean(Constants.KEY_LIQUID_GLASS, DEFAULT_LIQUID_GLASS));
+        if (!resolved.equals(stored)) writeBottomBarStyle(context, resolved);
+        return resolved;
+    }
+
+    @NonNull
+    static String resolveBottomBarStyle(@Nullable String stored, boolean floating, boolean liquid) {
+        if ("standard".equals(stored) && floating) return liquid ? "liquid" : "floating";
+        if ("standard".equals(stored) || "floating".equals(stored)
+                || "liquid".equals(stored) || "glass".equals(stored)) return stored;
+        if (stored != null || !floating) return "standard";
+        return liquid ? "liquid" : "floating";
+    }
+
+    public static void writeBottomBarStyle(@NonNull Context context, @NonNull String style) {
+        if (!"standard".equals(style) && !"floating".equals(style)
+                && !"liquid".equals(style) && !"glass".equals(style)) {
+            throw new IllegalArgumentException("Unknown bottom bar style: " + style);
+        }
+        local(context).edit()
+                .putString(Constants.KEY_BOTTOM_BAR_STYLE, style)
+                .putBoolean(Constants.KEY_FLOATING_NAV_BAR, !"standard".equals(style))
+                .putBoolean(Constants.KEY_LIQUID_GLASS, "liquid".equals(style))
+                .commit();
     }
 
     public static boolean readBottomBarBlur(@NonNull Context context) {
@@ -1882,6 +1936,7 @@ public final class PrefsBridge {
                 }
             }
             for (Map.Entry<String, String> entry : BACKUP_STRING_DEFAULTS.entrySet()) {
+                if (LOCAL_ONLY_KEYS.contains(entry.getKey())) continue;
                 syncStringKey(localPrefs, remotePrefs, entry.getKey(), entry.getValue());
             }
             long pending = localPrefs.getAll().keySet().stream()

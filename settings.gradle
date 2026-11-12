@@ -28,3 +28,12 @@ dependencyResolutionManagement {
 
 rootProject.name = "MiBackscreen"
 include(":app")
+
+includeBuild("third_party/miuix") {
+    dependencySubstitution {
+        ["core", "ui", "preference", "material", "blur", "glass", "glass-icons", "squircle", "icons", "nav"].each { name ->
+            substitute(module("top.yukonga.miuix.kmp:miuix-${name}-android"))
+                    .using(project(":miuix-${name}"))
+        }
+    }
+}

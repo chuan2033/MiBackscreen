@@ -138,10 +138,11 @@
     <string name="config_enable_app_card_title">添加到我的应用卡</string>
     <string name="config_enable_app_card_summary">恢复 MiBackscreen 背屏快捷面板入口</string>
     <string name="config_hide_launcher_icon">隐藏桌面图标</string>
-    <string name="config_floating_bar_title">悬浮底栏</string>
-    <string name="config_floating_bar_summary">使用悬浮样式的底栏</string>
-    <string name="config_liquid_glass_title">液态玻璃</string>
-    <string name="config_liquid_glass_summary">使用Apple风格的液态玻璃</string>
+    <string name="config_bottom_bar_style_title">底栏样式</string>
+    <string name="config_bottom_bar_style_standard">标准底栏</string>
+    <string name="config_bottom_bar_style_floating">悬浮底栏</string>
+    <string name="config_bottom_bar_style_liquid">iOS 液态玻璃</string>
+    <string name="config_bottom_bar_style_glass">Miuix 玻璃底栏</string>
     <string name="config_bottom_bar_blur_title">底栏模糊</string>
     <string name="config_bottom_bar_blur_summary">启用底栏的模糊效果</string>
     <string name="config_language_title">语言</string>
@@ -404,6 +405,8 @@
     <string name="theme_palette_monochrome">单色（Monochrome）</string>
     <string name="theme_palette_fidelity">保真（Fidelity）</string>
     <string name="theme_palette_content">内容（Content）</string>
+    <string name="theme_palette_cmf">CMF</string>
+    <string name="theme_palette_cmf_summary">使用 Material 2026 配色</string>
     <string name="theme_color_red">红色</string>
     <string name="theme_color_pink">粉色</string>
     <string name="theme_color_purple">紫色</string>
