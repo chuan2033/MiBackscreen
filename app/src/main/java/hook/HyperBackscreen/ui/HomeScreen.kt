@@ -32,6 +32,7 @@ import hook.HyperBackscreen.ui.components.DetailPageScaffold
 import hook.HyperBackscreen.ui.components.AppGlassTopAppBar
 import hook.HyperBackscreen.ui.components.TopBarIconButton
 import hook.HyperBackscreen.ui.components.rememberPageScrollBehavior
+import hook.HyperBackscreen.ui.components.rememberContentScrolled
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import android.os.Build
 import androidx.compose.foundation.layout.Box
@@ -67,6 +68,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
@@ -602,7 +604,7 @@ internal fun HomeScreen(
                     .padding(
                         bottom = BottomBarMetrics.snackbarBottomPadding(
                             onMainPage = backStack.lastOrNull() == HomeRoute.Main,
-                            floatingBar = bottomBarStyle.isFloating
+                            style = bottomBarStyle,
                         )
                     )
             )
@@ -692,6 +694,7 @@ private fun MainTabPage(
     onRearMediaChange: (RearMediaSwitch, Boolean) -> Unit,
 ) {
     val scrollBehavior = rememberPageScrollBehavior(listState)
+    val isContentScrolled by rememberContentScrolled(scrollBehavior, listState)
     val surfaceColor = MiuixTheme.colorScheme.surface
     // Each retained pager page must own its capture layer and coordinates. Sharing one
     // lets off-screen pages overwrite the current page's backdrop during navigation.
@@ -705,7 +708,6 @@ private fun MainTabPage(
         containerColor = MiuixTheme.colorScheme.surface,
         topBar = {
             val tabLabelRes = navItems.first { it.tab == tab }.labelRes
-            val isContentScrolled = scrollBehavior.state.heightOffset < 0f || listState.canScrollBackward
             AppGlassTopAppBar(
                 title = stringResource(tabLabelRes),
                 isContentScrolled = isContentScrolled,
@@ -1021,8 +1023,13 @@ private fun MainContent(
                         .navigationBarsPadding()
                         .padding(bottom = BottomBarMetrics.FloatingGap)
                 ) {
+                    val labels = navItems.map { stringResource(it.labelRes) }
+                    // 列表按标签内容缓存：每次重组都新建 List 会让底栏没法跳过重组。
+                    val liquidItems = remember(labels) {
+                        navItems.mapIndexed { index, item -> NavigationItem(labels[index], item.icon) }
+                    }
                     FloatingBottomBar(
-                        items = navItems.map { NavigationItem(stringResource(it.labelRes), it.icon) },
+                        items = liquidItems,
                         selectedIndex = navigationIndex,
                         onItemClick = ::selectPage,
                         backdrop = bottomBarBackdrop,
@@ -1035,21 +1042,36 @@ private fun MainContent(
             }
 
             if (bottomBarStyle == BottomBarStyle.GLASS) {
-                GlassNavigationBar(
-                    items = navItems.map { item ->
-                        val label = stringResource(item.labelRes)
+                val labels = navItems.map { stringResource(it.labelRes) }
+                val countText = if (showFunctionCount && enabledFunctionCount > 0) {
+                    pluralStringResource(R.plurals.enabled_function_count, enabledFunctionCount, enabledFunctionCount)
+                } else null
+                val countedDescription = countText?.let {
+                    stringResource(R.string.nav_label_with_count, stringResource(R.string.nav_function), it)
+                }
+                // GlassNavigationItem 没有角标位，计数只能写进标签；读屏用完整的一句话，不读括号。
+                val glassItems = remember(labels, countText, countedDescription, enabledFunctionCount) {
+                    navItems.mapIndexed { index, item ->
+                        val counted = countText != null && item.tab == HomeNavigationPolicy.Tab.FUNCTION
                         GlassNavigationItem(
                             icon = item.icon,
-                            label = if (showFunctionCount && enabledFunctionCount > 0 &&
-                                item.tab == HomeNavigationPolicy.Tab.FUNCTION
-                            ) "$label ($enabledFunctionCount)" else label,
+                            label = if (counted) "${labels[index]} ($enabledFunctionCount)" else labels[index],
+                            contentDescription = if (counted) countedDescription else null,
                         )
-                    },
+                    }
+                }
+                GlassNavigationBar(
+                    items = glassItems,
                     selectedIndex = navigationIndex,
                     onSelect = ::selectPage,
                     backdrop = bottomBarBackdrop.takeIf { bottomBarBlur },
+                    // 底边位置走 BottomBarMetrics：和液态底栏一样离导航栏 FloatingGap，Snackbar 按它的高度让位。
+                    defaultWindowInsetsPadding = false,
+                    height = BottomBarMetrics.GlassBarHeight,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = BottomBarMetrics.FloatingGap)
                         .padding(horizontal = 24.dp),
                 )
             }

@@ -852,10 +852,17 @@ public final class PrefsBridge {
             values.put(entry.getKey(), String.valueOf(value));
         }
         for (Map.Entry<String, String> entry : BACKUP_STRING_DEFAULTS.entrySet()) {
-            values.put(entry.getKey(),
-                    LOCAL_ONLY_KEYS.contains(entry.getKey())
-                            ? readBottomBarStyle(context)
-                            : readStringForUi(context, entry.getKey(), entry.getValue()));
+            String key = entry.getKey();
+            String value;
+            if (Constants.KEY_BOTTOM_BAR_STYLE.equals(key)) {
+                // 底栏样式要按旧版两个布尔解析，不能直接读原值。
+                value = readBottomBarStyle(context);
+            } else if (LOCAL_ONLY_KEYS.contains(key)) {
+                value = local(context).getString(key, entry.getValue());
+            } else {
+                value = readStringForUi(context, key, entry.getValue());
+            }
+            values.put(key, value);
         }
         return values;
     }
@@ -1266,16 +1273,18 @@ public final class PrefsBridge {
         local(context).edit().putBoolean(Constants.KEY_LIQUID_GLASS, enabled).apply();
     }
 
-    /** 保存底栏样式，同时维护旧版界面设置的读取结果。 */
+    /**
+     * 读底栏样式：新键缺失或与旧版两个布尔不一致时按旧版设置解析。
+     *
+     * 只读不写：解析结果只取决于这三个键，下次读到的仍是同一个值，没必要在读路径上写盘
+     * （调用方在组合阶段和主线程上）。用户改样式时 {@link #writeBottomBarStyle} 会把三个键一起写齐。
+     */
     @NonNull
     public static String readBottomBarStyle(@NonNull Context context) {
         SharedPreferences prefs = local(context);
-        String stored = prefs.getString(Constants.KEY_BOTTOM_BAR_STYLE, null);
-        String resolved = resolveBottomBarStyle(stored,
+        return resolveBottomBarStyle(prefs.getString(Constants.KEY_BOTTOM_BAR_STYLE, null),
                 prefs.getBoolean(Constants.KEY_FLOATING_NAV_BAR, DEFAULT_FLOATING_NAV_BAR),
                 prefs.getBoolean(Constants.KEY_LIQUID_GLASS, DEFAULT_LIQUID_GLASS));
-        if (!resolved.equals(stored)) writeBottomBarStyle(context, resolved);
-        return resolved;
     }
 
     @NonNull
@@ -1296,7 +1305,7 @@ public final class PrefsBridge {
                 .putString(Constants.KEY_BOTTOM_BAR_STYLE, style)
                 .putBoolean(Constants.KEY_FLOATING_NAV_BAR, !"standard".equals(style))
                 .putBoolean(Constants.KEY_LIQUID_GLASS, "liquid".equals(style))
-                .commit();
+                .apply();
     }
 
     public static boolean readBottomBarBlur(@NonNull Context context) {
