@@ -29,6 +29,13 @@ object PreferenceSyncReport {
         Constants.KEY_REAR_SCREEN_SCHEDULE_START to PrefsBridge.DEFAULT_REAR_SCREEN_SCHEDULE_START,
         Constants.KEY_REAR_SCREEN_SCHEDULE_END to PrefsBridge.DEFAULT_REAR_SCREEN_SCHEDULE_END,
         Constants.KEY_REAR_SCREEN_SCHEDULE_MODE to PrefsBridge.DEFAULT_REAR_SCREEN_SCHEDULE_MODE,
+        // 电量环与百分比数字的颜色覆盖：环的空串跟随系统，数字的空串跟随电量环。
+        Constants.KEY_BATTERY_COLOR_IDLE to PrefsBridge.DEFAULT_BATTERY_COLOR,
+        Constants.KEY_BATTERY_COLOR_CHARGING to PrefsBridge.DEFAULT_BATTERY_COLOR,
+        Constants.KEY_BATTERY_COLOR_LOW to PrefsBridge.DEFAULT_BATTERY_COLOR,
+        Constants.KEY_BATTERY_PERCENT_COLOR_IDLE to PrefsBridge.DEFAULT_BATTERY_COLOR,
+        Constants.KEY_BATTERY_PERCENT_COLOR_CHARGING to PrefsBridge.DEFAULT_BATTERY_COLOR,
+        Constants.KEY_BATTERY_PERCENT_COLOR_LOW to PrefsBridge.DEFAULT_BATTERY_COLOR,
     )
 
     @JvmStatic

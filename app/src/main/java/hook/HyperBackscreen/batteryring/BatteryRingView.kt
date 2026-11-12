@@ -21,6 +21,8 @@ internal class BatteryRingView(
     context: Context,
     private val geometry: BatteryRingGeometry.Profile,
     private val overrides: BatteryColorOverrides,
+    /** 百分比数字的覆盖色；某状态没设时跟随电量环当前颜色。 */
+    private val percentOverrides: BatteryColorOverrides,
     private val percentPosition: BatteryPercentPosition,
     private val layout: BatteryRingLayout,
 ) : View(context) {
@@ -40,7 +42,7 @@ internal class BatteryRingView(
         // 字重按偏好取（100~900）。旧版本固定 BOLD，默认值仍是 700，升级后观感不变。
         typeface = Typeface.create(Typeface.DEFAULT, layout.percentTextWeight, false)
         textSize = layout.percentTextSize.toFloat()
-        setShadowLayer(4f, 0f, 1.5f, 0x99000000.toInt())
+        if (layout.percentShadowEnabled) applyPercentShadow(this)
     }
     private val systemUiResources = runCatching {
         context.packageManager.getResourcesForApplication("com.android.systemui")
@@ -210,7 +212,7 @@ internal class BatteryRingView(
             layout.percentOffsetXPercent,
             layout.percentOffsetYPercent,
         )?.let { anchor ->
-            textPaint.color = color
+            textPaint.color = percentOverrides.resolve(current, color)
             val metrics = textPaint.fontMetrics
             val baseline = anchor.y - (metrics.ascent + metrics.descent) / 2f
             canvas.drawText("${current.percent}%", anchor.x, baseline, textPaint)

@@ -69,7 +69,10 @@ import hook.HyperBackscreen.ui.updater.UpdateCheckResult
 import hook.HyperBackscreen.ui.updater.UpdateChecker
 import hook.HyperBackscreen.ui.updater.UpdateDialog
 import hook.HyperBackscreen.ui.updater.UpdateInfo
-import hook.HyperBackscreen.ui.battery.BatteryColorSlot
+import hook.HyperBackscreen.ui.battery.BatteryColorTarget
+import hook.HyperBackscreen.ui.battery.batteryPercentColorsOf
+import hook.HyperBackscreen.ui.battery.batteryRingColorsOf
+import hook.HyperBackscreen.ui.battery.with
 import hook.HyperBackscreen.batteryring.BatteryPercentPosition
 import hook.HyperBackscreen.batteryring.BatteryRingLayout
 import hook.HyperBackscreen.ui.config.PreferencesBackup
@@ -152,9 +155,9 @@ internal fun RearScreenApp() {
     var savingLongPress by remember { mutableStateOf(false) }
     var savingAppCard by remember { mutableStateOf(false) }
     var enableBatteryRing by remember { mutableStateOf(initialPrefs.enableBatteryRing) }
-    var batteryColorIdle by remember { mutableStateOf(initialPrefs.batteryColorIdle) }
-    var batteryColorCharging by remember { mutableStateOf(initialPrefs.batteryColorCharging) }
-    var batteryColorLow by remember { mutableStateOf(initialPrefs.batteryColorLow) }
+    // 电量环与百分比数字各一套三态颜色：环的空串跟随系统，数字的空串跟随电量环。
+    var batteryRingColors by remember { mutableStateOf(batteryRingColorsOf(initialPrefs)) }
+    var batteryPercentColors by remember { mutableStateOf(batteryPercentColorsOf(initialPrefs)) }
     var batteryPercentPosition by remember {
         mutableStateOf(BatteryPercentPosition.fromPref(initialPrefs.batteryPercentPosition))
     }
@@ -298,9 +301,8 @@ internal fun RearScreenApp() {
                 val values = ModulePreferencesSnapshot.read(preferences)
                 enable18ProFeatures = values.enable18ProFeatures
                 enableBatteryRing = values.enableBatteryRing
-                batteryColorIdle = values.batteryColorIdle
-                batteryColorCharging = values.batteryColorCharging
-                batteryColorLow = values.batteryColorLow
+                batteryRingColors = batteryRingColorsOf(values)
+                batteryPercentColors = batteryPercentColorsOf(values)
                 batteryPercentPosition = BatteryPercentPosition.fromPref(values.batteryPercentPosition)
                 batteryLayout = batteryLayoutOf(batteryPercentPosition, values)
                 autoWallpaperInterval = AutoWallpaperInterval.fromPref(values.autoWallpaperIntervalMinutes)
@@ -557,9 +559,8 @@ internal fun RearScreenApp() {
             appLanguage = appLanguage,
             checkUpdates = checkUpdates,
             enableAppCard = enableAppCard,
-            batteryColorIdle = batteryColorIdle,
-            batteryColorCharging = batteryColorCharging,
-            batteryColorLow = batteryColorLow,
+            batteryRingColors = batteryRingColors,
+            batteryPercentColors = batteryPercentColors,
             batteryPercentPosition = batteryPercentPosition,
             batteryLayout = batteryLayout,
             disableRearScreenCover = disableRearScreenCover,
@@ -680,16 +681,11 @@ internal fun RearScreenApp() {
                     }
                 }
             },
-            onBatteryColorChange = { slot, value ->
-                val key = when (slot) {
-                    BatteryColorSlot.IDLE -> Constants.KEY_BATTERY_COLOR_IDLE
-                    BatteryColorSlot.CHARGING -> Constants.KEY_BATTERY_COLOR_CHARGING
-                    BatteryColorSlot.LOW -> Constants.KEY_BATTERY_COLOR_LOW
-                }
-                when (slot) {
-                    BatteryColorSlot.IDLE -> batteryColorIdle = value
-                    BatteryColorSlot.CHARGING -> batteryColorCharging = value
-                    BatteryColorSlot.LOW -> batteryColorLow = value
+            onBatteryColorChange = { target, slot, value ->
+                val key = target.keyFor(slot)
+                when (target) {
+                    BatteryColorTarget.RING -> batteryRingColors = batteryRingColors.with(slot, value)
+                    BatteryColorTarget.PERCENT -> batteryPercentColors = batteryPercentColors.with(slot, value)
                 }
                 // 防抖：拖动过程中只更新界面，停手 ColorWriteDebounceMillis 后才写偏好，
                 // 避免每帧一次跨进程写入、各作用域每帧收到变更通知。
@@ -976,6 +972,7 @@ private fun batteryLayoutOf(
         Constants.KEY_BATTERY_RING_STYLE to values.batteryRingStyle,
         Constants.KEY_BATTERY_LOW_THRESHOLD to values.batteryLowThreshold,
         Constants.KEY_BATTERY_CHARGE_SWEEP to values.batteryChargeSweep,
+        Constants.KEY_BATTERY_PERCENT_SHADOW to values.batteryPercentShadow,
     )::get
 )
 

@@ -52,6 +52,7 @@
     <string name="battery_ring_stroke_title">电量线条粗细</string>
     <string name="battery_ring_track_title">显示底轨</string>
     <string name="battery_charge_sweep_title">充电流光</string>
+    <string name="battery_percent_shadow_title">数字阴影</string>
     <string name="battery_ring_style_contour">整体轮廓</string>
     <string name="battery_ring_style_twin">上下双环</string>
     <string name="battery_percent_text_size_title">数字大小</string>
@@ -61,6 +62,10 @@
     <string name="battery_layout_dialog_summary">默认值: %1$s | 范围: %2$s ~ %3$s</string>
     <string name="battery_color_unsupported_model">当前机型背屏尺寸与校准参数不一致，暂不支持背屏电量显示</string>
     <string name="battery_color_invalid_value">颜色格式无效，请输入 #RRGGBB 或 #AARRGGBB</string>
+    <string name="battery_percent_color_follow_ring_title">跟随电量环</string>
+    <string name="battery_percent_color_follow_ring_summary">关闭后可给数字单独设色，先换成白色，在深色或与环同色的壁纸上更醒目</string>
+    <string name="battery_percent_color_reset_white">高对比白色</string>
+    <string name="battery_percent_color_hidden_hint">数字电量当前未显示，在上方「数字电量」里打开后，这里的颜色才会出现在背屏上</string>
     <string name="home_root_permission_required">请授权本应用Root权限，部分功能依赖Root权限</string>
     <string name="home_enable_18_pro_features_title">开启18pro系列背屏新功能</string>
     <string name="config_show_function_count_title">显示功能数量</string>

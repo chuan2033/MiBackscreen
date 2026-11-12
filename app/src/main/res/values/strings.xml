@@ -52,6 +52,7 @@
     <string name="battery_ring_stroke_title">Line thickness</string>
     <string name="battery_ring_track_title">Show track</string>
     <string name="battery_charge_sweep_title">Charging shimmer</string>
+    <string name="battery_percent_shadow_title">Number shadow</string>
     <string name="battery_ring_style_contour">Outline</string>
     <string name="battery_ring_style_twin">Dual rings</string>
     <string name="battery_percent_text_size_title">Number size</string>
@@ -61,6 +62,10 @@
     <string name="battery_layout_dialog_summary">Default: %1$s | Range: %2$s ~ %3$s</string>
     <string name="battery_color_unsupported_model">This model\'s rear screen differs from the calibrated geometry; the battery display is not supported yet</string>
     <string name="battery_color_invalid_value">Invalid color. Use #RRGGBB or #AARRGGBB</string>
+    <string name="battery_percent_color_follow_ring_title">Match battery ring</string>
+    <string name="battery_percent_color_follow_ring_summary">Turn off to color the number on its own. It starts as white, which stays readable on dark wallpapers or ones matching the ring color</string>
+    <string name="battery_percent_color_reset_white">High-contrast white</string>
+    <string name="battery_percent_color_hidden_hint">The battery percentage is hidden. Turn it on under "Battery percentage" above to see this color on the rear screen</string>
     <string name="home_root_permission_required">Please grant this app Root access. Some features require Root access.</string>
     <string name="home_enable_18_pro_features_title">Enable new rear-screen features for the 18 Pro series</string>
     <string name="config_show_function_count_title">Show enabled function count</string>

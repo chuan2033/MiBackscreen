@@ -128,6 +128,7 @@ public final class PrefsBridge {
     /** 低电量阈值（百分比），默认 20 与系统电池图标换色点一致。 */
     public static final String DEFAULT_BATTERY_LOW_THRESHOLD = "20";
     public static final String DEFAULT_BATTERY_CHARGE_SWEEP = "1";
+    public static final String DEFAULT_BATTERY_PERCENT_SHADOW = "1";
     public static final String DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES = "0";
     /** 定时切换的挑图方式，默认顺序循环。 */
     public static final String DEFAULT_AUTO_WALLPAPER_ORDER =
@@ -214,6 +215,9 @@ public final class PrefsBridge {
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_COLOR_IDLE, DEFAULT_BATTERY_COLOR);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_COLOR_CHARGING, DEFAULT_BATTERY_COLOR);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_COLOR_LOW, DEFAULT_BATTERY_COLOR);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_COLOR_IDLE, DEFAULT_BATTERY_COLOR);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_COLOR_CHARGING, DEFAULT_BATTERY_COLOR);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_COLOR_LOW, DEFAULT_BATTERY_COLOR);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_POSITION, DEFAULT_BATTERY_PERCENT_POSITION);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_OFFSET_X_LEFT, DEFAULT_BATTERY_PERCENT_OFFSET_X);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_OFFSET_X_RIGHT, DEFAULT_BATTERY_PERCENT_OFFSET_X);
@@ -228,6 +232,7 @@ public final class PrefsBridge {
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_RING_STYLE, DEFAULT_BATTERY_RING_STYLE);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_LOW_THRESHOLD, DEFAULT_BATTERY_LOW_THRESHOLD);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_CHARGE_SWEEP, DEFAULT_BATTERY_CHARGE_SWEEP);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_SHADOW, DEFAULT_BATTERY_PERCENT_SHADOW);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES, DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_AUTO_WALLPAPER_ORDER, DEFAULT_AUTO_WALLPAPER_ORDER);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_REAR_SCREEN_OFF_TIMEOUT, DEFAULT_REAR_SCREEN_OFF_TIMEOUT);
@@ -549,7 +554,10 @@ public final class PrefsBridge {
         return readForHook(module, Constants.KEY_ENABLE_BATTERY_RING, DEFAULT_ENABLE_BATTERY_RING);
     }
 
-    /** 电量颜色覆盖（UI 侧）：空字符串表示跟随系统。 */
+    /**
+     * 电量颜色覆盖（UI 侧）。电量环三个键空字符串表示跟随系统；
+     * 百分比数字三个键（{@code battery_percent_color_*}）空字符串表示跟随电量环。
+     */
     @NonNull
     public static String readBatteryColorForUi(@NonNull Context context, @NonNull String key) {
         return readStringForUi(context, key, DEFAULT_BATTERY_COLOR);
@@ -586,7 +594,7 @@ public final class PrefsBridge {
         writeStringFromUi(context, key, value);
     }
 
-    /** 电量颜色覆盖（Hook 侧）：空字符串表示跟随系统。 */
+    /** 电量颜色覆盖（Hook 侧）：环的键空串跟随系统，数字的键空串跟随电量环。 */
     @NonNull
     public static String readBatteryColor(@NonNull XposedModule module, @NonNull String key) {
         return readStringForHook(module, key, DEFAULT_BATTERY_COLOR);
@@ -625,6 +633,8 @@ public final class PrefsBridge {
                 return DEFAULT_BATTERY_LOW_THRESHOLD;
             case Constants.KEY_BATTERY_CHARGE_SWEEP:
                 return DEFAULT_BATTERY_CHARGE_SWEEP;
+            case Constants.KEY_BATTERY_PERCENT_SHADOW:
+                return DEFAULT_BATTERY_PERCENT_SHADOW;
             case Constants.KEY_BATTERY_PERCENT_OFFSET_Y:
                 return DEFAULT_BATTERY_PERCENT_OFFSET_Y;
             default:
@@ -932,11 +942,15 @@ public final class PrefsBridge {
             case Constants.KEY_BATTERY_COLOR_IDLE:
             case Constants.KEY_BATTERY_COLOR_CHARGING:
             case Constants.KEY_BATTERY_COLOR_LOW:
+            case Constants.KEY_BATTERY_PERCENT_COLOR_IDLE:
+            case Constants.KEY_BATTERY_PERCENT_COLOR_CHARGING:
+            case Constants.KEY_BATTERY_PERCENT_COLOR_LOW:
                 return value.isEmpty() || value.matches("#?([0-9a-fA-F]{6}|[0-9a-fA-F]{8})") ? value : null;
             case Constants.KEY_BATTERY_PERCENT_POSITION:
                 return value.equals("off") || value.equals("left") || value.equals("right") ? value : null;
             case Constants.KEY_BATTERY_RING_TRACK:
             case Constants.KEY_BATTERY_CHARGE_SWEEP:
+            case Constants.KEY_BATTERY_PERCENT_SHADOW:
                 return value.equals("0") || value.equals("1") ? value : null;
             case Constants.KEY_BATTERY_RING_STYLE:
                 return value.equals("contour") || value.equals("twin") ? value : null;
@@ -1735,6 +1749,9 @@ public final class PrefsBridge {
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_IDLE);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_CHARGING);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_LOW);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_COLOR_IDLE);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_COLOR_CHARGING);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_COLOR_LOW);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_POSITION);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_OFFSET_X);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_OFFSET_X_LEFT);
@@ -1747,6 +1764,7 @@ public final class PrefsBridge {
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_RING_STYLE);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_LOW_THRESHOLD);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_CHARGE_SWEEP);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_SHADOW);
             flushUiStringPreference(
                     localPrefs,
                     remotePrefs,
@@ -1840,6 +1858,21 @@ public final class PrefsBridge {
             syncStringKey(
                     localPrefs,
                     remotePrefs,
+                    Constants.KEY_BATTERY_PERCENT_COLOR_IDLE,
+                    DEFAULT_BATTERY_COLOR);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_PERCENT_COLOR_CHARGING,
+                    DEFAULT_BATTERY_COLOR);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_PERCENT_COLOR_LOW,
+                    DEFAULT_BATTERY_COLOR);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
                     Constants.KEY_BATTERY_PERCENT_POSITION,
                     DEFAULT_BATTERY_PERCENT_POSITION);
             syncStringKey(
@@ -1897,6 +1930,11 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_BATTERY_CHARGE_SWEEP,
                     DEFAULT_BATTERY_CHARGE_SWEEP);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_PERCENT_SHADOW,
+                    DEFAULT_BATTERY_PERCENT_SHADOW);
             syncStringKey(
                     localPrefs,
                     remotePrefs,
