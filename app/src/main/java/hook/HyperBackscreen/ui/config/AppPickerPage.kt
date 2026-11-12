@@ -1,11 +1,12 @@
 package hook.HyperBackscreen.ui.config
 
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.glass.GlassIconButton
+import hook.HyperBackscreen.ui.components.TopBarIconButton
+import hook.HyperBackscreen.ui.components.TopBarSearchField
 import top.yukonga.miuix.kmp.glass.GlassPopup
 import top.yukonga.miuix.kmp.glass.GlassPopupItem
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.More
+import top.yukonga.miuix.kmp.icon.glass.More
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.DetailPageScaffold
@@ -20,10 +21,7 @@ import android.widget.ImageView
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
@@ -56,7 +54,6 @@ import java.util.LinkedHashSet
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.preference.CheckboxLocation
@@ -93,7 +90,6 @@ internal fun AppPickerPage(
     val context = LocalContext.current
 
     var query by rememberSaveable { mutableStateOf("") }
-    var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var apps by remember { mutableStateOf(emptyList<InstalledAppItem>()) }
     var loading by remember { mutableStateOf(true) }
     var loadFailed by remember { mutableStateOf(false) }
@@ -158,16 +154,24 @@ internal fun AppPickerPage(
         onBack = onBack,
         // 筛选收进右上角「更多」菜单：列表顶部不再常驻一排分段按钮。
         actions = {
-            GlassIconButton(
+            TopBarIconButton(
                 onClick = { showFilterMenu = true },
                 modifier = Modifier.onGloballyPositioned { filterAnchorBounds = it.boundsInRoot() },
             ) {
                 Icon(
-                    imageVector = MiuixIcons.More,
+                    imageVector = MiuixIcons.Glass.More,
                     contentDescription = stringResource(R.string.app_picker_filter_menu),
                     tint = MiuixTheme.colorScheme.onBackground
                 )
             }
+        },
+        // 搜索框固定在顶栏玻璃里：往下翻很长的应用列表时随时能改关键词。
+        topBarBottom = {
+            TopBarSearchField(
+                query = query,
+                onQueryChange = { query = it },
+                label = stringResource(R.string.app_picker_search_hint),
+            )
         },
         overlay = {
             GlassPopup(
@@ -199,16 +203,6 @@ internal fun AppPickerPage(
             )
         }
         item {
-            InputField(
-                query = query,
-                onQueryChange = { query = it },
-                onSearch = {},
-                expanded = searchExpanded,
-                onExpandedChange = { searchExpanded = it },
-                label = stringResource(R.string.app_picker_search_hint),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(12.dp))
             // 筛选在右上角菜单里，这里写明当前看的是哪一类、有多少个。
             if (!loading) {
                 Text(
