@@ -10,9 +10,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -38,19 +35,19 @@ import hook.HyperBackscreen.common.Constants
 import hook.HyperBackscreen.common.RearWidgetList
 import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.components.DetailPageScaffold
+import hook.HyperBackscreen.ui.components.TopBarSearchField
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.glass.Delete
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
@@ -229,7 +226,7 @@ internal fun RearWidgetsPage(onAddClick: () -> Unit, onBack: () -> Unit) {
                                     backdrop = buttonBackdrop,
                                 ) {
                                     Icon(
-                                        imageVector = MiuixIcons.Delete,
+                                        imageVector = MiuixIcons.Glass.Delete,
                                         contentDescription = stringResource(R.string.rear_widgets_remove),
                                         tint = MiuixTheme.colorScheme.onSurfaceVariantActions
                                     )
@@ -265,23 +262,22 @@ internal fun RearWidgetPickerPage(onBack: () -> Unit) {
         value = withContext(Dispatchers.IO) { loadOptions(context, ::canPlaceOnRear) }
     }
     var query by rememberSaveable { mutableStateOf("") }
-    var searchExpanded by rememberSaveable { mutableStateOf(false) }
     val groups = remember(options, query) {
         options?.let { all -> filterOptions(all, query).groupBy { it.appLabel } }
     }
-    DetailPageScaffold(title = stringResource(R.string.rear_widgets_add), onBack = onBack, topSpacing = 0.dp) {
-        item(key = "search") {
-            InputField(
+    DetailPageScaffold(
+        title = stringResource(R.string.rear_widgets_add),
+        onBack = onBack,
+        topSpacing = 0.dp,
+        // 搜索框固定在顶栏玻璃里，小部件列表从它下面滑过。
+        topBarBottom = {
+            TopBarSearchField(
                 query = query,
                 onQueryChange = { query = it },
-                onSearch = {},
-                expanded = searchExpanded,
-                onExpandedChange = { searchExpanded = it },
                 label = stringResource(R.string.rear_widgets_search_hint),
-                modifier = Modifier.fillMaxWidth()
             )
-            Spacer(Modifier.height(8.dp))
-        }
+        },
+    ) {
         val loaded = groups
         if (loaded == null) {
             item(key = "loading") {

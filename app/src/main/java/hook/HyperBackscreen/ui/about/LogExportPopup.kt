@@ -38,7 +38,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.basic.Close
+import top.yukonga.miuix.kmp.icon.glass.Close
 
 /** Place inside the same Box as the log row so the popup is anchored to that entry. */
 @Composable
@@ -79,7 +79,7 @@ internal fun LogExportPopup(
                     modifier = Modifier.offset(x = 12.dp),
                 ) {
                     Icon(
-                        imageVector = MiuixIcons.Basic.Close,
+                        imageVector = MiuixIcons.Glass.Close,
                         contentDescription = stringResource(
                             if (exporting) R.string.log_cancel_export else R.string.log_close
                         ),

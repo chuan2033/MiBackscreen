@@ -121,12 +121,15 @@ android {
 
 dependencies {
     implementation 'androidx.activity:activity-compose:1.13.0'
+    // miuix 全部模块由 settings.gradle 的 includeBuild 替换成子模块 third_party/miuix 的源码，
+    // 下面这些坐标里的版本号不起作用，只用来标注子模块当前所在的提交。更新子模块时把这里的 2f7052e 一起改掉。
     implementation 'top.yukonga.miuix.kmp:miuix-ui-android:0.9.4-2f7052e-SNAPSHOT'
     implementation 'top.yukonga.miuix.kmp:miuix-preference-android:0.9.4-2f7052e-SNAPSHOT'
     implementation 'top.yukonga.miuix.kmp:miuix-icons-android:0.9.4-2f7052e-SNAPSHOT'
     implementation 'top.yukonga.miuix.kmp:miuix-blur-android:0.9.4-2f7052e-SNAPSHOT'
     implementation 'top.yukonga.miuix.kmp:miuix-nav-android:0.9.4-2f7052e-SNAPSHOT'
     implementation 'top.yukonga.miuix.kmp:miuix-glass-android:0.9.4-2f7052e-SNAPSHOT'
+    implementation 'top.yukonga.miuix.kmp:miuix-glass-icons-android:0.9.4-2f7052e-SNAPSHOT'
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0'
     compileOnly "io.github.libxposed:api:${libxposedApiVersion}"
