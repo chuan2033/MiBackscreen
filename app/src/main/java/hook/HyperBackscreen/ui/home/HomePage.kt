@@ -26,11 +26,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -38,7 +33,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
-import kotlin.math.roundToInt
 import androidx.lifecycle.viewmodel.compose.viewModel
 import hook.HyperBackscreen.ui.about.LogExportState
 import hook.HyperBackscreen.ui.about.LogExportViewModel
@@ -129,19 +123,9 @@ internal fun HomePage(
     var showLogPopup by rememberSaveable { mutableStateOf(false) }
     var popupShareFailed by rememberSaveable { mutableStateOf(false) }
     var popupFileMissing by rememberSaveable { mutableStateOf(false) }
-    var logEntryBounds by remember { mutableStateOf(IntRect.Zero) }
-    // 只记下坐标对象、不写状态：滚动时 onGloballyPositioned 每帧都会回调，
-    // 每帧写 IntRect 会让日志卡片和弹窗跟着每帧重组。打开弹窗时再换算成锚点区域。
-    val logEntryCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
-    fun refreshLogAnchor() {
-        val coordinates = logEntryCoordinates[0]?.takeIf { it.isAttached } ?: return
-        val position = coordinates.positionInWindow()
-        logEntryBounds = IntRect(IntOffset(position.x.roundToInt(), position.y.roundToInt()), coordinates.size)
-    }
     fun startExport() {
         popupShareFailed = false
         popupFileMissing = false
-        refreshLogAnchor()
         showLogPopup = true
         exporter.start()
     }
@@ -283,11 +267,7 @@ internal fun HomePage(
     }
 
     CardBlock(pressFeedbackType = PressFeedbackType.None) {
-        Box(Modifier.fillMaxWidth().onGloballyPositioned { coordinates ->
-            logEntryCoordinates[0] = coordinates
-            // 弹窗开着时才跟随位置；IntRect 相等时写状态不会触发重组。
-            if (showLogPopup) refreshLogAnchor()
-        }) {
+        Box(Modifier.fillMaxWidth()) {
             ArrowPreference(
                 title = stringResource(R.string.home_log_title),
                 summary = when (val state = exportState) {
@@ -297,7 +277,6 @@ internal fun HomePage(
                     LogExportState.Failed -> stringResource(R.string.log_failed_retry)
                 },
                 onClick = {
-                    refreshLogAnchor()
                     showLogPopup = true
                     if (exportState is LogExportState.Idle || exportState is LogExportState.Failed) {
                         startExport()
@@ -306,7 +285,6 @@ internal fun HomePage(
             )
             LogExportPopup(
                 show = showLogPopup,
-                anchorBounds = logEntryBounds,
                 state = exportState,
                 shareFailed = popupShareFailed,
                 fileMissing = popupFileMissing,

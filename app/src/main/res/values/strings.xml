@@ -290,7 +290,6 @@
     <string name="log_export_view">Log exported. Tap to view</string>
     <string name="log_export_start">Export log</string>
     <string name="log_stage_count">%1$d/%2$d</string>
-    <string name="log_close">Close</string>
     <string name="log_share_failed">Could not open sharing. Tap to retry</string>
     <string name="log_file_missing">Log file is unavailable. Generate it again</string>
     <string name="log_failed_retry">Failed to generate log. Tap to retry</string>

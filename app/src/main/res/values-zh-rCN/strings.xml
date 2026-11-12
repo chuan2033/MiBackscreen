@@ -287,7 +287,6 @@
     <string name="log_export_view">日志已导出，点击查看</string>
     <string name="log_export_start">导出日志</string>
     <string name="log_stage_count">%1$d/%2$d</string>
-    <string name="log_close">关闭</string>
     <string name="log_share_failed">无法打开分享，请重试</string>
     <string name="log_file_missing">日志文件已失效，请重新生成</string>
     <string name="log_failed_retry">日志生成失败，点击重试</string>
