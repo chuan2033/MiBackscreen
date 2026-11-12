@@ -44,8 +44,14 @@ internal fun RearScreenRecordPage(onBack: () -> Unit) {
     val resources = LocalResources.current
     val feedback = LocalUiFeedback.current
     val state by RearScreenRecorder.state.collectAsState()
-    // 录制通知（计时 + 停止按钮）需要通知权限；不给也照样录，只是通知栏里看不到，可以用磁贴停止。
-    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    // 录制通知（计时 + 停止按钮）需要通知权限。首次点「开始录屏」先弹权限框，用户选完再开始录；
+    // 不给也照样录，只是通知栏里看不到，可以用磁贴停止。永久拒绝后系统不再弹框，回调直接返回，同样开始录。
+    fun startRecording() {
+        if (!RearRecordService.start(context)) RearScreenRecorder.start(context)
+    }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        startRecording()
+    }
 
     LaunchedEffect(Unit) {
         RearScreenRecorder.events.collect { event ->
@@ -106,8 +112,9 @@ internal fun RearScreenRecordPage(onBack: () -> Unit) {
                                         PackageManager.PERMISSION_GRANTED
                                     ) {
                                         notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    } else {
+                                        startRecording()
                                     }
-                                    if (!RearRecordService.start(context)) RearScreenRecorder.start(context)
                                 }
                             },
                             modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(48.dp),
