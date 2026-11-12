@@ -98,6 +98,13 @@ android {
         compose true
     }
 
+    lint {
+        // AGP 9.5 起新增的跨方法线程推断（ThreadConstraint）会把 Hook 回调里的离屏绘制、
+        // 写盘等调用报成「无法满足的线程要求」：这些回调跑在哪个线程由宿主决定，lint 推断不了。
+        // 降为警告，仍出现在报告里，但不让构建失败。
+        warning 'ThreadConstraint'
+    }
+
     testOptions {
         unitTests.all {
             // 宿主 dex 分析工具用，正常运行测试时为空，相关用例自动跳过。
