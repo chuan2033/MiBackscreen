@@ -6,6 +6,11 @@ import hook.HyperBackscreen.ui.components.DialogButtonRow
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.offset
@@ -160,10 +165,23 @@ internal fun LogExportPopup(
                         )
                     }
                     // 复制完整文件路径，方便在文件管理器或电脑上直接定位这份日志。
+                    // 不用 clickable 默认的按压高亮：它是个直角灰框，在圆角面板里很突兀；按下时只让文字变淡。
+                    val copyInteraction = remember { MutableInteractionSource() }
+                    val copyPressed by copyInteraction.collectIsPressedAsState()
+                    val copyAlpha by animateFloatAsState(
+                        targetValue = if (copyPressed) 0.5f else 1f,
+                        animationSpec = tween(if (copyPressed) 0 else 150),
+                        label = "copyPathPress",
+                    )
                     Text(
                         text = stringResource(if (copied) R.string.log_path_copied else R.string.log_copy_path),
                         modifier = Modifier
-                            .clickable(role = Role.Button) {
+                            .graphicsLayer { alpha = copyAlpha }
+                            .clickable(
+                                interactionSource = copyInteraction,
+                                indication = null,
+                                role = Role.Button,
+                            ) {
                                 context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(
                                     ClipData.newPlainText("MiBackscreen log", savedFile.absolutePath)
                                 )
