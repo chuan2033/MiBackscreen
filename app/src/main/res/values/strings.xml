@@ -256,7 +256,6 @@
         <item quantity="one">Active for %1$d app</item>
         <item quantity="other">Active for %1$d apps</item>
     </plurals>
-    <string name="app_picker_double_tap_hint">While a checked app is in the foreground, double-tap will not wake the rear screen. Checking any app turns this feature on; unchecking all turns it off.</string>
     <string name="config_restore_confirm_title">Restore settings?</string>
     <string name="config_restore_confirm_summary">Backed up %1$s, %2$d items (module version %3$s). Restoring overwrites your current settings.</string>
     <string name="config_restore_confirm_action">Restore</string>
@@ -307,7 +306,6 @@
         <item quantity="one">Active for %1$d app</item>
         <item quantity="other">Active for %1$d apps</item>
     </plurals>
-    <string name="double_tap_sleep_picker_hint">While a checked app is shown on the rear screen (the rear launcher \"Rear Screen Center\", the rear camera, an app moved to the rear screen, etc.), double-tapping the rear screen will not turn it off. Check \"Rear Screen Center\" to disable double-tap sleep on the rear launcher. Takes effect the next time that app appears on the rear screen; uncheck all to restore the system default.</string>
     <!-- 背屏音乐控件白名单 -->
     <string name="music_widget_whitelist_title">Rear music widget apps</string>
     <string name="music_widget_whitelist_summary_none">No apps added, using the built-in list</string>

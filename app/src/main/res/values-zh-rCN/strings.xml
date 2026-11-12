@@ -253,7 +253,6 @@
     <plurals name="double_tap_wake_summary_count">
         <item quantity="other">已对 %1$d 个应用生效</item>
     </plurals>
-    <string name="app_picker_double_tap_hint">勾选的应用在前台运行时，背屏双击不会唤醒。勾选任意一个应用即自动启用此功能，全部取消即关闭。</string>
     <string name="config_restore_confirm_title">恢复配置？</string>
     <string name="config_restore_confirm_summary">备份时间 %1$s，共 %2$d 项（模块版本 %3$s）。恢复后将覆盖当前配置。</string>
     <string name="config_restore_confirm_action">恢复</string>
@@ -303,7 +302,6 @@
     <plurals name="double_tap_sleep_summary_count">
         <item quantity="other">已对 %1$d 个应用生效</item>
     </plurals>
-    <string name="double_tap_sleep_picker_hint">勾选的应用显示在背屏上时（背屏桌面「背屏中心」、背屏相机、投到背屏的应用等），双击背屏不会熄屏。勾选「背屏中心」即可在背屏桌面上禁用双击熄屏。对应应用下次显示到背屏时生效，全部取消即恢复系统默认。</string>
     <!-- 背屏音乐控件白名单 -->
     <string name="music_widget_whitelist_title">背屏音乐控件白名单</string>
     <string name="music_widget_whitelist_summary_none">未追加应用，使用系统内置名单</string>

@@ -86,7 +86,10 @@ internal fun AppPickerPage(
     onBack: () -> Unit,
     // 同一个选择页给多份名单复用：标题与页首说明按名单区分，默认是「双击亮屏黑名单」。
     @StringRes titleRes: Int = R.string.app_picker_title,
-    @StringRes hintRes: Int = R.string.app_picker_double_tap_hint,
+    // 页首说明；为 null 时不显示。
+    @StringRes hintRes: Int? = null,
+    // 是否在列表上方显示「正在显示：某类 · N 个」。
+    showFilterSummary: Boolean = true,
 ) {
     val context = LocalContext.current
 
@@ -210,7 +213,7 @@ internal fun AppPickerPage(
         },
     ) {
         // 「名单非空即启用、清空即关闭」是隐式规则，在入口页把它说清楚。
-        item(key = "picker_hint") {
+        if (hintRes != null) item(key = "picker_hint") {
             Text(
                 text = stringResource(hintRes),
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
@@ -220,7 +223,7 @@ internal fun AppPickerPage(
         }
         item {
             // 筛选在右上角菜单里，这里写明当前看的是哪一类、有多少个。
-            if (!loading) {
+            if (!loading && showFilterSummary) {
                 Text(
                     text = stringResource(
                         R.string.app_picker_showing,

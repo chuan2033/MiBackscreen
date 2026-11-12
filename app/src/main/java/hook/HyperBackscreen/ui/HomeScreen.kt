@@ -467,7 +467,7 @@ internal fun HomeScreen(
                         onSelectedPackagesChange = onDoubleTapWakeDisabledPackagesChange,
                         onBack = { navigateBackFrom(page) },
                         titleRes = R.string.config_disable_double_tap_wake_title,
-                        hintRes = R.string.app_picker_double_tap_hint
+                        showFilterSummary = false
                     )
                     HomeRoute.BatteryColor -> BatteryColorPage(
                         enableBatteryRing = enableBatteryRing,
@@ -513,7 +513,7 @@ internal fun HomeScreen(
                         onSelectedPackagesChange = onDoubleTapSleepDisabledPackagesChange,
                         onBack = { navigateBackFrom(page) },
                         titleRes = R.string.double_tap_sleep_title,
-                        hintRes = R.string.double_tap_sleep_picker_hint
+                        showFilterSummary = false
                     )
                     HomeRoute.MusicWhitelistAppPicker -> AppPickerPage(
                         selectedPackages = musicWidgetWhitelistPackages,
