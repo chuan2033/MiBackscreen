@@ -1,5 +1,7 @@
 package hook.HyperBackscreen.ui
 
+import androidx.compose.ui.platform.LocalDensity
+import hook.HyperBackscreen.ui.components.effect.BgEffectBackground
 import hook.HyperBackscreen.model.AutoWallpaperInterval
 import hook.HyperBackscreen.model.AutoWallpaperOrder
 import hook.HyperBackscreen.model.RearScreenOffTimeout
@@ -652,6 +654,9 @@ private fun SettingsPage(
     }
 }
 
+/** 关于页动态背景完全淡出所需的滚动距离。 */
+private val AboutBgFadeDistance = 240.dp
+
 @Composable
 private fun MainTabPage(
     functionGroupCounts: FunctionGroupCounts,
@@ -742,6 +747,23 @@ private fun MainTabPage(
                 .fillMaxSize()
                 .layerBackdrop(backdrop)
         ) {
+            // 关于页铺一层动态渐变背景（Logo 后面那片流动的色彩），往下滑时逐渐淡出。
+            // 画在采样层里：顶栏的毛玻璃会透出这片颜色。只在当前页时播放动画，切走就停，省电。
+            if (tab == HomeNavigationPolicy.Tab.ABOUT) {
+                val density = LocalDensity.current
+                val fadeDistancePx = with(density) { AboutBgFadeDistance.toPx() }
+                BgEffectBackground(
+                    dynamicBackground = isCurrentPage,
+                    modifier = Modifier.fillMaxSize(),
+                    alpha = {
+                        if (listState.firstVisibleItemIndex > 0) {
+                            0f
+                        } else {
+                            1f - (listState.firstVisibleItemScrollOffset / fadeDistancePx).coerceIn(0f, 1f)
+                        }
+                    },
+                ) {}
+            }
             LazyColumn(
                 state = listState,
                 modifier = Modifier
