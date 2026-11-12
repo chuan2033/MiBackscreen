@@ -333,8 +333,8 @@
     <string name="rear_double_tap_title">Rear double-tap</string>
     <string name="rear_double_tap_summary_none">No apps selected, feature off</string>
     <string name="rear_double_tap_summary_counts">Wake blocked for %1$d · sleep blocked for %2$d</string>
-    <string name="rear_double_tap_wake_section">Rear screen off: block double-tap to wake</string>
-    <string name="rear_double_tap_sleep_section">Rear screen on: block double-tap to sleep</string>
+    <string name="rear_double_tap_wake_section">Block double-tap wake · Main-screen app</string>
+    <string name="rear_double_tap_sleep_section">Block double-tap sleep · Rear-screen app</string>
     <string name="rear_double_tap_choose_apps">Choose apps</string>
     <string name="rear_video_resume_title">Resume video wallpaper</string>
     <string name="rear_video_resume_summary">Continue from where it stopped after waking</string>
