@@ -1,6 +1,7 @@
 package hook.HyperBackscreen.ui
 
 import hook.HyperBackscreen.ui.components.AppDialog
+import hook.HyperBackscreen.ui.theme.BottomBarStyle
 import hook.HyperBackscreen.model.AutoWallpaperInterval
 import hook.HyperBackscreen.model.AutoWallpaperOrder
 import hook.HyperBackscreen.model.RearScreenOffTimeout
@@ -190,11 +191,8 @@ internal fun RearScreenApp() {
     var rearMedia by remember { mutableStateOf(rearMediaOf(initialPrefs)) }
     // 歌词开关是同步提交（Binder）后再发广播，写入期间忽略重复点击。
     var savingRearLyric by remember { mutableStateOf(false) }
-    var floatingNavBar by remember {
-        mutableStateOf(PrefsBridge.readFloatingNavBar(context))
-    }
-    var liquidGlass by remember {
-        mutableStateOf(PrefsBridge.readLiquidGlass(context))
+    var bottomBarStyle by remember {
+        mutableStateOf(BottomBarStyle.fromPrefValue(PrefsBridge.readBottomBarStyle(context)))
     }
     var bottomBarBlur by remember {
         mutableStateOf(PrefsBridge.readBottomBarBlur(context))
@@ -456,8 +454,7 @@ internal fun RearScreenApp() {
             }
             // 外观类偏好不在 ModulePreferencesSnapshot 的观察集合里，手动回读一次；
             // 其余模块偏好经 observe 监听自动刷新界面。
-            floatingNavBar = PrefsBridge.readFloatingNavBar(context)
-            liquidGlass = PrefsBridge.readLiquidGlass(context)
+            bottomBarStyle = BottomBarStyle.fromPrefValue(PrefsBridge.readBottomBarStyle(context))
             bottomBarBlur = PrefsBridge.readBottomBarBlur(context)
             showFunctionCount = PrefsBridge.readShowFunctionCount(context)
             checkUpdates = PrefsBridge.readCheckUpdates(context)
@@ -553,8 +550,7 @@ internal fun RearScreenApp() {
             keepRearScreenOnInGame = keepRearScreenOnInGame,
             fixRearScreenApply = fixRearScreenApply,
             faceEnrollmentCompat = faceEnrollmentCompat,
-            floatingNavBar = floatingNavBar,
-            liquidGlass = liquidGlass,
+            bottomBarStyle = bottomBarStyle,
             bottomBarBlur = bottomBarBlur,
             showFunctionCount = showFunctionCount,
             appLanguage = appLanguage,
@@ -636,13 +632,9 @@ internal fun RearScreenApp() {
                 keepRearScreenOnInGame = newValue
                 PrefsBridge.writeKeepRearScreenOnInGameFromUi(context, newValue)
             },
-            onFloatingNavBarChange = { newValue ->
-                floatingNavBar = newValue
-                PrefsBridge.writeFloatingNavBar(context, newValue)
-            },
-            onLiquidGlassChange = { newValue ->
-                liquidGlass = newValue
-                PrefsBridge.writeLiquidGlass(context, newValue)
+            onBottomBarStyleChange = { style ->
+                bottomBarStyle = style
+                PrefsBridge.writeBottomBarStyle(context, style.prefValue)
             },
             onBottomBarBlurChange = { newValue ->
                 bottomBarBlur = newValue

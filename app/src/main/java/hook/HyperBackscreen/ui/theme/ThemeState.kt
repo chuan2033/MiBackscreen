@@ -181,4 +181,5 @@ internal val ThemePaletteStyle.labelRes: Int
         ThemePaletteStyle.Monochrome -> R.string.theme_palette_monochrome
         ThemePaletteStyle.Fidelity -> R.string.theme_palette_fidelity
         ThemePaletteStyle.Content -> R.string.theme_palette_content
+        ThemePaletteStyle.Cmf -> R.string.theme_palette_cmf
     }

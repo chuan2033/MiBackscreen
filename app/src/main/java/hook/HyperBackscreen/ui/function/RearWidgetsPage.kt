@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Drawable
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -42,9 +44,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -213,12 +217,23 @@ internal fun RearWidgetsPage(onAddClick: () -> Unit, onBack: () -> Unit) {
                             ?: if (options != null) stringResource(R.string.rear_widgets_uninstalled) else null,
                         startAction = { WidgetPreview(option?.preview) },
                         endActions = {
-                            IconButton(onClick = { RearWidgetSelection.remove(context, flat) }) {
-                                Icon(
-                                    imageVector = MiuixIcons.Delete,
-                                    contentDescription = stringResource(R.string.rear_widgets_remove),
-                                    tint = MiuixTheme.colorScheme.onSurfaceVariantActions
+                            val buttonBackdrop = rememberLayerBackdrop()
+                            Box {
+                                Box(
+                                    Modifier.matchParentSize()
+                                        .layerBackdrop(buttonBackdrop)
+                                        .background(MiuixTheme.colorScheme.surfaceContainer)
                                 )
+                                GlassIconButton(
+                                    onClick = { RearWidgetSelection.remove(context, flat) },
+                                    backdrop = buttonBackdrop,
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Delete,
+                                        contentDescription = stringResource(R.string.rear_widgets_remove),
+                                        tint = MiuixTheme.colorScheme.onSurfaceVariantActions
+                                    )
+                                }
                             }
                         }
                     )

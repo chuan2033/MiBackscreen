@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.DialogButtonRow
 import hook.HyperBackscreen.ui.components.DetailPageScaffold
+import hook.HyperBackscreen.ui.components.AppGlassTabRow
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.Role
 import top.yukonga.miuix.kmp.basic.Button
@@ -87,7 +88,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.basic.ColorPicker
-import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
@@ -100,7 +100,7 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 /**
  * 电量状态分段控件上下的留白。
  *
- * 轮廓条自带底色且与卡片同色系，紧贴上方折叠标题行和下方色盘时三者会糊成一片，
+ * 分段玻璃条紧贴上方折叠标题行和下方色盘时会显得拥挤，
  * 所以单独留出这一段。加上标题行自身的 16dp 内边距后，上下各约 24dp，视觉对称。
  */
 private val BatteryColorTabRowVerticalMargin = 8.dp
@@ -114,10 +114,6 @@ private val BatteryPercentPositionTabs = listOf(
     BatteryPercentPosition.LEFT,
     BatteryPercentPosition.RIGHT
 )
-
-/** 数字电量只有两项且文案长（「双摄中间左侧」），放宽分段宽度免得被截断。 */
-private val BatteryPercentTabMinWidth = 110.dp
-private val BatteryPercentTabMaxWidth = 150.dp
 
 /** 可单独设置颜色的三个电量状态。 */
 internal enum class BatteryColorSlot(
@@ -299,17 +295,19 @@ internal fun BatteryColorPage(
                     // 线条样式：绕模组一整圈的连体轮廓，或上下各一圈的双环。
                     // 摆法与颜色那格一致，两个选项落在同一条底色上；样式只换绘制轨道，
                     // 下面的尺寸参数两种样式共用，切过去不用重调粗细。
-                    TabRowWithContour(
+                    AppGlassTabRow(
                         tabs = BatteryRingStyle.entries.map { stringResource(it.labelRes) },
-                        selectedTabIndex = draft.ringStyle.ordinal,
-                        onTabSelected = { index ->
+                        selectedIndex = draft.ringStyle.ordinal,
+                        onSelect = { index ->
                             BatteryRingStyle.entries.getOrNull(index)?.let { style ->
                                 val next = draft.copy(ringStyle = style)
                                 draft = next
                                 onLayoutCommit(next)
                             }
                         },
-                        modifier = Modifier.padding(
+                        backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
+                        segmented = true,
+                        modifier = Modifier.fillMaxWidth().padding(
                             start = 16.dp,
                             end = 16.dp,
                             top = BatteryColorTabRowVerticalMargin,
@@ -363,20 +361,20 @@ internal fun BatteryColorPage(
                     AnimatedVisibility(visible = percentShown) {
                         // AnimatedVisibility 只有一个内容槽，多行要自己包一层。
                         Column {
-                            TabRowWithContour(
+                            AppGlassTabRow(
                                 tabs = BatteryPercentPositionTabs.map {
                                     stringResource(it.labelRes)
                                 },
-                                selectedTabIndex = BatteryPercentPositionTabs
+                                selectedIndex = BatteryPercentPositionTabs
                                     .indexOf(percentPosition)
                                     .coerceAtLeast(0),
-                                onTabSelected = { index ->
+                                onSelect = { index ->
                                     BatteryPercentPositionTabs.getOrNull(index)
                                         ?.let { position -> applyPosition(position) }
                                 },
-                                minWidth = BatteryPercentTabMinWidth,
-                                maxWidth = BatteryPercentTabMaxWidth,
-                                modifier = Modifier.padding(
+                                backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
+                                segmented = true,
+                                modifier = Modifier.fillMaxWidth().padding(
                                     start = 16.dp,
                                     end = 16.dp,
                                     top = BatteryColorTabRowVerticalMargin,
@@ -404,20 +402,20 @@ internal fun BatteryColorPage(
                 // 颜色自定义排在最下面：色盘展开后很长，夹在中间会把「数字电量」
                 // 顶到屏幕外，想调数字位置得先划过整块调色区。放末尾就不挡事。
                 // 「选哪个状态」本身就是「给谁上色」，跟调色盘是一件事，所以状态
-                // TabRow 跟颜色一起在这格；留在「电量环」里的话，展开这一格根本看不出
-                // 当前在改哪个状态。TabRow 用带轮廓的变体：三个选项落在一条整体底色上、
-                // 选中项凸起，比基础版那种逐个描边方框干净。整条与卡片同色系，上下各
-                // 留一段空白，左右缩进对齐卡片内其它内容。
+                // 颜色状态选项与色盘放在同一张卡片，展开时可以直接看到当前编辑的状态。
+                // 玻璃分段条使用滑动指示器，左右缩进与卡片内容一致。
                 CollapsibleFunctionGroup(
                     title = stringResource(R.string.battery_color_custom_title)
                 ) {
-                    TabRowWithContour(
+                    AppGlassTabRow(
                         tabs = BatteryColorSlot.entries.map { stringResource(it.labelRes) },
-                        selectedTabIndex = selected.ordinal,
-                        onTabSelected = { index ->
+                        selectedIndex = selected.ordinal,
+                        onSelect = { index ->
                             BatteryColorSlot.entries.getOrNull(index)?.let { previewSlot(it) }
                         },
-                        modifier = Modifier.padding(
+                        backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
+                        segmented = true,
+                        modifier = Modifier.fillMaxWidth().padding(
                             start = 16.dp,
                             end = 16.dp,
                             top = BatteryColorTabRowVerticalMargin,

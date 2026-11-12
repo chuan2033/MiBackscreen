@@ -139,10 +139,11 @@
     <string name="config_enable_app_card_title">Add to My app cards</string>
     <string name="config_enable_app_card_summary">Restore the MiBackscreen quick panel entry</string>
     <string name="config_hide_launcher_icon">Hide home screen icon</string>
-    <string name="config_floating_bar_title">Floating Bar</string>
-    <string name="config_floating_bar_summary">Use a floating-style bottom bar</string>
-    <string name="config_liquid_glass_title">Liquid Glass</string>
-    <string name="config_liquid_glass_summary">Use Apple-style liquid glass</string>
+    <string name="config_bottom_bar_style_title">Bottom bar style</string>
+    <string name="config_bottom_bar_style_standard">Standard</string>
+    <string name="config_bottom_bar_style_floating">Floating</string>
+    <string name="config_bottom_bar_style_liquid">iOS Liquid Glass</string>
+    <string name="config_bottom_bar_style_glass">Miuix Glass</string>
     <string name="config_bottom_bar_blur_title">Bottom bar blur</string>
     <string name="config_bottom_bar_blur_summary">Enable the bottom bar blur effect</string>
     <string name="config_language_title">Language</string>
@@ -332,8 +333,8 @@
     <string name="rear_double_tap_title">Rear double-tap</string>
     <string name="rear_double_tap_summary_none">No apps selected, feature off</string>
     <string name="rear_double_tap_summary_counts">Wake blocked for %1$d · sleep blocked for %2$d</string>
-    <string name="rear_double_tap_wake_section">Rear screen off: block double-tap to wake</string>
-    <string name="rear_double_tap_sleep_section">Rear screen on: block double-tap to sleep</string>
+    <string name="rear_double_tap_wake_section">Block double-tap wake · Main-screen app</string>
+    <string name="rear_double_tap_sleep_section">Block double-tap sleep · Rear-screen app</string>
     <string name="rear_double_tap_choose_apps">Choose apps</string>
     <string name="rear_video_resume_title">Resume video wallpaper</string>
     <string name="rear_video_resume_summary">Continue from where it stopped after waking</string>
@@ -410,6 +411,8 @@
     <string name="theme_palette_monochrome">Monochrome</string>
     <string name="theme_palette_fidelity">Fidelity</string>
     <string name="theme_palette_content">Content</string>
+    <string name="theme_palette_cmf">CMF</string>
+    <string name="theme_palette_cmf_summary">Material 2026 color scheme</string>
     <string name="theme_color_red">Red</string>
     <string name="theme_color_pink">Pink</string>
     <string name="theme_color_purple">Purple</string>

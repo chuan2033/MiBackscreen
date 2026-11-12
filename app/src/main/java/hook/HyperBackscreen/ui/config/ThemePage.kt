@@ -20,9 +20,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.ui.components.AnimatedPreferenceVisibility
+import hook.HyperBackscreen.ui.components.AppGlassTabRow
 import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.components.DetailPageScaffold
 import hook.HyperBackscreen.ui.theme.LocalThemeState
+import hook.HyperBackscreen.ui.theme.BottomBarStyle
 import hook.HyperBackscreen.ui.theme.ThemeState
 import hook.HyperBackscreen.ui.theme.UiStyle
 import hook.HyperBackscreen.ui.theme.keyColorOptions
@@ -33,7 +35,6 @@ import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.basic.SliderDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.basic.TabRow
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import hook.HyperBackscreen.ui.components.AppDropdownPreference
@@ -52,12 +53,10 @@ import kotlin.math.roundToInt
  */
 @Composable
 internal fun ThemePage(
-    floatingNavBar: Boolean,
-    liquidGlass: Boolean,
+    bottomBarStyle: BottomBarStyle,
     bottomBarBlur: Boolean,
     showFunctionCount: Boolean,
-    onFloatingNavBarChange: (Boolean) -> Unit,
-    onLiquidGlassChange: (Boolean) -> Unit,
+    onBottomBarStyleChange: (BottomBarStyle) -> Unit,
     onBottomBarBlurChange: (Boolean) -> Unit,
     onShowFunctionCountChange: (Boolean) -> Unit,
     onBack: () -> Unit,
@@ -68,15 +67,16 @@ internal fun ThemePage(
         onBack = onBack,
     ) {
         item(key = "brightness") {
-            TabRow(
+            AppGlassTabRow(
                 tabs = listOf(
                     stringResource(R.string.config_theme_mode_system),
                     stringResource(R.string.config_theme_mode_light),
                     stringResource(R.string.config_theme_mode_dark),
                 ),
-                selectedTabIndex = state.themeMode.brightnessIndex,
-                onTabSelected = state::updateBrightness,
-                modifier = Modifier.padding(bottom = 12.dp),
+                selectedIndex = state.themeMode.brightnessIndex,
+                onSelect = state::updateBrightness,
+                backgroundColor = MiuixTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
             )
         }
         item(key = "color") { ColorCard(state) }
@@ -84,12 +84,10 @@ internal fun ThemePage(
         item(key = "bars") {
             BarsCard(
                 state = state,
-                floatingNavBar = floatingNavBar,
-                liquidGlass = liquidGlass,
+                bottomBarStyle = bottomBarStyle,
                 bottomBarBlur = bottomBarBlur,
                 showFunctionCount = showFunctionCount,
-                onFloatingNavBarChange = onFloatingNavBarChange,
-                onLiquidGlassChange = onLiquidGlassChange,
+                onBottomBarStyleChange = onBottomBarStyleChange,
                 onBottomBarBlurChange = onBottomBarBlurChange,
                 onShowFunctionCountChange = onShowFunctionCountChange,
             )
@@ -126,22 +124,28 @@ private fun ColorCard(state: ThemeState) {
                     items = styles.map { stringResource(it.labelRes) },
                     selectedIndex = styles.indexOf(state.paletteStyle).coerceAtLeast(0),
                     title = stringResource(R.string.theme_palette_style_title),
+                    summary = if (state.paletteStyle == ThemePaletteStyle.Cmf) {
+                        stringResource(R.string.theme_palette_cmf_summary)
+                    } else null,
                     onSelectedIndexChange = { index -> state.updatePaletteStyle(styles[index]) },
                 )
-                val specs = ThemeColorSpec.entries
-                val downgraded = state.colorSpec == ThemeColorSpec.Spec2025 && !state.paletteStyle.supportsSpec2025
-                AppDropdownPreference(
-                    items = specs.map {
-                        stringResource(
-                            if (it == ThemeColorSpec.Spec2025) R.string.theme_color_spec_2025
-                            else R.string.theme_color_spec_2021
-                        )
-                    },
-                    selectedIndex = specs.indexOf(state.colorSpec).coerceAtLeast(0),
-                    title = stringResource(R.string.theme_color_spec_title),
-                    summary = if (downgraded) stringResource(R.string.theme_color_spec_downgraded) else null,
-                    onSelectedIndexChange = { index -> state.updateColorSpec(specs[index]) },
-                )
+                AnimatedPreferenceVisibility(visible = state.paletteStyle != ThemePaletteStyle.Cmf) {
+                    val specs = ThemeColorSpec.entries
+                    val downgraded = state.colorSpec == ThemeColorSpec.Spec2025 &&
+                        !state.paletteStyle.supportsSpec2025
+                    AppDropdownPreference(
+                        items = specs.map {
+                            stringResource(
+                                if (it == ThemeColorSpec.Spec2025) R.string.theme_color_spec_2025
+                                else R.string.theme_color_spec_2021
+                            )
+                        },
+                        selectedIndex = specs.indexOf(state.colorSpec).coerceAtLeast(0),
+                        title = stringResource(R.string.theme_color_spec_title),
+                        summary = if (downgraded) stringResource(R.string.theme_color_spec_downgraded) else null,
+                        onSelectedIndexChange = { index -> state.updateColorSpec(specs[index]) },
+                    )
+                }
             }
         }
     }
@@ -188,12 +192,10 @@ private fun StyleCard(state: ThemeState) {
 @Composable
 private fun BarsCard(
     state: ThemeState,
-    floatingNavBar: Boolean,
-    liquidGlass: Boolean,
+    bottomBarStyle: BottomBarStyle,
     bottomBarBlur: Boolean,
     showFunctionCount: Boolean,
-    onFloatingNavBarChange: (Boolean) -> Unit,
-    onLiquidGlassChange: (Boolean) -> Unit,
+    onBottomBarStyleChange: (BottomBarStyle) -> Unit,
     onBottomBarBlurChange: (Boolean) -> Unit,
     onShowFunctionCountChange: (Boolean) -> Unit,
 ) {
@@ -205,27 +207,26 @@ private fun BarsCard(
             title = stringResource(R.string.theme_top_bar_blur_title),
             summary = stringResource(R.string.theme_top_bar_blur_summary),
         )
-        SwitchPreference(
-            checked = floatingNavBar,
-            onCheckedChange = onFloatingNavBarChange,
-            title = stringResource(R.string.config_floating_bar_title),
-            summary = stringResource(R.string.config_floating_bar_summary),
+        AppDropdownPreference(
+            items = listOf(
+                stringResource(R.string.config_bottom_bar_style_standard),
+                stringResource(R.string.config_bottom_bar_style_floating),
+                stringResource(R.string.config_bottom_bar_style_liquid),
+                stringResource(R.string.config_bottom_bar_style_glass),
+            ),
+            selectedIndex = BottomBarStyle.entries.indexOf(bottomBarStyle),
+            title = stringResource(R.string.config_bottom_bar_style_title),
+            onSelectedIndexChange = { index ->
+                BottomBarStyle.entries.getOrNull(index)?.let(onBottomBarStyleChange)
+            },
         )
-        AnimatedPreferenceVisibility(visible = floatingNavBar) {
-            SwitchPreference(
-                checked = liquidGlass,
-                onCheckedChange = onLiquidGlassChange,
-                title = stringResource(R.string.config_liquid_glass_title),
-                summary = stringResource(R.string.config_liquid_glass_summary),
-            )
-        }
         SwitchPreference(
             checked = bottomBarBlur,
             onCheckedChange = onBottomBarBlurChange,
             title = stringResource(R.string.config_bottom_bar_blur_title),
             // 液态玻璃底栏里这个开关管的是玻璃折射本身，关掉就是纯色底，摘要要说清楚。
             summary = stringResource(
-                if (floatingNavBar && liquidGlass) R.string.config_bottom_bar_blur_summary_glass
+                if (bottomBarStyle == BottomBarStyle.LIQUID) R.string.config_bottom_bar_blur_summary_glass
                 else R.string.config_bottom_bar_blur_summary
             ),
         )
