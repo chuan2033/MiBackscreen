@@ -190,6 +190,7 @@
     <string name="about_developer_title">Developer</string>
     <string name="about_group_title">Community</string>
     <string name="about_group_name">Official QQ group</string>
+    <string name="about_member_qq">QQ: %1$s</string>
     <string name="about_qq_open_failed">Could not open QQ. Number %1$s copied, search it in QQ</string>
     <string name="about_credits_title">Credits</string>
     <string name="about_miuix_summary">This project uses Miuix UI components</string>

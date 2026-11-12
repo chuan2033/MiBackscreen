@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -196,6 +197,7 @@ internal fun AboutArrowPreference(
     url: String? = null,
     @DrawableRes avatar: Int? = null,
     startAction: (@Composable () -> Unit)? = null,
+    endActions: @Composable RowScope.() -> Unit = {},
     onClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -227,6 +229,7 @@ internal fun AboutArrowPreference(
                 )
             }
         } else null,
+        endActions = endActions,
         onClick = {
             if (onClick != null) {
                 onClick()
