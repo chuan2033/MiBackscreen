@@ -3,9 +3,11 @@ package hook.HyperBackscreen.ui.config
 import top.yukonga.miuix.kmp.basic.Icon
 import hook.HyperBackscreen.ui.components.TopBarIconButton
 import hook.HyperBackscreen.ui.components.TopBarSearchField
-import hook.HyperBackscreen.ui.components.onBoundsInOverlay
-import top.yukonga.miuix.kmp.glass.GlassMotion
-import top.yukonga.miuix.kmp.glass.GlassPopup
+import top.yukonga.miuix.kmp.glass.GlassTopAppBarDefaults
+import top.yukonga.miuix.kmp.glass.GlassTransformPopup
+import top.yukonga.miuix.kmp.glass.glassPopupAnchor
+import top.yukonga.miuix.kmp.glass.glassPopupAnchorContent
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import top.yukonga.miuix.kmp.glass.GlassPopupItem
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.glass.More
@@ -37,10 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -142,7 +141,7 @@ internal fun AppPickerPage(
     }
 
     var showFilterMenu by remember { mutableStateOf(false) }
-    var filterAnchorBounds by remember { mutableStateOf(Rect.Zero) }
+    val filterAnchor = rememberGlassPopupAnchor()
     val filterLabels = AppFilter.entries.map { entry ->
         if (entry == AppFilter.SELECTED && selectedSet.isNotEmpty()) {
             stringResource(entry.labelRes) + " (" + selectedSet.size + ")"
@@ -158,11 +157,18 @@ internal fun AppPickerPage(
         actions = {
             TopBarIconButton(
                 onClick = { showFilterMenu = true },
-                modifier = Modifier.onBoundsInOverlay { filterAnchorBounds = it },
+                // 菜单从这颗按钮本身变形展开、收起时缩回按钮（GlassTransformPopup），
+                // 按钮的玻璃底由弹窗接管，只复制中间的图标。
+                modifier = Modifier.glassPopupAnchor(
+                    filterAnchor,
+                    cornerRadius = GlassTopAppBarDefaults.ButtonSize / 2,
+                    floating = true,
+                ),
             ) {
                 Icon(
                     imageVector = MiuixIcons.Glass.More,
                     contentDescription = stringResource(R.string.app_picker_filter_menu),
+                    modifier = Modifier.glassPopupAnchorContent(filterAnchor),
                     tint = MiuixTheme.colorScheme.onBackground
                 )
             }
@@ -176,20 +182,19 @@ internal fun AppPickerPage(
             )
         },
         overlay = {
-            val filterMenuVisible = showFilterMenu && filterAnchorBounds != Rect.Zero
-            // GlassPopup 只淡入淡出菜单文字，玻璃面板本身一直不透明：点开头几帧和收起最后一百多毫秒，
-            // 缩成一条扁胶囊的面板会挂在「更多」按钮上方。让整块面板跟文字走同一条淡入淡出曲线。
-            val filterMenuAlpha by animateFloatAsState(
-                targetValue = if (filterMenuVisible) 1f else 0f,
-                animationSpec = GlassMotion.popupMorphFade(filterMenuVisible),
-                label = "filterMenuPanelFade",
-            )
-            GlassPopup(
-                show = filterMenuVisible,
+            GlassTransformPopup(
+                show = showFilterMenu,
                 onDismissRequest = { showFilterMenu = false },
-                anchorBounds = filterAnchorBounds,
+                anchor = filterAnchor,
                 backdrop = LocalPageBackdrop.current,
-                modifier = Modifier.graphicsLayer { alpha = filterMenuAlpha },
+                simplified = true,
+                anchorContent = {
+                    Icon(
+                        imageVector = MiuixIcons.Glass.More,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onBackground
+                    )
+                },
             ) {
                 filterLabels.forEachIndexed { index, label ->
                     GlassPopupItem(
