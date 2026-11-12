@@ -10,11 +10,17 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -38,6 +44,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
@@ -148,6 +155,17 @@ private fun scaledBitmap(drawable: Drawable): ImageBitmap? = runCatching {
 private fun canPlaceOnRear(info: AppWidgetProviderInfo): Boolean =
     info.configure == null || info.widgetFeatures and AppWidgetProviderInfo.WIDGET_FEATURE_CONFIGURATION_OPTIONAL != 0
 
+/** 按小部件名、应用名或包名搜索，忽略大小写；空查询返回全部。 */
+private fun filterOptions(options: List<WidgetOption>, query: String): List<WidgetOption> {
+    val keyword = query.trim()
+    if (keyword.isEmpty()) return options
+    return options.filter {
+        it.label.contains(keyword, ignoreCase = true)
+            || it.appLabel.contains(keyword, ignoreCase = true)
+            || it.component.packageName.contains(keyword, ignoreCase = true)
+    }
+}
+
 /** 功能页入口的摘要。 */
 @Composable
 internal fun rearWidgetsEntrySummary(): String {
@@ -243,18 +261,38 @@ private fun sizeSummary(option: WidgetOption): String =
 internal fun RearWidgetPickerPage(onBack: () -> Unit) {
     val context = LocalContext.current
     val selected by remember(context) { RearWidgetSelection.flow(context) }.collectAsState()
-    val groups by produceState<Map<String, List<WidgetOption>>?>(null) {
-        value = withContext(Dispatchers.IO) {
-            loadOptions(context, ::canPlaceOnRear).groupBy { it.appLabel }
-        }
+    val options by produceState<List<WidgetOption>?>(null) {
+        value = withContext(Dispatchers.IO) { loadOptions(context, ::canPlaceOnRear) }
+    }
+    var query by rememberSaveable { mutableStateOf("") }
+    var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    val groups = remember(options, query) {
+        options?.let { all -> filterOptions(all, query).groupBy { it.appLabel } }
     }
     DetailPageScaffold(title = stringResource(R.string.rear_widgets_add), onBack = onBack, topSpacing = 0.dp) {
+        item(key = "search") {
+            InputField(
+                query = query,
+                onQueryChange = { query = it },
+                onSearch = {},
+                expanded = searchExpanded,
+                onExpandedChange = { searchExpanded = it },
+                label = stringResource(R.string.rear_widgets_search_hint),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+        }
         val loaded = groups
         if (loaded == null) {
             item(key = "loading") {
                 BasicComponent(summary = stringResource(R.string.rear_widgets_loading))
             }
             return@DetailPageScaffold
+        }
+        if (loaded.isEmpty()) {
+            item(key = "empty") {
+                BasicComponent(summary = stringResource(R.string.rear_widgets_search_empty))
+            }
         }
         loaded.forEach { (app, options) ->
             item(key = "app_$app") {

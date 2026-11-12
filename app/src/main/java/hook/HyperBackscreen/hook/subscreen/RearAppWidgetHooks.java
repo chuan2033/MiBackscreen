@@ -62,6 +62,11 @@ public final class RearAppWidgetHooks {
 
     @Nullable private volatile Method updateMethod;
     @Nullable private volatile String selectedRaw;
+    /**
+     * 模块 App 广播带来的最新选择。App 写偏好和发广播几乎同时，偏好同步到这个进程有延迟，
+     * 广播到达时读偏好还是旧值（表现为加了小部件要重启背屏中心才出现）；在两边一致之前以它为准。
+     */
+    @Nullable private volatile String pushedRaw;
     @NonNull private volatile List<String> selected = Collections.emptyList();
 
     @NonNull private WeakReference<Object> panelRef = new WeakReference<>(null);
@@ -168,8 +173,14 @@ public final class RearAppWidgetHooks {
 
     @NonNull
     private List<String> currentSelection() {
-        String raw = PrefsBridge.readRearAppWidgetsForHook(module);
-        return selectionFrom(raw);
+        String prefs = PrefsBridge.readRearAppWidgetsForHook(module);
+        String pushed = pushedRaw;
+        if (pushed != null) {
+            // 偏好已经同步过来（和广播带来的一致），以后照常读偏好。
+            if (pushed.equals(prefs == null ? "" : prefs)) pushedRaw = null;
+            return selectionFrom(pushed);
+        }
+        return selectionFrom(prefs);
     }
 
     @NonNull
@@ -476,7 +487,8 @@ public final class RearAppWidgetHooks {
                 @Override
                 public void onReceive(Context c, Intent intent) {
                     if (!Constants.ACTION_SYNC_REAR_WIDGETS.equals(intent.getAction())) return;
-                    selectionFrom(intent.getStringExtra(Constants.EXTRA_PREFERENCE_VALUE));
+                    String value = intent.getStringExtra(Constants.EXTRA_PREFERENCE_VALUE);
+                    if (value != null) pushedRaw = value;
                     reapply();
                 }
             };
