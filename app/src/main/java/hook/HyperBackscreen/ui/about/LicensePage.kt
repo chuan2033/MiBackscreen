@@ -19,7 +19,9 @@ private data class LicenseItem(
 // Group artifacts from the same project; Gradle/compiler/test tools are not app dependencies.
 private val licenses = listOf(
     LicenseItem(
-        name = "Miuix (UI / Preference / Icons / Blur / Navigation)",
+        // Core / Squircle / Window come in transitively. The about-page BgEffect background
+        // (ui/components/effect) is copied from the miuix example app and keeps its headers.
+        name = "Miuix (UI / Preference / Icons / Glass / Glass Icons / Blur / Material / Navigation / BgEffect)",
         license = "Apache-2.0",
         url = "https://github.com/compose-miuix-ui/miuix"
     ),
@@ -98,6 +100,12 @@ private val licenses = listOf(
         license = "Apache-2.0",
         // Local JARs match classes.jar in the official 102.0.0 Maven AARs.
         url = "https://central.sonatype.com/artifact/io.github.libxposed/service/102.0.0"
+    ),
+    LicenseItem(
+        // 按结构定位宿主混淆成员；Maven POM 声明的许可为 LGPL-3.0。
+        name = "DexKit",
+        license = "LGPL-3.0",
+        url = "https://github.com/LuckyPray/DexKit"
     ),
     LicenseItem(
         // 背屏实时歌词订阅 SuperLyric 3.x / 4.x 服务。仓库 LICENSE 为 LGPL-2.1，
