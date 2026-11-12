@@ -30,8 +30,11 @@ import hook.HyperBackscreen.R
 import hook.HyperBackscreen.ui.components.AboutArrowPreference
 import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Update
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
@@ -74,6 +77,14 @@ internal fun AboutPage(
         AboutArrowPreference(
             title = stringResource(R.string.about_update_title),
             summary = null,
+            startAction = {
+                Icon(
+                    imageVector = MiuixIcons.Update,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = MiuixTheme.colorScheme.onSurface
+                )
+            },
             onClick = onAppUpdateClick
         )
     }
