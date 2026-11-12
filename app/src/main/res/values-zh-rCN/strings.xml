@@ -452,5 +452,7 @@
     <string name="rear_widgets_cells">%1$d×%2$d</string>
     <string name="rear_widgets_cells_fit">%1$d×%2$d · 适合背屏</string>
     <string name="rear_widgets_loading">正在读取小部件…</string>
+    <string name="rear_widgets_search_hint">搜索小部件或应用</string>
+    <string name="rear_widgets_search_empty">没有匹配的小部件</string>
     <string name="rear_widgets_already_added">已添加</string>
 </resources>
