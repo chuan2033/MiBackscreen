@@ -45,4 +45,10 @@ class PreferenceSyncReportTest {
         assertFalse(report.contains("\nfake=value"))
         assertFalse(report.contains("do-not-export"))
     }
+
+    @Test fun batteryPercentColorIsReportedWithFollowRingDefault() {
+        val key = Constants.KEY_BATTERY_PERCENT_COLOR_CHARGING
+        val report = PreferenceSyncReport.build(mapOf(key to "#FFFFFFFF"), emptyMap<String, Any>())
+        assertTrue(report.contains("[$key]\ndefault=\"\"\nlocal=\"#FFFFFFFF\"\nremote=<unset; default=\"\">"))
+    }
 }

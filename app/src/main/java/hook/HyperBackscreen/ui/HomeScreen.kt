@@ -80,6 +80,8 @@ import hook.HyperBackscreen.ui.about.VersionHistoryPage
 import hook.HyperBackscreen.batteryring.BatteryRingGeometry
 import hook.HyperBackscreen.ui.battery.BatteryColorPage
 import hook.HyperBackscreen.ui.battery.BatteryColorSlot
+import hook.HyperBackscreen.ui.battery.BatteryColorTarget
+import hook.HyperBackscreen.batteryring.BatteryColorOverrides
 import hook.HyperBackscreen.batteryring.BatteryPercentPosition
 import hook.HyperBackscreen.batteryring.BatteryRingLayout
 import hook.HyperBackscreen.ui.components.FloatingBottomBar
@@ -311,12 +313,11 @@ internal fun HomeScreen(
     onSettingsEntryChange: (String) -> Unit,
     onBackupPreferences: () -> Unit,
     onRestorePreferences: () -> Unit,
-    batteryColorIdle: String,
-    batteryColorCharging: String,
-    batteryColorLow: String,
+    batteryRingColors: BatteryColorOverrides,
+    batteryPercentColors: BatteryColorOverrides,
     batteryPercentPosition: BatteryPercentPosition,
     batteryLayout: BatteryRingLayout,
-    onBatteryColorChange: (BatteryColorSlot, String) -> Unit,
+    onBatteryColorChange: (BatteryColorTarget, BatteryColorSlot, String) -> Unit,
     onBatteryPercentPositionChange: (BatteryPercentPosition) -> Unit,
     onBatteryLayoutChange: (BatteryRingLayout) -> Unit,
     rearMedia: RearMediaSwitches,
@@ -473,9 +474,8 @@ internal fun HomeScreen(
                     HomeRoute.BatteryColor -> BatteryColorPage(
                         enableBatteryRing = enableBatteryRing,
                         onEnableBatteryRingChange = onEnableBatteryRingChange,
-                        idleColor = batteryColorIdle,
-                        chargingColor = batteryColorCharging,
-                        lowColor = batteryColorLow,
+                        ringColors = batteryRingColors,
+                        percentColors = batteryPercentColors,
                         percentPosition = batteryPercentPosition,
                         layout = batteryLayout,
                         onColorChange = onBatteryColorChange,

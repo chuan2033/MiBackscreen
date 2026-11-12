@@ -39,6 +39,13 @@ object BatteryRingHost {
                     low = PrefsBridge.readBatteryColor(module, Constants.KEY_BATTERY_COLOR_LOW),
                 )
             },
+            percentColors = {
+                BatteryColorOverrides(
+                    idle = PrefsBridge.readBatteryColor(module, Constants.KEY_BATTERY_PERCENT_COLOR_IDLE),
+                    charging = PrefsBridge.readBatteryColor(module, Constants.KEY_BATTERY_PERCENT_COLOR_CHARGING),
+                    low = PrefsBridge.readBatteryColor(module, Constants.KEY_BATTERY_PERCENT_COLOR_LOW),
+                )
+            },
             percentPosition = {
                 BatteryPercentPosition.fromPref(PrefsBridge.readBatteryPercentPosition(module))
             },
@@ -76,6 +83,13 @@ object BatteryRingHost {
                     low = PrefsBridge.readBatteryColorForRemote(Constants.KEY_BATTERY_COLOR_LOW),
                 )
             },
+            percentColors = {
+                BatteryColorOverrides(
+                    idle = PrefsBridge.readBatteryColorForRemote(Constants.KEY_BATTERY_PERCENT_COLOR_IDLE),
+                    charging = PrefsBridge.readBatteryColorForRemote(Constants.KEY_BATTERY_PERCENT_COLOR_CHARGING),
+                    low = PrefsBridge.readBatteryColorForRemote(Constants.KEY_BATTERY_PERCENT_COLOR_LOW),
+                )
+            },
             percentPosition = {
                 BatteryPercentPosition.fromPref(PrefsBridge.readBatteryPercentPositionForRemote())
             },
@@ -90,6 +104,7 @@ object BatteryRingHost {
     private fun showEnabled(
         activity: Activity,
         colors: () -> BatteryColorOverrides,
+        percentColors: () -> BatteryColorOverrides,
         percentPosition: () -> BatteryPercentPosition,
         layout: (BatteryPercentPosition) -> BatteryRingLayout,
     ) {
@@ -100,7 +115,9 @@ object BatteryRingHost {
         ring?.let { (it.parent as? ViewGroup)?.removeView(it) }
         // 覆盖色在挂载时读一次；改颜色后重新进入背屏桌面即可生效，绘制线程不再读偏好。
         val position = percentPosition()
-        val view = BatteryRingView(activity, geometry, colors(), position, layout(position))
+        val view = BatteryRingView(
+            activity, geometry, colors(), percentColors(), position, layout(position),
+        )
         ring = view
         parent.addView(view, ViewGroup.LayoutParams(-1, -1))
     }
