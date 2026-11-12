@@ -66,8 +66,8 @@ internal fun DetailPageScaffold(
     topBarBottom: (@Composable () -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
-    val scrollBehavior = rememberPageScrollBehavior()
     val listState = rememberLazyListState()
+    val scrollBehavior = rememberPageScrollBehavior(listState)
     val surfaceColor = MiuixTheme.colorScheme.surface
     // 顶栏采样列表内容，顶栏本身处于采样范围之外。
     val backdrop = rememberLayerBackdrop {
