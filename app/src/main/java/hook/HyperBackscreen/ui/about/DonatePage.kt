@@ -3,6 +3,7 @@ package hook.HyperBackscreen.ui.about
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.DetailPageScaffold
+import hook.HyperBackscreen.ui.components.AppGlassTabRow
 import hook.HyperBackscreen.ui.theme.currentAppColors
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import top.yukonga.miuix.kmp.basic.Button
@@ -10,7 +11,6 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -40,7 +40,6 @@ import hook.HyperBackscreen.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.basic.TabRow
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -88,20 +87,16 @@ internal fun DonatePage(onBack: () -> Unit) {
         onBack = onBack,
     ) {
         item {
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val tabWidth = (maxWidth - 9.dp) / 2
-                TabRow(
-                    tabs = tabs,
-                    selectedTabIndex = selectedIndex,
-                    onTabSelected = {
-                        selectedIndex = it
-                        saveMessage = null
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    minWidth = tabWidth,
-                    maxWidth = tabWidth
-                )
-            }
+            AppGlassTabRow(
+                tabs = tabs,
+                selectedIndex = selectedIndex,
+                onSelect = {
+                    selectedIndex = it
+                    saveMessage = null
+                },
+                backgroundColor = MiuixTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
         item {
             Spacer(Modifier.height(16.dp))

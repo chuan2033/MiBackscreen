@@ -1,0 +1,4 @@
+[submodule "third_party/miuix"]
+	path = third_party/miuix
+	url = https://github.com/compose-miuix-ui/miuix
+	branch = main

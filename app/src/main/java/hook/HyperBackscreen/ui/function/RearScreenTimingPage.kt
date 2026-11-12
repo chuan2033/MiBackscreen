@@ -4,8 +4,9 @@ import hook.HyperBackscreen.ui.components.AppDialog
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.DetailPageScaffold
+import hook.HyperBackscreen.ui.components.AppGlassTabRow
 import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.basic.TabRowWithContour
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +26,7 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import hook.HyperBackscreen.ui.components.AppDropdownPreference
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * 「息屏与定时」二级页：管背屏什么时候灭、多久灭、多久换一次壁纸。
@@ -130,16 +132,18 @@ internal fun RearScreenTimingPage(
                     BasicComponent(
                         title = stringResource(R.string.rear_screen_schedule_mode_title),
                         bottomAction = {
-                            TabRowWithContour(
+                            AppGlassTabRow(
                                 tabs = RearScreenScheduleMode.entries.map { stringResource(it.labelRes) },
-                                selectedTabIndex = rearScreenSchedule.scheduleMode.ordinal,
-                                onTabSelected = { index ->
+                                selectedIndex = rearScreenSchedule.scheduleMode.ordinal,
+                                onSelect = { index ->
                                     RearScreenScheduleMode.entries.getOrNull(index)
                                         ?.let { mode ->
                                             onRearScreenScheduleChange(rearScreenSchedule.withMode(mode))
                                         }
                                 },
-                                modifier = Modifier.padding(top = 10.dp)
+                                backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
+                                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                                segmented = true,
                             )
                         }
                     )

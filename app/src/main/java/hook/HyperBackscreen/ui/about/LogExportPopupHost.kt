@@ -23,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.TransformOrigin
@@ -35,7 +36,10 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import top.yukonga.miuix.kmp.squircle.squircleClip
+import hook.HyperBackscreen.ui.components.currentGlassBackdrop
+import top.yukonga.miuix.kmp.glass.GlassPopupDefaults
+import top.yukonga.miuix.kmp.glass.glassPanel
+import top.yukonga.miuix.kmp.material.GlassShape
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.RemovePlatformDialogDefaultEffects
 import kotlin.math.roundToInt
@@ -59,6 +63,11 @@ internal fun LogExportPopupHost(
     ) {
         RemovePlatformDialogDefaultEffects()
         val insets = WindowInsets.safeDrawing
+        val panelShape = GlassShape(HomeUiTokens.CornerLarge)
+        val panelFill = MiuixTheme.colorScheme.surfaceContainer
+        val popupMaterial = GlassPopupDefaults.material()
+        val popupStroke = GlassPopupDefaults.stroke()
+        val pageBackdrop = currentGlassBackdrop
         var hostOrigin by remember { mutableStateOf(Offset.Zero) }
         Box(Modifier.fillMaxSize().onGloballyPositioned { hostOrigin = it.positionInWindow() }) {
             Box(Modifier.fillMaxSize()
@@ -86,8 +95,14 @@ internal fun LogExportPopupHost(
                             transformOrigin = TransformOrigin(0.5f, 1f),
                         ) + fadeOut(tween(150)),
                     ) {
-                        Box(Modifier.squircleClip(HomeUiTokens.CornerLarge)
-                            .background(MiuixTheme.colorScheme.surfaceContainer)
+                        Box(Modifier.glassPanel(
+                                backdrop = pageBackdrop,
+                                shape = panelShape,
+                                material = popupMaterial,
+                                stroke = popupStroke,
+                                shading = false,
+                                fallback = Modifier.clip(panelShape).background(panelFill),
+                            )
                             .pointerInput(Unit) { detectTapGestures(onTap = {}) }) {
                             content()
                         }
