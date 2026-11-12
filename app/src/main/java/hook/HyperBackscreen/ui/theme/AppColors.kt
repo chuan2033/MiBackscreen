@@ -49,13 +49,6 @@ internal data class AppColors(
 private val ActiveContainerLight = Color(0xFFDFFAE4)
 private val ActiveContainerDark = Color(0xFF1A3825)
 private val ActiveGlyph = Color(0xFF36D167)
-// Mochi 的激活卡用和珊瑚主色同系的蜜桃色，对勾用珊瑚色，不再是和奶油底不搭的薄荷绿。
-private val MochiActiveContainerLight = Color(0xFFFFE4D8)
-private val MochiActiveContainerDark = Color(0xFF4A2E27)
-private val MochiActiveGlyphLight = Color(0xFFF2856D)
-private val MochiActiveGlyphDark = Color(0xFFF29A86)
-private val MochiScopeActiveLight = Color(0xFF5B95E8)
-private val MochiScopeActiveDark = Color(0xFF7AACF2)
 private val WeChatTop = Color(0xFF2E9E5B)
 private val WeChatBottom = Color(0xFF7AC992)
 private val AlipayTop = Color(0xFF2A62E0)
@@ -64,33 +57,20 @@ private val AlipayBottom = Color(0xFF63A0F8)
 /** 深色模式下品牌渐变往黑色压的比例：整块卡片不至于在暗背景里发亮。 */
 private const val DarkBrandDim = 0.28f
 
-internal fun appColors(scheme: Colors, dynamic: Boolean, style: UiStyle = UiStyle.DEFAULT): AppColors {
+internal fun appColors(scheme: Colors, dynamic: Boolean): AppColors {
     val dark = scheme.surface.luminance() < 0.5f
     val brandDim = if (dark) DarkBrandDim else 0f
-    val mochi = style == UiStyle.MOCHI
     return AppColors(
         statusActiveContainer = when {
             dynamic -> scheme.secondaryContainer
-            mochi && dark -> MochiActiveContainerDark
-            mochi -> MochiActiveContainerLight
             dark -> ActiveContainerDark
             else -> ActiveContainerLight
         },
         onStatusActiveContainer = if (dynamic) scheme.onSecondaryContainer else scheme.onSurfaceContainer,
-        statusActiveGlyph = when {
-            dynamic -> scheme.primary
-            mochi && dark -> MochiActiveGlyphDark
-            mochi -> MochiActiveGlyphLight
-            else -> ActiveGlyph
-        },
+        statusActiveGlyph = if (dynamic) scheme.primary else ActiveGlyph,
         // 圆点的蓝 / 红直接取主题的 primary / error：默认色板下就是 miuix 蓝和红，
         // Monet 下蓝点跟随主题主色，红点仍是错误色。
-        // Mochi 的主色是珊瑚红，和错误红几乎分不出来，「已注入」圆点改用固定的柔和蓝。
-        scopeActive = if (mochi && !dynamic) {
-            if (dark) MochiScopeActiveDark else MochiScopeActiveLight
-        } else {
-            scheme.primary
-        },
+        scopeActive = scheme.primary,
         scopeNeedsRestart = scheme.error,
         shimmerBase = scheme.onSurface.copy(alpha = 0.08f),
         shimmerHighlight = scheme.onSurface.copy(alpha = 0.03f),
@@ -108,4 +88,4 @@ internal val LocalAppColors = staticCompositionLocalOf<AppColors?> { null }
 internal val currentAppColors: AppColors
     @Composable
     @ReadOnlyComposable
-    get() = LocalAppColors.current ?: appColors(MiuixTheme.colorScheme, dynamic = false, style = LocalUiStyle.current)
+    get() = LocalAppColors.current ?: appColors(MiuixTheme.colorScheme, dynamic = false)

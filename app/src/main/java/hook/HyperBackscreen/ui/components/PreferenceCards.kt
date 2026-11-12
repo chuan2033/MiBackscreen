@@ -35,9 +35,6 @@ import android.content.Context
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
-import hook.HyperBackscreen.ui.theme.UiStyle
-import hook.HyperBackscreen.ui.theme.currentUiStyle
-import hook.HyperBackscreen.ui.theme.uiStyleCard
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.ui.util.openUrl
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -60,14 +57,11 @@ internal fun CardBlock(
     translucent: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val style = currentUiStyle
-    val corner = style.cardCorner
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(bottom = 12.dp)
-            .uiStyleCard(corner),
-        cornerRadius = corner,
+            .padding(bottom = 12.dp),
+        cornerRadius = HomeUiTokens.CornerCard,
         insideMargin = PaddingValues(),
         colors = CardDefaults.defaultColors(
             color = if (translucent) {
@@ -77,8 +71,7 @@ internal fun CardBlock(
             },
             contentColor = MiuixTheme.colorScheme.onSurfaceContainer
         ),
-        // Mochi 下不用 miuix 的倾斜按压：Mochi 自带按压回弹（uiStyleCard），叠上去两种动效打架。
-        pressFeedbackType = if (style == UiStyle.DEFAULT) pressFeedbackType else PressFeedbackType.None,
+        pressFeedbackType = pressFeedbackType,
         showIndication = pressFeedbackType != PressFeedbackType.None,
         holdDownState = false,
         onClick = onClick,

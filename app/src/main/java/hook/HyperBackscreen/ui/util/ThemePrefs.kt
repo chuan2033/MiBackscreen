@@ -51,7 +51,6 @@ enum class ThemeMode(val index: Int) {
 object ThemePrefs {
     private const val PREF_NAME = "app_ui_prefs"
     private const val KEY_THEME_MODE = "theme_mode"
-    private const val KEY_UI_STYLE = "ui_style"
     private const val KEY_KEY_COLOR = "key_color"
     private const val KEY_PALETTE_STYLE = "palette_style"
     private const val KEY_COLOR_SPEC = "color_spec"
@@ -71,13 +70,6 @@ object ThemePrefs {
 
     fun setThemeMode(context: Context, mode: ThemeMode) {
         prefs(context).edit().putInt(KEY_THEME_MODE, mode.index).apply()
-    }
-
-    fun getUiStyle(context: Context): hook.HyperBackscreen.ui.theme.UiStyle =
-        hook.HyperBackscreen.ui.theme.UiStyle.fromIndex(prefs(context).getInt(KEY_UI_STYLE, 0))
-
-    fun setUiStyle(context: Context, style: hook.HyperBackscreen.ui.theme.UiStyle) {
-        prefs(context).edit().putInt(KEY_UI_STYLE, style.index).apply()
     }
 
     /** Monet 种子色（ARGB）；0 表示不指定，跟随系统壁纸取色。 */

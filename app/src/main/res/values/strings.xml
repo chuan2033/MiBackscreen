@@ -387,11 +387,6 @@
     <string name="rear_cast_note_running_only">Only apps that are already running can be moved. Apps cannot be launched directly on the rear screen. While the phone is locked, apps are not moved to the rear screen.</string>
     <string name="rear_cast_note_compat">Some apps may look wrong on the rear screen (layout, touch, or a black screen). Moving them back to the main screen restores them.</string>
     <string name="rear_cast_note_timeout">The rear screen turns off after 10 seconds of inactivity by default. Make it longer here.</string>
-    <string name="config_ui_style_title">UI style</string>
-    <string name="config_ui_style_default">Default</string>
-    <string name="config_ui_style_mochi">Mochi</string>
-    <string name="config_ui_style_default_summary">Stock miuix look</string>
-    <string name="config_ui_style_mochi_summary">Soft and round: cream palette, large corners, gentle shadows, bouncy press</string>
     <string name="theme_title">Theme</string>
     <string name="theme_monet_short">Monet</string>
     <string name="theme_monet_title">Monet colors</string>

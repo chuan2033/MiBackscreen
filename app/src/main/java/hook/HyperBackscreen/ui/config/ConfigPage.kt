@@ -9,7 +9,6 @@ import hook.HyperBackscreen.R
 import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.theme.LocalThemeState
 import hook.HyperBackscreen.ui.theme.keyColorOptions
-import hook.HyperBackscreen.ui.theme.UiStyle
 import hook.HyperBackscreen.ui.util.AppLanguage
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -125,11 +124,5 @@ private fun themeSummary(): String {
     } else {
         null
     }
-    val style = stringResource(
-        when (state.uiStyle) {
-            UiStyle.DEFAULT -> R.string.config_ui_style_default
-            UiStyle.MOCHI -> R.string.config_ui_style_mochi
-        }
-    )
-    return listOfNotNull(brightness, color, style).joinToString(" · ")
+    return listOfNotNull(brightness, color).joinToString(" · ")
 }

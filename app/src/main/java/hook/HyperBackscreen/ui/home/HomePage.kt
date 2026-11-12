@@ -1,5 +1,6 @@
 package hook.HyperBackscreen.ui.home
 
+import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import hook.HyperBackscreen.ui.components.AppDialog
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -58,7 +59,6 @@ import hook.HyperBackscreen.ui.util.currentHyperOSVersion
 import hook.HyperBackscreen.ui.util.currentPackageVersion
 import hook.HyperBackscreen.ui.util.currentSystemVersion
 import hook.HyperBackscreen.ui.util.RootAccess
-import hook.HyperBackscreen.ui.theme.currentUiStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runInterruptible
@@ -173,7 +173,7 @@ internal fun HomePage(
                 .padding(bottom = 12.dp)
                 .background(
                     MiuixTheme.colorScheme.errorContainer,
-                    RoundedCornerShape(currentUiStyle.cardCorner)
+                    RoundedCornerShape(HomeUiTokens.CornerCard)
                 )
                 .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp)
                 .semantics { liveRegion = LiveRegionMode.Polite },

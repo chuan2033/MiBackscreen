@@ -14,7 +14,7 @@ import top.yukonga.miuix.kmp.theme.ThemeController
 private val ModeOnlySeed = Color(0xFF3482FF)
 
 /**
- * 模块的 miuix 主题：色板用 [colors]（已叠好 UiStyle），同时让 `MiuixTheme.isDynamicColor` 跟随 Monet 开关。
+ * 模块的 miuix 主题：色板用 [colors]，同时让 `MiuixTheme.isDynamicColor` 跟随 Monet 开关。
  *
  * `MiuixTheme(colors = …)` 不提供配色模式，`isDynamicColor` 恒为 false：Glass 底栏的选中色和指示器、
  * Switch 的滑块色在 Monet 下都不跟主色。配色模式的 CompositionLocal 是库内部的，只能经

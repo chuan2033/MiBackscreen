@@ -125,7 +125,7 @@ internal fun DetailPageScaffold(
                     .overScrollVertical()
                     .nestedScroll(scrollBehavior.nestedScrollConnection),
                 // 左右留白放进 contentPadding 而不是给列表本身加 padding：列表边界会裁掉卡片阴影，
-                // 留白在列表外时 Mochi 的卡片阴影左右两侧被切成一条竖直的灰边。
+                // 留白在列表外时卡片阴影左右两侧会被切成一条竖直的灰边。
                 contentPadding = PaddingValues(
                     start = 12.dp,
                     end = 12.dp,

@@ -26,7 +26,6 @@ import hook.HyperBackscreen.ui.components.DetailPageScaffold
 import hook.HyperBackscreen.ui.theme.LocalThemeState
 import hook.HyperBackscreen.ui.theme.BottomBarStyle
 import hook.HyperBackscreen.ui.theme.ThemeState
-import hook.HyperBackscreen.ui.theme.UiStyle
 import hook.HyperBackscreen.ui.theme.keyColorOptions
 import hook.HyperBackscreen.ui.theme.labelRes
 import hook.HyperBackscreen.ui.theme.supportsSpec2025
@@ -47,7 +46,6 @@ import kotlin.math.roundToInt
 /**
  * 主题页，移植自 KernelSU 管理器的「主题」页（ColorPaletteScreenMiuix），按本模块适配：
  * - 颜色部分与 KernelSU 一致：明暗三段 + Monet，Monet 下可选强调色，选了强调色再给色彩风格和色彩标准；
- * - 多了本模块的「界面风格」（默认 / Mochi）；
  * - 底栏相关沿用模块原来的四个开关，另加 KernelSU 的顶栏模糊、横滑返回、页面缩放。
  * 所有改动即时生效。
  */
@@ -80,7 +78,6 @@ internal fun ThemePage(
             )
         }
         item(key = "color") { ColorCard(state) }
-        item(key = "style") { StyleCard(state) }
         item(key = "bars") {
             BarsCard(
                 state = state,
@@ -165,28 +162,6 @@ private fun KeyColorSwatch(keyColor: Int) {
                 if (keyColor == 0) Modifier.border(2.dp, scheme.surfaceContainer, CircleShape) else Modifier
             )
     )
-}
-
-@Composable
-private fun StyleCard(state: ThemeState) {
-    // 风格卡紧跟在颜色卡下面，不再加小标题（标题和条目名都叫「界面风格」会重复）。
-    CardBlock(pressFeedbackType = PressFeedbackType.None) {
-        AppDropdownPreference(
-            items = listOf(
-                stringResource(R.string.config_ui_style_default),
-                stringResource(R.string.config_ui_style_mochi),
-            ),
-            selectedIndex = UiStyle.entries.indexOf(state.uiStyle),
-            title = stringResource(R.string.config_ui_style_title),
-            summary = stringResource(
-                when (state.uiStyle) {
-                    UiStyle.DEFAULT -> R.string.config_ui_style_default_summary
-                    UiStyle.MOCHI -> R.string.config_ui_style_mochi_summary
-                }
-            ),
-            onSelectedIndexChange = { index -> UiStyle.entries.getOrNull(index)?.let(state::updateUiStyle) },
-        )
-    }
 }
 
 @Composable

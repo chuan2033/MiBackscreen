@@ -15,12 +15,10 @@ import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.DialogButtonRow
 import hook.HyperBackscreen.ui.theme.LocalAppColors
 import hook.HyperBackscreen.ui.theme.AppMiuixTheme
-import hook.HyperBackscreen.ui.theme.LocalUiStyle
 import hook.HyperBackscreen.ui.theme.LocalThemeState
 import hook.HyperBackscreen.ui.theme.ThemeState
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
-import hook.HyperBackscreen.ui.theme.styledColorScheme
 import hook.HyperBackscreen.ui.theme.appColors
 import android.graphics.Color
 import android.content.Context
@@ -213,10 +211,9 @@ internal fun RearScreenApp() {
     var pendingUpdate by remember { mutableStateOf<UpdateInfo?>(null) }
     var downloadFailed by remember { mutableStateOf(false) }
     var disableRearScreenCover by remember { mutableStateOf(initialPrefs.disableRearScreenCover) }
-    // 主题相关设置（颜色模式、Monet 强调色、界面风格、页面缩放等）集中在 ThemeState，主题页直接读写它。
+    // 主题相关设置（颜色模式、Monet 强调色、页面缩放等）集中在 ThemeState，主题页直接读写它。
     val themeState = remember { ThemeState(context) }
     val themeMode = themeState.themeMode
-    val uiStyle = themeState.uiStyle
     var themeSettingsShortcut by remember { mutableStateOf(initialPrefs.themeSettingsShortcut) }
     var settingsEntry by remember { mutableStateOf(initialPrefs.settingsEntry) }
     var disableDoubleTapWake by remember { mutableStateOf(initialPrefs.disableDoubleTapWake) }
@@ -379,7 +376,7 @@ internal fun RearScreenApp() {
     }
 
     val baseColors = themeState.baseColors(isDark)
-    val appColors = styledColorScheme(baseColors, uiStyle, isDark, themeMode.usesDynamicColors)
+    val appColors = baseColors
 
     /**
      * 恢复配置只写了偏好；按「恢复前后有变化的键」补上与逐项切换时相同的副作用，
@@ -472,8 +469,8 @@ internal fun RearScreenApp() {
         }
     }
     AppMiuixTheme(colors = appColors, dynamicColor = themeMode.usesDynamicColors, isDark = isDark) {
-      val projectColors = remember(appColors, themeMode.usesDynamicColors, uiStyle) {
-          appColors(appColors, themeMode.usesDynamicColors, uiStyle)
+      val projectColors = remember(appColors, themeMode.usesDynamicColors) {
+          appColors(appColors, themeMode.usesDynamicColors)
       }
       // 页面缩放：和 KernelSU 一样直接缩放 Compose 的 density，字体缩放保持系统设置。
       val systemDensity = LocalDensity.current
@@ -483,7 +480,6 @@ internal fun RearScreenApp() {
       CompositionLocalProvider(
           LocalUiFeedback provides feedback,
           LocalAppColors provides projectColors,
-          LocalUiStyle provides uiStyle,
           LocalThemeState provides themeState,
           LocalDensity provides scaledDensity
       ) {

@@ -381,11 +381,6 @@
     <string name="rear_cast_note_running_only">只能移动已经在运行的应用，不能直接在背屏上启动应用；手机锁定时不会把应用投到背屏。</string>
     <string name="rear_cast_note_compat">部分应用在背屏上可能显示异常（比例、触控或黑屏），拉回主屏即可恢复。</string>
     <string name="rear_cast_note_timeout">背屏默认 10 秒无操作就息屏，可在这里调长。</string>
-    <string name="config_ui_style_title">界面风格</string>
-    <string name="config_ui_style_default">默认</string>
-    <string name="config_ui_style_mochi">Mochi</string>
-    <string name="config_ui_style_default_summary">miuix 原样</string>
-    <string name="config_ui_style_mochi_summary">软糯圆润：奶油配色、大圆角、柔和投影，按下会回弹</string>
     <string name="theme_title">主题</string>
     <string name="theme_monet_short">Monet</string>
     <string name="theme_monet_title">Monet 取色</string>

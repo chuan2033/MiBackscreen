@@ -27,8 +27,7 @@ import top.yukonga.miuix.kmp.theme.ThemePaletteStyle
  *
  * - 颜色：明暗三段（跟随系统 / 浅色 / 深色）+ Monet 开关；开 Monet 后可指定强调色（种子色），
  *   指定了强调色还能选色彩风格（TonalSpot、Vibrant…）和色彩标准（Material 2021 / 2025）。
- *   取色交给 miuix 的 [ThemeController]，和 KernelSU 走的是同一条路径；
- *   本模块自己的 [UiStyle]（默认 / Mochi）再叠在结果上。
+ *   取色交给 miuix 的 [ThemeController]，和 KernelSU 走的是同一条路径。
  * - 界面：顶栏模糊、页面缩放、全屏横滑返回。悬浮底栏 / 液态玻璃 / 底栏模糊 / 功能数量角标沿用模块原有的开关。
  * - 没有移植的：KernelSU 的「预测性返回」需要隐藏 API 豁免库，「分页手势模式」和本模块固定的跨轴分页手势冲突，
  *   「模块描述行数」是 KernelSU 自己的页面；AMOLED 纯黑在 Miuix 界面下 KernelSU 也没有提供。
@@ -40,8 +39,6 @@ internal class ThemeState(context: Context) {
     private val appContext = context.applicationContext
 
     var themeMode by mutableStateOf(ThemePrefs.getThemeMode(appContext))
-        private set
-    var uiStyle by mutableStateOf(ThemePrefs.getUiStyle(appContext))
         private set
     /** Monet 种子色（ARGB），0 = 跟随系统壁纸。只在 Monet 开着时生效。 */
     var keyColor by mutableIntStateOf(ThemePrefs.getKeyColor(appContext))
@@ -67,11 +64,6 @@ internal class ThemeState(context: Context) {
     fun updateBrightness(index: Int) = updateThemeMode(themeMode.withBrightness(index))
 
     fun updateMonet(enabled: Boolean) = updateThemeMode(themeMode.withMonet(enabled))
-
-    fun updateUiStyle(style: UiStyle) {
-        ThemePrefs.setUiStyle(appContext, style)
-        uiStyle = style
-    }
 
     fun updateKeyColor(color: Int) {
         ThemePrefs.setKeyColor(appContext, color)
@@ -104,7 +96,7 @@ internal class ThemeState(context: Context) {
     }
 
     /**
-     * 按当前设置算出 miuix 基础色板（还没叠 [UiStyle]）。
+     * 按当前设置算出 miuix 色板。
      * 非 Monet 时就是 miuix 默认的浅色 / 深色；Monet 且没指定强调色时取系统壁纸色；
      * 指定了强调色就按色彩风格和色彩标准从种子色生成。
      */

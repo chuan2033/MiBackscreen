@@ -1,5 +1,6 @@
 package hook.HyperBackscreen.ui.home
 
+import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.Crossfade
@@ -14,8 +15,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import hook.HyperBackscreen.ui.theme.currentAppColors
-import hook.HyperBackscreen.ui.theme.currentUiStyle
-import hook.HyperBackscreen.ui.theme.uiStyleCard
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -107,14 +106,12 @@ internal fun HomeStatusCard(
         label = "statusMark"
     )
 
-    val cardCorner = currentUiStyle.cardCorner
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 12.dp)
-            .uiStyleCard(cardCorner),
+            .padding(bottom = 12.dp),
         insideMargin = PaddingValues(),
-        cornerRadius = cardCorner,
+        cornerRadius = HomeUiTokens.CornerCard,
         colors = CardDefaults.defaultColors(
             color = containerColor,
             contentColor = contentColor
