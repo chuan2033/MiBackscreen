@@ -2,6 +2,14 @@ package hook.HyperBackscreen.ui.components
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,12 +33,12 @@ import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import top.yukonga.miuix.kmp.basic.ButtonColors
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.glass.GlassDialogButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
+import top.yukonga.miuix.kmp.glass.GlassDialogButtonDefaults
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -68,6 +76,7 @@ internal fun DetailPageScaffold(
 ) {
     val listState = rememberLazyListState()
     val scrollBehavior = rememberPageScrollBehavior(listState)
+    val isContentScrolled by rememberContentScrolled(scrollBehavior, listState)
     val surfaceColor = MiuixTheme.colorScheme.surface
     // 顶栏采样列表内容，顶栏本身处于采样范围之外。
     val backdrop = rememberLayerBackdrop {
@@ -75,14 +84,16 @@ internal fun DetailPageScaffold(
         drawContent()
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    val overlayHost = remember { OverlayHost() }
+    Box(modifier = modifier.fillMaxSize().onPlaced { overlayHost.coordinates = it }) {
+    CompositionLocalProvider(LocalOverlayHost provides overlayHost) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MiuixTheme.colorScheme.surface,
         topBar = {
             AppGlassTopAppBar(
                 title = title,
-                isContentScrolled = scrollBehavior.state.heightOffset < 0f || listState.canScrollBackward,
+                isContentScrolled = isContentScrolled,
                 backdrop = backdrop,
                 scrollBehavior = scrollBehavior,
                 navigationIcon = {
@@ -132,7 +143,37 @@ internal fun DetailPageScaffold(
         }
         }
     }
+    }
     CompositionLocalProvider(LocalPageBackdrop provides backdrop) { overlay() }
+    }
+}
+
+/** [DetailPageScaffold] 外层 Box 的布局坐标，也就是 `overlay` 槽所在的坐标系。 */
+internal class OverlayHost {
+    var coordinates: LayoutCoordinates? = null
+}
+
+internal val LocalOverlayHost = staticCompositionLocalOf<OverlayHost?> { null }
+
+/**
+ * 报告控件在 [DetailPageScaffold] `overlay` 坐标系里的边界，给 GlassPopup 的 anchorBounds 用。
+ *
+ * GlassPopup 要的是它所在 BoxScope 的坐标。boundsInRoot 只在页面静止、正好位于根原点时与之相等；
+ * 导航转场或侧滑返回时页面带着 graphicsLayer 变换，两者会差一个变换。
+ * 不在 DetailPageScaffold 里时退回 boundsInRoot。
+ */
+@Composable
+internal fun Modifier.onBoundsInOverlay(onBounds: (Rect) -> Unit): Modifier {
+    val host = LocalOverlayHost.current
+    return onGloballyPositioned { coordinates ->
+        val hostCoordinates = host?.coordinates
+        onBounds(
+            if (hostCoordinates != null && hostCoordinates.isAttached) {
+                hostCoordinates.localBoundingBoxOf(coordinates, clipBounds = false)
+            } else {
+                coordinates.boundsInRoot()
+            }
+        )
     }
 }
 
@@ -145,7 +186,7 @@ internal fun DialogButtonRow(
     secondaryText: String? = null,
     onSecondary: () -> Unit = {},
     primaryEnabled: Boolean = true,
-    primaryColors: ButtonColors = ButtonDefaults.buttonColorsPrimary(),
+    primaryColors: ButtonColors = GlassDialogButtonDefaults.buttonColors(GlassDialogButtonRole.Primary),
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),

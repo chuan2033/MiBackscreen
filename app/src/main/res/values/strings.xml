@@ -97,6 +97,7 @@
     <!-- Navigation -->
     <string name="nav_home">Home</string>
     <string name="nav_function">Functions</string>
+    <string name="nav_label_with_count">%1$s, %2$s</string>
     <string name="nav_about">About</string>
     <string name="settings_title">Settings</string>
 
@@ -254,7 +255,7 @@
     <string name="config_restore_confirm_title">Restore settings?</string>
     <string name="config_restore_confirm_summary">Backed up %1$s, %2$d items (module version %3$s). Restoring overwrites your current settings.</string>
     <string name="config_restore_confirm_action">Restore</string>
-    <string name="config_bottom_bar_blur_summary_glass">On: liquid glass refraction. Off: solid background</string>
+    <string name="config_bottom_bar_blur_summary_glass">On: glass refraction. Off: solid background</string>
     <string name="about_module_title">Module</string>
     <string name="scope_state_stale_system">Old version, reboot phone</string>
     <string name="common_undo">Undo</string>

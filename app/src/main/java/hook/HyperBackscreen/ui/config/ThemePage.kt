@@ -224,10 +224,13 @@ private fun BarsCard(
             checked = bottomBarBlur,
             onCheckedChange = onBottomBarBlurChange,
             title = stringResource(R.string.config_bottom_bar_blur_title),
-            // 液态玻璃底栏里这个开关管的是玻璃折射本身，关掉就是纯色底，摘要要说清楚。
+            // 液态玻璃和 Glass 底栏里这个开关管的是玻璃折射本身，关掉就是纯色底，摘要要说清楚。
             summary = stringResource(
-                if (bottomBarStyle == BottomBarStyle.LIQUID) R.string.config_bottom_bar_blur_summary_glass
-                else R.string.config_bottom_bar_blur_summary
+                if (bottomBarStyle == BottomBarStyle.LIQUID || bottomBarStyle == BottomBarStyle.GLASS) {
+                    R.string.config_bottom_bar_blur_summary_glass
+                } else {
+                    R.string.config_bottom_bar_blur_summary
+                }
             ),
         )
         SwitchPreference(

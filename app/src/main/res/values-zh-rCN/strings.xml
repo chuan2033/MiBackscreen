@@ -96,6 +96,7 @@
     <!-- Navigation -->
     <string name="nav_home">主页</string>
     <string name="nav_function">功能</string>
+    <string name="nav_label_with_count">%1$s，%2$s</string>
     <string name="nav_about">关于</string>
     <string name="settings_title">设置</string>
 
