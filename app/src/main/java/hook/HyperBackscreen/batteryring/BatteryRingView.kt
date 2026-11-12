@@ -21,6 +21,8 @@ internal class BatteryRingView(
     context: Context,
     private val geometry: BatteryRingGeometry.Profile,
     private val overrides: BatteryColorOverrides,
+    /** 百分比数字的覆盖色；某状态没设时跟随电量环当前颜色。 */
+    private val percentOverrides: BatteryColorOverrides,
     private val percentPosition: BatteryPercentPosition,
     private val layout: BatteryRingLayout,
 ) : View(context) {
@@ -210,7 +212,7 @@ internal class BatteryRingView(
             layout.percentOffsetXPercent,
             layout.percentOffsetYPercent,
         )?.let { anchor ->
-            textPaint.color = color
+            textPaint.color = percentOverrides.resolve(current, color)
             val metrics = textPaint.fontMetrics
             val baseline = anchor.y - (metrics.ascent + metrics.descent) / 2f
             canvas.drawText("${current.percent}%", anchor.x, baseline, textPaint)

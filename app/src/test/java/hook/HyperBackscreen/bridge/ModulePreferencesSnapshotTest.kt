@@ -172,6 +172,21 @@ class ModulePreferencesSnapshotTest {
         }
     }
 
+    @Test fun batteryPercentColorIsObservedIndependentlyOfRingColor() {
+        val cache = Cache()
+        var snapshot = ModulePreferencesSnapshot.read(cache.preferences)
+        assertEquals(PrefsBridge.DEFAULT_BATTERY_COLOR, snapshot.batteryPercentColorLow)
+        val before = snapshot
+        ModulePreferencesSnapshot.observe(cache.preferences, Runnable {
+            snapshot = ModulePreferencesSnapshot.read(cache.preferences)
+        }).use {
+            cache.put(PrefsBridge.PENDING_UI_PREFIX + Constants.KEY_BATTERY_PERCENT_COLOR_LOW, "#FFFFFFFF")
+            assertEquals("#FFFFFFFF", snapshot.batteryPercentColorLow)
+            assertEquals(PrefsBridge.DEFAULT_BATTERY_COLOR, snapshot.batteryColorLow)
+            assertEquals(before, snapshot.copy(batteryPercentColorLow = PrefsBridge.DEFAULT_BATTERY_COLOR))
+        }
+    }
+
     @Test fun batteryPercentPositionIsObservedIndependently() {
         val cache = Cache()
         var snapshot = ModulePreferencesSnapshot.read(cache.preferences)

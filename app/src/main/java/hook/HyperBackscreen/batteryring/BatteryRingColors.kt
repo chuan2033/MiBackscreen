@@ -1,9 +1,10 @@
 package hook.HyperBackscreen.batteryring
 
 /**
- * 背屏电量显示颜色的用户覆盖值。
+ * 背屏电量显示某一部分（电量环或百分比数字）的三态颜色覆盖值。
  *
- * 空字符串表示跟随系统（SystemUI 电池资源色），这是默认状态；只有用户显式改过才覆盖。
+ * 空字符串表示「不覆盖」，这是默认状态，只有用户显式改过才生效：
+ * 电量环不覆盖时跟随系统（SystemUI 电池资源色），百分比数字不覆盖时跟随电量环。
  * 格式为 `#RRGGBB` 或 `#AARRGGBB`，无法解析时按未设置处理。
  */
 internal data class BatteryColorOverrides(
@@ -17,6 +18,9 @@ internal data class BatteryColorOverrides(
         state.isLow -> parseBatteryColor(low)
         else -> parseBatteryColor(idle)
     }
+
+    /** 该状态的覆盖色，没覆盖就用 [inherited]（数字跟随电量环时传环的实际颜色）。 */
+    fun resolve(state: BatteryRingState, inherited: Int): Int = overrideFor(state) ?: inherited
 
     /** 该状态对应的原始覆盖值，供设置页回显。 */
     fun rawFor(state: BatteryRingState): String = when {

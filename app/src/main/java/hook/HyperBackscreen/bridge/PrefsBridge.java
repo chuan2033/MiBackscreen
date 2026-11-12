@@ -214,6 +214,9 @@ public final class PrefsBridge {
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_COLOR_IDLE, DEFAULT_BATTERY_COLOR);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_COLOR_CHARGING, DEFAULT_BATTERY_COLOR);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_COLOR_LOW, DEFAULT_BATTERY_COLOR);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_COLOR_IDLE, DEFAULT_BATTERY_COLOR);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_COLOR_CHARGING, DEFAULT_BATTERY_COLOR);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_COLOR_LOW, DEFAULT_BATTERY_COLOR);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_POSITION, DEFAULT_BATTERY_PERCENT_POSITION);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_OFFSET_X_LEFT, DEFAULT_BATTERY_PERCENT_OFFSET_X);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_OFFSET_X_RIGHT, DEFAULT_BATTERY_PERCENT_OFFSET_X);
@@ -549,7 +552,10 @@ public final class PrefsBridge {
         return readForHook(module, Constants.KEY_ENABLE_BATTERY_RING, DEFAULT_ENABLE_BATTERY_RING);
     }
 
-    /** 电量颜色覆盖（UI 侧）：空字符串表示跟随系统。 */
+    /**
+     * 电量颜色覆盖（UI 侧）。电量环三个键空字符串表示跟随系统；
+     * 百分比数字三个键（{@code battery_percent_color_*}）空字符串表示跟随电量环。
+     */
     @NonNull
     public static String readBatteryColorForUi(@NonNull Context context, @NonNull String key) {
         return readStringForUi(context, key, DEFAULT_BATTERY_COLOR);
@@ -586,7 +592,7 @@ public final class PrefsBridge {
         writeStringFromUi(context, key, value);
     }
 
-    /** 电量颜色覆盖（Hook 侧）：空字符串表示跟随系统。 */
+    /** 电量颜色覆盖（Hook 侧）：环的键空串跟随系统，数字的键空串跟随电量环。 */
     @NonNull
     public static String readBatteryColor(@NonNull XposedModule module, @NonNull String key) {
         return readStringForHook(module, key, DEFAULT_BATTERY_COLOR);
@@ -925,6 +931,9 @@ public final class PrefsBridge {
             case Constants.KEY_BATTERY_COLOR_IDLE:
             case Constants.KEY_BATTERY_COLOR_CHARGING:
             case Constants.KEY_BATTERY_COLOR_LOW:
+            case Constants.KEY_BATTERY_PERCENT_COLOR_IDLE:
+            case Constants.KEY_BATTERY_PERCENT_COLOR_CHARGING:
+            case Constants.KEY_BATTERY_PERCENT_COLOR_LOW:
                 return value.isEmpty() || value.matches("#?([0-9a-fA-F]{6}|[0-9a-fA-F]{8})") ? value : null;
             case Constants.KEY_BATTERY_PERCENT_POSITION:
                 return value.equals("off") || value.equals("left") || value.equals("right") ? value : null;
@@ -1726,6 +1735,9 @@ public final class PrefsBridge {
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_IDLE);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_CHARGING);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_COLOR_LOW);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_COLOR_IDLE);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_COLOR_CHARGING);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_COLOR_LOW);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_POSITION);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_OFFSET_X);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_OFFSET_X_LEFT);
@@ -1827,6 +1839,21 @@ public final class PrefsBridge {
                     localPrefs,
                     remotePrefs,
                     Constants.KEY_BATTERY_COLOR_LOW,
+                    DEFAULT_BATTERY_COLOR);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_PERCENT_COLOR_IDLE,
+                    DEFAULT_BATTERY_COLOR);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_PERCENT_COLOR_CHARGING,
+                    DEFAULT_BATTERY_COLOR);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_PERCENT_COLOR_LOW,
                     DEFAULT_BATTERY_COLOR);
             syncStringKey(
                     localPrefs,

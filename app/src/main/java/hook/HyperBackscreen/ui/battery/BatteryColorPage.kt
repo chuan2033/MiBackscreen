@@ -1,6 +1,7 @@
 package hook.HyperBackscreen.ui.battery
 
 import hook.HyperBackscreen.ui.components.AppDialog
+import hook.HyperBackscreen.batteryring.BatteryColorOverrides
 import hook.HyperBackscreen.batteryring.BatteryPercentPosition
 import hook.HyperBackscreen.batteryring.BatteryRingGeometry
 import hook.HyperBackscreen.batteryring.BatteryRingLayout
@@ -148,12 +149,13 @@ private const val WallpaperPollIntervalMillis = 1500L
 internal fun BatteryColorPage(
     enableBatteryRing: Boolean,
     onEnableBatteryRingChange: (Boolean) -> Unit,
-    idleColor: String,
-    chargingColor: String,
-    lowColor: String,
+    /** 电量环三态颜色，空串 = 跟随系统。 */
+    ringColors: BatteryColorOverrides,
+    /** 百分比数字三态颜色，空串 = 跟随电量环。 */
+    percentColors: BatteryColorOverrides,
     percentPosition: BatteryPercentPosition,
     layout: BatteryRingLayout,
-    onColorChange: (BatteryColorSlot, String) -> Unit,
+    onColorChange: (BatteryColorTarget, BatteryColorSlot, String) -> Unit,
     onPercentPositionChange: (BatteryPercentPosition) -> Unit,
     onLayoutCommit: (BatteryRingLayout) -> Unit,
     onBack: () -> Unit
@@ -220,11 +222,10 @@ internal fun BatteryColorPage(
         }
     }
 
-    fun rawFor(slot: BatteryColorSlot): String = when (slot) {
-        BatteryColorSlot.IDLE -> idleColor
-        BatteryColorSlot.CHARGING -> chargingColor
-        BatteryColorSlot.LOW -> lowColor
-    }
+    // 正在给谁上色：电量环或百分比数字。只是编辑焦点，不写偏好；状态（未充电 / 充电中 / 低电量）两者共用。
+    var colorTarget by rememberSaveable { mutableStateOf(BatteryColorTarget.RING) }
+    val ringColor = resolveSlotColor(selected, ringColors.rawFor(selected))
+    val percentColor = resolvePercentColor(percentColors.rawFor(selected), ringColor)
 
     DetailPageScaffold(
         title = stringResource(R.string.function_battery_color_title),
@@ -236,7 +237,8 @@ internal fun BatteryColorPage(
                     geometry = geometry,
                     percent = previewPercent,
                     charging = previewCharging,
-                    color = resolveSlotColor(selected, rawFor(selected)),
+                    color = ringColor,
+                    percentColor = percentColor,
                     percentPosition = percentPosition,
                     layout = draft,
                     wallpaper = wallpaper,
@@ -407,6 +409,22 @@ internal fun BatteryColorPage(
                 CollapsibleFunctionGroup(
                     title = stringResource(R.string.battery_color_custom_title)
                 ) {
+                    // 先选给谁上色（环 / 数字），再选哪个状态：两排分段条同一种样式，从上往下读。
+                    AppGlassTabRow(
+                        tabs = BatteryColorTarget.entries.map { stringResource(it.labelRes) },
+                        selectedIndex = colorTarget.ordinal,
+                        onSelect = { index ->
+                            BatteryColorTarget.entries.getOrNull(index)?.let { colorTarget = it }
+                        },
+                        backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
+                        segmented = true,
+                        modifier = Modifier.fillMaxWidth().padding(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = BatteryColorTabRowVerticalMargin,
+                            bottom = BatteryColorTabRowVerticalMargin
+                        )
+                    )
                     AppGlassTabRow(
                         tabs = BatteryColorSlot.entries.map { stringResource(it.labelRes) },
                         selectedIndex = selected.ordinal,
@@ -435,11 +453,27 @@ internal fun BatteryColorPage(
                         },
                         showReset = false
                     )
-                    BatteryColorEditor(
-                        slot = selected,
-                        raw = rawFor(selected),
-                        onColorChange = { value -> onColorChange(selected, value) }
-                    )
+                    when (colorTarget) {
+                        BatteryColorTarget.RING -> BatteryColorEditor(
+                            editKey = colorTarget to selected,
+                            color = ringColor,
+                            resetLabel = stringResource(R.string.battery_color_reset_system),
+                            resetValue = "",
+                            resetArgb = resolveSlotColor(selected, "").toArgb(),
+                            onColorChange = { value ->
+                                onColorChange(BatteryColorTarget.RING, selected, value)
+                            }
+                        )
+                        BatteryColorTarget.PERCENT -> BatteryPercentColorSection(
+                            slot = selected,
+                            raw = percentColors.rawFor(selected),
+                            color = percentColor,
+                            percentShown = percentPosition != BatteryPercentPosition.OFF,
+                            onColorChange = { value ->
+                                onColorChange(BatteryColorTarget.PERCENT, selected, value)
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -732,6 +766,55 @@ private fun resolveSlotColor(slot: BatteryColorSlot, raw: String): Color {
     return Color(parseBatteryColor(raw) ?: systemColor)
 }
 
+/** 数字自己的覆盖色优先；为空或非法时跟随电量环当前颜色（与背屏绘制端同一判据）。 */
+private fun resolvePercentColor(raw: String, ringColor: Color): Color =
+    parseBatteryColor(raw)?.let(::Color) ?: ringColor
+
+/**
+ * 「电量数字」的颜色区：「跟随电量环」开关在最上，关掉后才展开色盘。
+ *
+ * 默认跟随，老用户升级后观感不变；关掉时先换成白色 —— 用户反馈里最常见的问题就是
+ * 绿 / 红数字被壁纸吃掉，白色是开箱即用的高对比选择，再想换色直接拖色盘。
+ */
+@Composable
+private fun ColumnScope.BatteryPercentColorSection(
+    slot: BatteryColorSlot,
+    raw: String,
+    color: Color,
+    percentShown: Boolean,
+    onColorChange: (String) -> Unit
+) {
+    val follow = parseBatteryColor(raw) == null
+    if (!percentShown) {
+        Text(
+            text = stringResource(R.string.battery_percent_color_hidden_hint),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+        )
+    }
+    SwitchPreference(
+        checked = follow,
+        onCheckedChange = { checked ->
+            onColorChange(if (checked) "" else BatteryPercentContrastColor)
+        },
+        title = stringResource(R.string.battery_percent_color_follow_ring_title),
+        summary = stringResource(R.string.battery_percent_color_follow_ring_summary)
+    )
+    AnimatedVisibility(visible = !follow) {
+        Column {
+            BatteryColorEditor(
+                editKey = BatteryColorTarget.PERCENT to slot,
+                color = color,
+                resetLabel = stringResource(R.string.battery_percent_color_reset_white),
+                resetValue = BatteryPercentContrastColor,
+                resetArgb = parseBatteryColor(BatteryPercentContrastColor) ?: 0xFFFFFFFF.toInt(),
+                onColorChange = onColorChange
+            )
+        }
+    }
+}
+
 /** 按真实背屏几何绘制预览：面板、摄像头模组、镜头、电量进度线。 */
 @Composable
 private fun BatteryRearScreenPreview(
@@ -739,6 +822,8 @@ private fun BatteryRearScreenPreview(
     percent: Int,
     charging: Boolean,
     color: Color,
+    /** 百分比数字的颜色；跟随电量环时就是 [color]。 */
+    percentColor: Color,
     percentPosition: BatteryPercentPosition,
     layout: BatteryRingLayout,
     wallpaper: ImageBitmap?,
@@ -902,7 +987,7 @@ private fun BatteryRearScreenPreview(
                 layout.percentOffsetXPercent,
                 layout.percentOffsetYPercent
             )?.let { anchor ->
-                percentPaint.color = color.toArgb()
+                percentPaint.color = percentColor.toArgb()
                 percentPaint.textSize = layout.percentTextSize.toFloat()
                 percentPaint.typeface = percentTypeface
                 val metrics = percentPaint.fontMetrics
@@ -920,16 +1005,25 @@ private fun BatteryRearScreenPreview(
     }
 }
 
-/** 颜色编辑区：色盘、HEX 输入与恢复系统默认，内容直接排进外层卡片容器。 */
+/**
+ * 颜色编辑区：色盘、HEX 输入与一个「复位」按钮，内容直接排进外层卡片容器。
+ *
+ * 环和数字共用：环的复位是「恢复系统默认」（存空串），数字的复位是「高对比白色」。
+ * [editKey] 换了（切部分或切状态）就重置 HEX 草稿，避免上一格的输入串到下一格。
+ */
 @Composable
 private fun ColumnScope.BatteryColorEditor(
-    slot: BatteryColorSlot,
-    raw: String,
+    editKey: Any,
+    color: Color,
+    resetLabel: String,
+    /** 点复位时写入偏好的值。 */
+    resetValue: String,
+    /** 点复位后 HEX 框回显的颜色。 */
+    resetArgb: Int,
     onColorChange: (String) -> Unit
 ) {
-    val initial = resolveSlotColor(slot, raw)
-    val systemArgb = resolveSlotColor(slot, "").toArgb()
-    var hexText by remember(slot) { mutableStateOf(formatBatteryColor(initial.toArgb())) }
+    val initial = color
+    var hexText by remember(editKey) { mutableStateOf(formatBatteryColor(initial.toArgb())) }
 
     fun fillInputs(argb: Int) {
         hexText = formatBatteryColor(argb)
@@ -995,10 +1089,10 @@ private fun ColumnScope.BatteryColorEditor(
             }
         )
         TextButton(
-            text = stringResource(R.string.battery_color_reset_system),
+            text = resetLabel,
             onClick = {
-                fillInputs(systemArgb)
-                onColorChange("")
+                fillInputs(resetArgb)
+                onColorChange(resetValue)
             },
             modifier = Modifier
                 .weight(1f)

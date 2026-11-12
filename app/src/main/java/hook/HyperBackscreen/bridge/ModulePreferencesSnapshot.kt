@@ -21,6 +21,10 @@ internal data class ModulePreferencesSnapshot(
     val batteryColorIdle: String = "",
     val batteryColorCharging: String = "",
     val batteryColorLow: String = "",
+    /** 百分比数字的三态颜色；空串 = 跟随电量环。 */
+    val batteryPercentColorIdle: String = "",
+    val batteryPercentColorCharging: String = "",
+    val batteryPercentColorLow: String = "",
     val batteryPercentPosition: String = PrefsBridge.DEFAULT_BATTERY_PERCENT_POSITION,
     val batteryPercentOffsetX: String = PrefsBridge.DEFAULT_BATTERY_PERCENT_OFFSET_X,
     val batteryPercentOffsetXLeft: String = PrefsBridge.DEFAULT_BATTERY_PERCENT_OFFSET_X,
@@ -72,6 +76,9 @@ internal data class ModulePreferencesSnapshot(
             Constants.KEY_BATTERY_COLOR_IDLE,
             Constants.KEY_BATTERY_COLOR_CHARGING,
             Constants.KEY_BATTERY_COLOR_LOW,
+            Constants.KEY_BATTERY_PERCENT_COLOR_IDLE,
+            Constants.KEY_BATTERY_PERCENT_COLOR_CHARGING,
+            Constants.KEY_BATTERY_PERCENT_COLOR_LOW,
             Constants.KEY_BATTERY_PERCENT_POSITION,
             Constants.KEY_BATTERY_PERCENT_OFFSET_X,
             Constants.KEY_BATTERY_PERCENT_OFFSET_X_LEFT,
@@ -134,6 +141,12 @@ internal data class ModulePreferencesSnapshot(
                 batteryColorCharging = value(Constants.KEY_BATTERY_COLOR_CHARGING) as? String
                     ?: PrefsBridge.DEFAULT_BATTERY_COLOR,
                 batteryColorLow = value(Constants.KEY_BATTERY_COLOR_LOW) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_COLOR,
+                batteryPercentColorIdle = value(Constants.KEY_BATTERY_PERCENT_COLOR_IDLE) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_COLOR,
+                batteryPercentColorCharging = value(Constants.KEY_BATTERY_PERCENT_COLOR_CHARGING) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_COLOR,
+                batteryPercentColorLow = value(Constants.KEY_BATTERY_PERCENT_COLOR_LOW) as? String
                     ?: PrefsBridge.DEFAULT_BATTERY_COLOR,
                 batteryPercentPosition = value(Constants.KEY_BATTERY_PERCENT_POSITION) as? String
                     ?: PrefsBridge.DEFAULT_BATTERY_PERCENT_POSITION,

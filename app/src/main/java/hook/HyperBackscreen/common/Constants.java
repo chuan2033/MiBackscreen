@@ -18,6 +18,10 @@ public final class Constants {
     public static final String KEY_BATTERY_COLOR_IDLE = "battery_color_idle";
     public static final String KEY_BATTERY_COLOR_CHARGING = "battery_color_charging";
     public static final String KEY_BATTERY_COLOR_LOW = "battery_color_low";
+    // 百分比数字的颜色覆盖，同样按三个状态分开；空字符串表示跟随电量环（该状态下环的实际颜色）。
+    public static final String KEY_BATTERY_PERCENT_COLOR_IDLE = "battery_percent_color_idle";
+    public static final String KEY_BATTERY_PERCENT_COLOR_CHARGING = "battery_percent_color_charging";
+    public static final String KEY_BATTERY_PERCENT_COLOR_LOW = "battery_percent_color_low";
     public static final String KEY_BATTERY_PERCENT_POSITION = "battery_percent_position";
     // 背屏电量显示的位置 / 尺寸微调，整数百分比的字符串形式；解析失败回默认值。
     // 数字偏移以摄像头模组宽（X）/ 高（Y）为基准，线条缩放 100 表示严格贴模组轮廓。
