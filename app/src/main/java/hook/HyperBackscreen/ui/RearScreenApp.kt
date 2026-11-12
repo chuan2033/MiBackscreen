@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.DialogButtonRow
 import hook.HyperBackscreen.ui.theme.LocalAppColors
+import hook.HyperBackscreen.ui.theme.AppMiuixTheme
 import hook.HyperBackscreen.ui.theme.LocalUiStyle
 import hook.HyperBackscreen.ui.theme.LocalThemeState
 import hook.HyperBackscreen.ui.theme.ThemeState
@@ -468,7 +469,7 @@ internal fun RearScreenApp() {
             applyRestoreSideEffects(before, after)
         }
     }
-    MiuixTheme(colors = appColors) {
+    AppMiuixTheme(colors = appColors, dynamicColor = themeMode.usesDynamicColors, isDark = isDark) {
       val projectColors = remember(appColors, themeMode.usesDynamicColors, uiStyle) {
           appColors(appColors, themeMode.usesDynamicColors, uiStyle)
       }

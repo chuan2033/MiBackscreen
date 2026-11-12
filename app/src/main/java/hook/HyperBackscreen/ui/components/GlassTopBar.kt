@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -66,6 +67,18 @@ internal fun rememberPageScrollBehavior(listState: LazyListState? = null): Scrol
     }
     return behavior
 }
+
+/**
+ * 顶栏的「内容已滑到顶栏下面」状态：顶栏折起来了，或列表本身离开了顶部。
+ *
+ * 用 derivedStateOf 包住，只在布尔值翻转时触发重组。直接在组合里读 heightOffset 的话，
+ * 顶栏折叠 / 展开的每一帧都会让整个顶栏（连同并进去的标签栏、搜索框）重组。
+ */
+@Composable
+internal fun rememberContentScrolled(scrollBehavior: ScrollBehavior, listState: LazyListState): State<Boolean> =
+    remember(scrollBehavior, listState) {
+        derivedStateOf { scrollBehavior.state.heightOffset < 0f || listState.canScrollBackward }
+    }
 
 /**
  * 顶栏下方固定区域（标签栏、搜索框）的玻璃采样源，只在 [AppGlassTopAppBar] 的 bottomContent 里有值。
@@ -127,11 +140,15 @@ internal fun AppGlassTopAppBar(
         },
         bottomContent = {
             if (bottomContent != null) {
-                CompositionLocalProvider(
-                    LocalTopBarGlass provides TopBarGlass(
+                // 同一个实例：staticCompositionLocalOf 换值会让整棵 bottomContent 重组。
+                val topBarGlass = remember(barBackdrop, supported, materialAlpha) {
+                    TopBarGlass(
                         backdrop = barBackdrop.takeIf { supported },
                         materialAlpha = materialAlpha,
-                    ),
+                    )
+                }
+                CompositionLocalProvider(
+                    LocalTopBarGlass provides topBarGlass,
                     content = bottomContent,
                 )
             }

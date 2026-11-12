@@ -3,6 +3,7 @@ package hook.HyperBackscreen.ui.config
 import top.yukonga.miuix.kmp.basic.Icon
 import hook.HyperBackscreen.ui.components.TopBarIconButton
 import hook.HyperBackscreen.ui.components.TopBarSearchField
+import hook.HyperBackscreen.ui.components.onBoundsInOverlay
 import top.yukonga.miuix.kmp.glass.GlassPopup
 import top.yukonga.miuix.kmp.glass.GlassPopupItem
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -37,8 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -156,7 +155,7 @@ internal fun AppPickerPage(
         actions = {
             TopBarIconButton(
                 onClick = { showFilterMenu = true },
-                modifier = Modifier.onGloballyPositioned { filterAnchorBounds = it.boundsInRoot() },
+                modifier = Modifier.onBoundsInOverlay { filterAnchorBounds = it },
             ) {
                 Icon(
                     imageVector = MiuixIcons.Glass.More,

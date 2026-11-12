@@ -3,7 +3,6 @@ package hook.HyperBackscreen.ui.about
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.DialogButtonRow
-import hook.HyperBackscreen.ui.components.currentGlassBackdrop
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.mutableStateOf
@@ -35,7 +34,7 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.glass.GlassIconButton
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.glass.Close
@@ -71,11 +70,12 @@ internal fun LogExportPopup(
                     modifier = Modifier.weight(1f).semantics { heading() },
                 )
                 val exporting = state is LogExportState.Running
-                // 关闭按钮保持 48dp 点击区域，图标使用 20dp 尺寸。
-                GlassIconButton(
+                // 关闭按钮保持 48dp 点击区域，图标使用 20dp 尺寸。不用玻璃圆钮：它会采样面板下面的页面，
+                // 在玻璃面板上看起来像挖了个洞。
+                IconButton(
                     onClick = { if (exporting) onCancel() else onDismiss() },
-                    backdrop = currentGlassBackdrop,
-                    size = 48.dp,
+                    minWidth = 48.dp,
+                    minHeight = 48.dp,
                     modifier = Modifier.offset(x = 12.dp),
                 ) {
                     Icon(
