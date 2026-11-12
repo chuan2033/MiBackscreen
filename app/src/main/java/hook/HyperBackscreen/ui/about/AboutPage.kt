@@ -1,7 +1,6 @@
 package hook.HyperBackscreen.ui.about
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -68,11 +67,10 @@ internal fun AboutPage(
         TEAM.forEach { member ->
             AboutArrowPreference(
                 title = member.name,
-                summary = stringResource(R.string.about_member_qq, member.qq),
+                summary = member.role,
                 startAction = {
                     AboutAvatar(url = member.avatarUrl, fallback = MiuixIcons.Contacts)
                 },
-                endActions = { RoleBadge(member.role) },
                 onClick = { openQq(member.chatUri, member.qq) }
             )
         }
@@ -188,19 +186,4 @@ private fun AboutHeader(onVersionClick: () -> Unit) {
             style = MiuixTheme.textStyles.body2
         )
     }
-}
-
-/** 成员角色：箭头左边的蓝色描边胶囊。 */
-@Composable
-private fun RoleBadge(role: String) {
-    val color = MiuixTheme.colorScheme.primary
-    Text(
-        text = role,
-        modifier = Modifier
-            .padding(end = 8.dp)
-            .border(1.dp, color, RoundedCornerShape(50))
-            .padding(horizontal = 10.dp, vertical = 2.dp),
-        color = color,
-        style = MiuixTheme.textStyles.footnote1,
-    )
 }
