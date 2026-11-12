@@ -27,10 +27,11 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.WindowInsets
 import hook.HyperBackscreen.ui.theme.BottomBarMetrics
 import hook.HyperBackscreen.ui.theme.BottomBarStyle
-import hook.HyperBackscreen.ui.theme.currentTopBarBlur
 import hook.HyperBackscreen.ui.components.DialogButtonRow
 import hook.HyperBackscreen.ui.components.DetailPageScaffold
-import hook.HyperBackscreen.ui.components.BlurredBar
+import hook.HyperBackscreen.ui.components.AppGlassTopAppBar
+import hook.HyperBackscreen.ui.components.TopBarIconButton
+import hook.HyperBackscreen.ui.components.rememberPageScrollBehavior
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import android.os.Build
 import androidx.compose.foundation.layout.Box
@@ -105,28 +106,23 @@ import hook.HyperBackscreen.ui.function.RearScreenTimingPage
 import hook.HyperBackscreen.ui.home.HomePage
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
 import top.yukonga.miuix.kmp.glass.GlassNavigationBar
 import top.yukonga.miuix.kmp.glass.GlassNavigationItem
-import top.yukonga.miuix.kmp.glass.GlassIconButton
-import top.yukonga.miuix.kmp.glass.GlassTopAppBar
-import top.yukonga.miuix.kmp.material.GlassShadows
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurDefaults
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.glass.Refresh
+import top.yukonga.miuix.kmp.icon.glass.Settings
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Info
-import top.yukonga.miuix.kmp.icon.extended.Refresh
-import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.NavDisplayEffects
@@ -695,7 +691,7 @@ private fun MainTabPage(
     rearMedia: RearMediaSwitches,
     onRearMediaChange: (RearMediaSwitch, Boolean) -> Unit,
 ) {
-    val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = rememberPageScrollBehavior(listState)
     val surfaceColor = MiuixTheme.colorScheme.surface
     // Each retained pager page must own its capture layer and coordinates. Sharing one
     // lets off-screen pages overwrite the current page's backdrop during navigation.
@@ -710,18 +706,14 @@ private fun MainTabPage(
         topBar = {
             val tabLabelRes = navItems.first { it.tab == tab }.labelRes
             val isContentScrolled = scrollBehavior.state.heightOffset < 0f || listState.canScrollBackward
-            BlurredBar(backdrop) {
-            GlassTopAppBar(
+            AppGlassTopAppBar(
                 title = stringResource(tabLabelRes),
-                largeTitle = stringResource(tabLabelRes),
                 isContentScrolled = isContentScrolled,
-                backdrop = backdrop.takeIf { currentTopBarBlur },
-                backgroundAlpha = { 0f },
-                buttonShadow = GlassShadows.Regular.takeIf { isContentScrolled },
+                backdrop = backdrop,
                 scrollBehavior = scrollBehavior,
                 actions = {
                     val topAction = HomeNavigationPolicy.topActionFor(tab)
-                    GlassIconButton(
+                    TopBarIconButton(
                         onClick = {
                             when (topAction) {
                                 HomeNavigationPolicy.TopAction.RESTART -> onRestartClick()
@@ -731,8 +723,8 @@ private fun MainTabPage(
                     ) {
                         Icon(
                             imageVector = when (topAction) {
-                                HomeNavigationPolicy.TopAction.RESTART -> MiuixIcons.Refresh
-                                HomeNavigationPolicy.TopAction.SETTINGS -> MiuixIcons.Settings
+                                HomeNavigationPolicy.TopAction.RESTART -> MiuixIcons.Glass.Refresh
+                                HomeNavigationPolicy.TopAction.SETTINGS -> MiuixIcons.Glass.Settings
                             },
                             contentDescription = stringResource(when (topAction) {
                                 HomeNavigationPolicy.TopAction.RESTART -> R.string.restart_scope
@@ -743,7 +735,6 @@ private fun MainTabPage(
                     }
                 },
             )
-            }
         }
     ) { innerPadding ->
         CompositionLocalProvider(LocalPageBackdrop provides backdrop) {

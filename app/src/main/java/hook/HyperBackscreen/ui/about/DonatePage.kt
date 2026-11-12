@@ -3,7 +3,7 @@ package hook.HyperBackscreen.ui.about
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.DetailPageScaffold
-import hook.HyperBackscreen.ui.components.AppGlassTabRow
+import hook.HyperBackscreen.ui.components.TopBarTabs
 import hook.HyperBackscreen.ui.theme.currentAppColors
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import top.yukonga.miuix.kmp.basic.Button
@@ -85,22 +85,18 @@ internal fun DonatePage(onBack: () -> Unit) {
     DetailPageScaffold(
         title = stringResource(R.string.about_donate_title),
         onBack = onBack,
-    ) {
-        item {
-            AppGlassTabRow(
+        // 微信 / 支付宝切换的是整页内容：标签栏并进顶栏玻璃里，二维码卡片从它下面滑过。
+        topBarBottom = {
+            TopBarTabs(
                 tabs = tabs,
                 selectedIndex = selectedIndex,
                 onSelect = {
                     selectedIndex = it
                     saveMessage = null
                 },
-                backgroundColor = MiuixTheme.colorScheme.surface,
-                modifier = Modifier.fillMaxWidth(),
             )
-        }
-        item {
-            Spacer(Modifier.height(16.dp))
-        }
+        },
+    ) {
         item {
             DonationCard(
                 topColor = cardTop,
