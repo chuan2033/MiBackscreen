@@ -120,6 +120,12 @@ internal fun FunctionPage(
                     summary = rearWidgetsEntrySummary(),
                     onClick = onRearWidgetsClick
                 )
+                // 背屏录屏是模块 App 自己用 root 完成的，不靠背屏中心的 Hook，但用户找它会来「背屏」里找。
+                ArrowPreference(
+                    title = stringResource(R.string.rear_record_title),
+                    summary = stringResource(R.string.rear_record_entry_summary),
+                    onClick = onRearScreenRecordClick
+                )
             }
 
             CollapsibleFunctionGroup(
@@ -164,15 +170,6 @@ internal fun FunctionPage(
                     summary = stringResource(R.string.rear_video_keep_audio_summary)
                 )
             }
-        }
-
-        // 背屏工具：模块 App 自己用 root 完成的动作，不对应任何 Xposed 作用域，单独一张卡片。
-        CardBlock(pressFeedbackType = PressFeedbackType.None) {
-            ArrowPreference(
-                title = stringResource(R.string.rear_record_title),
-                summary = stringResource(R.string.rear_record_entry_summary),
-                onClick = onRearScreenRecordClick
-            )
         }
     }
 }
