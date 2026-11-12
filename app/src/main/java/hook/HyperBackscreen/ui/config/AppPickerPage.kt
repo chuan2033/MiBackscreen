@@ -4,6 +4,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import hook.HyperBackscreen.ui.components.TopBarIconButton
 import hook.HyperBackscreen.ui.components.TopBarSearchField
 import hook.HyperBackscreen.ui.components.onBoundsInOverlay
+import top.yukonga.miuix.kmp.glass.GlassMotion
 import top.yukonga.miuix.kmp.glass.GlassPopup
 import top.yukonga.miuix.kmp.glass.GlassPopupItem
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -36,6 +37,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalContext
@@ -173,11 +176,20 @@ internal fun AppPickerPage(
             )
         },
         overlay = {
+            val filterMenuVisible = showFilterMenu && filterAnchorBounds != Rect.Zero
+            // GlassPopup 只淡入淡出菜单文字，玻璃面板本身一直不透明：点开头几帧和收起最后一百多毫秒，
+            // 缩成一条扁胶囊的面板会挂在「更多」按钮上方。让整块面板跟文字走同一条淡入淡出曲线。
+            val filterMenuAlpha by animateFloatAsState(
+                targetValue = if (filterMenuVisible) 1f else 0f,
+                animationSpec = GlassMotion.popupMorphFade(filterMenuVisible),
+                label = "filterMenuPanelFade",
+            )
             GlassPopup(
-                show = showFilterMenu && filterAnchorBounds != Rect.Zero,
+                show = filterMenuVisible,
                 onDismissRequest = { showFilterMenu = false },
                 anchorBounds = filterAnchorBounds,
                 backdrop = LocalPageBackdrop.current,
+                modifier = Modifier.graphicsLayer { alpha = filterMenuAlpha },
             ) {
                 filterLabels.forEachIndexed { index, label ->
                     GlassPopupItem(
