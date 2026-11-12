@@ -24,22 +24,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
-import hook.HyperBackscreen.ui.theme.currentTopBarBlur
 import top.yukonga.miuix.kmp.basic.ButtonColors
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
 import top.yukonga.miuix.kmp.glass.GlassDialogButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
-import top.yukonga.miuix.kmp.glass.GlassIconButton
-import top.yukonga.miuix.kmp.glass.GlassTopAppBar
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.glass.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
@@ -64,10 +59,15 @@ internal fun DetailPageScaffold(
      * 列表在它下面单独滚动，所以调下面的参数时预览始终可见。
      */
     pinnedHeader: (@Composable () -> Unit)? = null,
+    /**
+     * 并进顶栏玻璃里的固定区域（[TopBarTabs]、[TopBarSearchField]）：属于顶栏，列表从它下面滑过，
+     * 玻璃采样列表层。和 [pinnedHeader] 不同，它不把列表往下推出一块独立区域。
+     */
+    topBarBottom: (@Composable () -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
-    val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
     val listState = rememberLazyListState()
+    val scrollBehavior = rememberPageScrollBehavior(listState)
     val surfaceColor = MiuixTheme.colorScheme.surface
     // 顶栏采样列表内容，顶栏本身处于采样范围之外。
     val backdrop = rememberLayerBackdrop {
@@ -80,26 +80,23 @@ internal fun DetailPageScaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MiuixTheme.colorScheme.surface,
         topBar = {
-            BlurredBar(backdrop) {
-            GlassTopAppBar(
+            AppGlassTopAppBar(
                 title = title,
-                largeTitle = title,
                 isContentScrolled = scrollBehavior.state.heightOffset < 0f || listState.canScrollBackward,
-                backdrop = backdrop.takeIf { currentTopBarBlur },
-                backgroundAlpha = { 0f },
+                backdrop = backdrop,
                 scrollBehavior = scrollBehavior,
                 navigationIcon = {
-                    GlassIconButton(onClick = onBack) {
+                    TopBarIconButton(onClick = onBack) {
                         Icon(
-                            imageVector = MiuixIcons.Back,
+                            imageVector = MiuixIcons.Glass.Back,
                             contentDescription = stringResource(R.string.common_back),
                             tint = MiuixTheme.colorScheme.onBackground
                         )
                     }
                 },
                 actions = actions,
+                bottomContent = topBarBottom,
             )
-            }
         }
     ) { paddingValues ->
         CompositionLocalProvider(LocalPageBackdrop provides backdrop) {
