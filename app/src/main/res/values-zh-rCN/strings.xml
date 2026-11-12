@@ -328,8 +328,8 @@
     <string name="rear_double_tap_title">背屏双击</string>
     <string name="rear_double_tap_summary_none">未选择应用，功能未启用</string>
     <string name="rear_double_tap_summary_counts">亮屏拦截 %1$d 个应用 · 熄屏拦截 %2$d 个应用</string>
-    <string name="rear_double_tap_wake_section">背屏熄着时：禁止双击亮屏</string>
-    <string name="rear_double_tap_sleep_section">背屏亮着时：禁止双击熄屏</string>
+    <string name="rear_double_tap_wake_section">禁止双击亮屏 · 主屏前台应用</string>
+    <string name="rear_double_tap_sleep_section">禁止双击熄屏 · 背屏当前应用</string>
     <string name="rear_double_tap_choose_apps">选择应用</string>
     <string name="rear_video_resume_title">视频壁纸续播</string>
     <string name="rear_video_resume_summary">亮屏后从上次位置继续播放</string>

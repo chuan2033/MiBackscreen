@@ -9,18 +9,11 @@ import hook.HyperBackscreen.R
 import hook.HyperBackscreen.common.PackageListCodec
 import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.components.DetailPageScaffold
-import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
-/**
- * 「背屏双击」二级页：把两份按应用生效的双击名单放在一起讲清楚。
- *
- * 两者方向相反、看的应用也不同，容易混淆：
- * - 双击亮屏：背屏熄着时，看的是**主屏**前台应用（主屏打游戏、握持时防误触点亮背屏）；
- * - 双击熄屏：背屏亮着时，看的是**背屏上**显示的应用（背屏桌面、背屏相机等防误触熄屏）。
- */
+/** 按应用设置背屏双击亮屏与熄屏。 */
 @Composable
 internal fun RearDoubleTapPage(
     doubleTapWakeDisabledPackages: String,
@@ -42,7 +35,6 @@ internal fun RearDoubleTapPage(
                 insideMargin = PaddingValues(16.dp, 8.dp)
             )
             CardBlock(pressFeedbackType = PressFeedbackType.None) {
-                BasicComponent(summary = stringResource(R.string.app_picker_double_tap_hint))
                 ArrowPreference(
                     title = stringResource(R.string.rear_double_tap_choose_apps),
                     summary = countSummary(wakeCount),
@@ -56,7 +48,6 @@ internal fun RearDoubleTapPage(
                 insideMargin = PaddingValues(16.dp, 8.dp)
             )
             CardBlock(pressFeedbackType = PressFeedbackType.None) {
-                BasicComponent(summary = stringResource(R.string.double_tap_sleep_picker_hint))
                 ArrowPreference(
                     title = stringResource(R.string.rear_double_tap_choose_apps),
                     summary = countSummary(sleepCount),
