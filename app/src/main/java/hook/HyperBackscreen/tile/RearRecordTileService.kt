@@ -63,7 +63,7 @@ class RearRecordTileService : TileService() {
         try {
             val tile = qsTile ?: return
             tile.state = tileState
-            tile.label = getString(R.string.rear_record_title)
+            tile.label = getString(R.string.rear_record_tile_label)
             tile.subtitle = subtitle
             tile.icon = Icon.createWithResource(this, R.drawable.ic_tile_rear_record)
             tile.updateTile()

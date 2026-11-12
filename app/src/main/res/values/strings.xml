@@ -378,7 +378,8 @@
     <string name="rear_cast_locked">Unlock the phone first</string>
     <string name="rear_cast_denied">Request rejected by the system</string>
     <string name="rear_cast_move_failed">Could not move the app</string>
-    <string name="rear_cast_tile_label">Cast to rear</string>
+    <string name="rear_record_tile_label">MiBackscreen Rear recording</string>
+    <string name="rear_cast_tile_label">MiBackscreen Cast to rear</string>
     <string name="rear_cast_tile_busy">Working…</string>
     <string name="rear_cast_toast_to_rear">Moved to the rear screen: %1$s</string>
     <string name="rear_cast_toast_to_main">Moved back to the main screen: %1$s</string>

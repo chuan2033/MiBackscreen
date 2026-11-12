@@ -372,7 +372,8 @@
     <string name="rear_cast_locked">请先解锁手机</string>
     <string name="rear_cast_denied">请求被系统拒绝</string>
     <string name="rear_cast_move_failed">移动应用失败</string>
-    <string name="rear_cast_tile_label">投到背屏</string>
+    <string name="rear_record_tile_label">MiBackscreen 背屏录屏</string>
+    <string name="rear_cast_tile_label">MiBackscreen 投到背屏</string>
     <string name="rear_cast_tile_busy">处理中…</string>
     <string name="rear_cast_toast_to_rear">已投到背屏：%1$s</string>
     <string name="rear_cast_toast_to_main">已拉回主屏：%1$s</string>
