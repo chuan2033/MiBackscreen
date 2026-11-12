@@ -19,6 +19,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import hook.HyperBackscreen.ui.util.openUrl
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -128,32 +131,31 @@ internal fun LogExportPopup(
                         )
                     }
                     // 复制完整文件路径，方便在文件管理器或电脑上直接定位这份日志。
-                    // 不用 clickable 默认的按压高亮：它是个直角灰框，在圆角面板里很突兀；按下时只让文字变淡。
-                    val copyInteraction = remember { MutableInteractionSource() }
-                    val copyPressed by copyInteraction.collectIsPressedAsState()
-                    val copyAlpha by animateFloatAsState(
-                        targetValue = if (copyPressed) 0.5f else 1f,
-                        animationSpec = tween(if (copyPressed) 0 else 150),
-                        label = "copyPathPress",
-                    )
-                    Text(
+                    PressFadeLink(
                         text = stringResource(if (copied) R.string.log_path_copied else R.string.log_copy_path),
-                        modifier = Modifier
-                            .graphicsLayer { alpha = copyAlpha }
-                            .clickable(
-                                interactionSource = copyInteraction,
-                                indication = null,
-                                role = Role.Button,
-                            ) {
-                                context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(
-                                    ClipData.newPlainText("MiBackscreen log", savedFile.absolutePath)
-                                )
-                                copied = true
-                            }
-                            .padding(start = 12.dp, top = 12.dp, bottom = 12.dp),
-                        style = MiuixTheme.textStyles.body2,
-                        color = MiuixTheme.colorScheme.primary,
-                    )
+                        modifier = Modifier.padding(start = 12.dp, top = 12.dp, bottom = 12.dp),
+                    ) {
+                        copyToClipboard(context, savedFile.absolutePath)
+                        copied = true
+                    }
+                }
+            }
+            // 去 GitHub 新建 Issue：链接预填环境信息；文件没法随链接上传，先复制日志路径，提示用户在网页里添加附件。
+            val readyState = state as? LogExportState.Ready
+            if (readyState != null && !fileMissing) {
+                val context = LocalContext.current
+                PressFadeLink(
+                    text = stringResource(R.string.log_report_issue),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                ) {
+                    val archive = readyState.sharedPath ?: readyState.file
+                    val url = FeedbackIssue.buildUrl(context, archive.name)
+                    if (openUrl(context, url)) {
+                        copyToClipboard(context, archive.absolutePath)
+                        Toast.makeText(context, R.string.log_report_issue_copied, Toast.LENGTH_LONG).show()
+                    } else {
+                        Toast.makeText(context, R.string.log_report_issue_failed, Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
             if (running) {
@@ -177,4 +179,42 @@ internal fun LogExportPopup(
             }
         }
     }
+}
+
+private fun copyToClipboard(context: Context, text: String) {
+    context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(
+        ClipData.newPlainText("MiBackscreen log", text)
+    )
+}
+
+/**
+ * 主题色文字链接。不用 clickable 默认的按压高亮：它是个直角灰框，在圆角面板里很突兀；按下时只让文字变淡。
+ */
+@Composable
+private fun PressFadeLink(
+    text: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val alpha by animateFloatAsState(
+        targetValue = if (pressed) 0.5f else 1f,
+        animationSpec = tween(if (pressed) 0 else 150),
+        label = "pressFadeLink",
+    )
+    Text(
+        text = text,
+        modifier = Modifier
+            .graphicsLayer { this.alpha = alpha }
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .then(modifier),
+        style = MiuixTheme.textStyles.body2,
+        color = MiuixTheme.colorScheme.primary,
+    )
 }

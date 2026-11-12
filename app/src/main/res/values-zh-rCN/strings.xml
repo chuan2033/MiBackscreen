@@ -291,6 +291,11 @@
     <string name="log_file_missing">日志文件已失效，请重新生成</string>
     <string name="log_failed_retry">日志生成失败，点击重试</string>
     <string name="log_regenerate">重新生成</string>
+    <string name="log_report_issue">去 GitHub 反馈问题</string>
+    <string name="log_report_issue_copied">已复制日志路径，请在网页里把日志包添加为附件</string>
+    <string name="log_report_issue_failed">无法打开网页，请检查是否安装了浏览器</string>
+    <string name="feedback_issue_title">[问题反馈] </string>
+    <string name="feedback_issue_body">### 问题描述\n\n\n### 复现步骤\n1. \n\n### 期望结果\n\n\n### 环境\n- 模块版本：%1$s\n- 机型：%2$s\n- 系统版本：%3$s\n- 安卓版本：%4$s\n- 背屏中心：%5$s\n- 主题商店：%6$s\n\n### 日志\n日志包：`%7$s`（在手机存储根目录）\n请把这个日志包拖进或添加到这里作为附件。\n</string>
     <string name="settings_save_failed">设置保存失败</string>
     <string name="settings_saved_pending">已暂存在本机，模块服务连接后自动同步</string>
     <!-- 按应用禁用背屏双击熄屏 -->

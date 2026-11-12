@@ -294,6 +294,11 @@
     <string name="log_file_missing">Log file is unavailable. Generate it again</string>
     <string name="log_failed_retry">Failed to generate log. Tap to retry</string>
     <string name="log_regenerate">Regenerate</string>
+    <string name="log_report_issue">Report on GitHub</string>
+    <string name="log_report_issue_copied">Log path copied. Attach the log archive on the web page</string>
+    <string name="log_report_issue_failed">Could not open the web page. Check that a browser is installed</string>
+    <string name="feedback_issue_title">[Bug] </string>
+    <string name="feedback_issue_body">### Description\n\n\n### Steps to reproduce\n1. \n\n### Expected result\n\n\n### Environment\n- Module version: %1$s\n- Device: %2$s\n- System version: %3$s\n- Android version: %4$s\n- Rear Screen Center: %5$s\n- Theme Store: %6$s\n\n### Log\nLog archive: `%7$s` (in the phone storage root)\nPlease drag or attach this log archive here.\n</string>
     <string name="settings_save_failed">Could not save this setting</string>
     <string name="settings_saved_pending">Saved on this device; it will sync once the module service connects</string>
     <!-- 按应用禁用背屏双击熄屏 -->
