@@ -128,6 +128,7 @@ public final class PrefsBridge {
     /** 低电量阈值（百分比），默认 20 与系统电池图标换色点一致。 */
     public static final String DEFAULT_BATTERY_LOW_THRESHOLD = "20";
     public static final String DEFAULT_BATTERY_CHARGE_SWEEP = "1";
+    public static final String DEFAULT_BATTERY_PERCENT_SHADOW = "1";
     public static final String DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES = "0";
     /** 定时切换的挑图方式，默认顺序循环。 */
     public static final String DEFAULT_AUTO_WALLPAPER_ORDER =
@@ -231,6 +232,7 @@ public final class PrefsBridge {
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_RING_STYLE, DEFAULT_BATTERY_RING_STYLE);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_LOW_THRESHOLD, DEFAULT_BATTERY_LOW_THRESHOLD);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_CHARGE_SWEEP, DEFAULT_BATTERY_CHARGE_SWEEP);
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_BATTERY_PERCENT_SHADOW, DEFAULT_BATTERY_PERCENT_SHADOW);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES, DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_AUTO_WALLPAPER_ORDER, DEFAULT_AUTO_WALLPAPER_ORDER);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_REAR_SCREEN_OFF_TIMEOUT, DEFAULT_REAR_SCREEN_OFF_TIMEOUT);
@@ -631,6 +633,8 @@ public final class PrefsBridge {
                 return DEFAULT_BATTERY_LOW_THRESHOLD;
             case Constants.KEY_BATTERY_CHARGE_SWEEP:
                 return DEFAULT_BATTERY_CHARGE_SWEEP;
+            case Constants.KEY_BATTERY_PERCENT_SHADOW:
+                return DEFAULT_BATTERY_PERCENT_SHADOW;
             case Constants.KEY_BATTERY_PERCENT_OFFSET_Y:
                 return DEFAULT_BATTERY_PERCENT_OFFSET_Y;
             default:
@@ -939,6 +943,7 @@ public final class PrefsBridge {
                 return value.equals("off") || value.equals("left") || value.equals("right") ? value : null;
             case Constants.KEY_BATTERY_RING_TRACK:
             case Constants.KEY_BATTERY_CHARGE_SWEEP:
+            case Constants.KEY_BATTERY_PERCENT_SHADOW:
                 return value.equals("0") || value.equals("1") ? value : null;
             case Constants.KEY_BATTERY_RING_STYLE:
                 return value.equals("contour") || value.equals("twin") ? value : null;
@@ -1750,6 +1755,7 @@ public final class PrefsBridge {
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_RING_STYLE);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_LOW_THRESHOLD);
             flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_CHARGE_SWEEP);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_BATTERY_PERCENT_SHADOW);
             flushUiStringPreference(
                     localPrefs,
                     remotePrefs,
@@ -1915,6 +1921,11 @@ public final class PrefsBridge {
                     remotePrefs,
                     Constants.KEY_BATTERY_CHARGE_SWEEP,
                     DEFAULT_BATTERY_CHARGE_SWEEP);
+            syncStringKey(
+                    localPrefs,
+                    remotePrefs,
+                    Constants.KEY_BATTERY_PERCENT_SHADOW,
+                    DEFAULT_BATTERY_PERCENT_SHADOW);
             syncStringKey(
                     localPrefs,
                     remotePrefs,

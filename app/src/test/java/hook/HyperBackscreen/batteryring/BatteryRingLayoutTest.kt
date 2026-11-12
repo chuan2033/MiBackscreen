@@ -52,4 +52,17 @@ class BatteryRingLayoutTest {
         assertEquals("0", entries[Constants.KEY_BATTERY_CHARGE_SWEEP])
         assertEquals(false, BatteryRingLayout.of(BatteryPercentPosition.RIGHT) { entries[it] }.chargeSweepEnabled)
     }
+
+    @Test
+    fun percentShadowDefaultsOnAndOnlyExplicitZeroTurnsItOff() {
+        // 旧版本数字固定带投影、没有这个键：读到空值保持有阴影，升级后观感不变。
+        assertEquals(true, layout().percentShadowEnabled)
+        assertEquals(true, BatteryRingLayout.defaultFor(BatteryPercentPosition.LEFT).percentShadowEnabled)
+        assertEquals(true, layout(Constants.KEY_BATTERY_PERCENT_SHADOW to "garbage").percentShadowEnabled)
+        assertEquals(false, layout(Constants.KEY_BATTERY_PERCENT_SHADOW to " 0 ").percentShadowEnabled)
+        val off = BatteryRingLayout.defaultFor(BatteryPercentPosition.RIGHT).copy(percentShadowEnabled = false)
+        val entries = off.entries(BatteryPercentPosition.RIGHT).toMap()
+        assertEquals("0", entries[Constants.KEY_BATTERY_PERCENT_SHADOW])
+        assertEquals(false, BatteryRingLayout.of(BatteryPercentPosition.RIGHT) { entries[it] }.percentShadowEnabled)
+    }
 }

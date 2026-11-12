@@ -38,6 +38,7 @@ internal data class ModulePreferencesSnapshot(
     val batteryRingStyle: String = PrefsBridge.DEFAULT_BATTERY_RING_STYLE,
     val batteryLowThreshold: String = PrefsBridge.DEFAULT_BATTERY_LOW_THRESHOLD,
     val batteryChargeSweep: String = PrefsBridge.DEFAULT_BATTERY_CHARGE_SWEEP,
+    val batteryPercentShadow: String = PrefsBridge.DEFAULT_BATTERY_PERCENT_SHADOW,
     val autoWallpaperIntervalMinutes: String = PrefsBridge.DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES,
     val autoWallpaperOrder: String = PrefsBridge.DEFAULT_AUTO_WALLPAPER_ORDER,
     val rearScreenOffTimeout: String = PrefsBridge.DEFAULT_REAR_SCREEN_OFF_TIMEOUT,
@@ -92,6 +93,7 @@ internal data class ModulePreferencesSnapshot(
             Constants.KEY_BATTERY_RING_STYLE,
             Constants.KEY_BATTERY_LOW_THRESHOLD,
             Constants.KEY_BATTERY_CHARGE_SWEEP,
+            Constants.KEY_BATTERY_PERCENT_SHADOW,
             Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES,
             Constants.KEY_AUTO_WALLPAPER_ORDER,
             Constants.KEY_REAR_SCREEN_OFF_TIMEOUT,
@@ -174,6 +176,8 @@ internal data class ModulePreferencesSnapshot(
                     ?: PrefsBridge.DEFAULT_BATTERY_LOW_THRESHOLD,
                 batteryChargeSweep = value(Constants.KEY_BATTERY_CHARGE_SWEEP) as? String
                     ?: PrefsBridge.DEFAULT_BATTERY_CHARGE_SWEEP,
+                batteryPercentShadow = value(Constants.KEY_BATTERY_PERCENT_SHADOW) as? String
+                    ?: PrefsBridge.DEFAULT_BATTERY_PERCENT_SHADOW,
                 autoWallpaperIntervalMinutes = value(Constants.KEY_AUTO_WALLPAPER_INTERVAL_MINUTES) as? String
                     ?: PrefsBridge.DEFAULT_AUTO_WALLPAPER_INTERVAL_MINUTES,
                 autoWallpaperOrder = value(Constants.KEY_AUTO_WALLPAPER_ORDER) as? String
