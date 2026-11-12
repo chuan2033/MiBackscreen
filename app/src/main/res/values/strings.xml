@@ -284,14 +284,13 @@
     <string name="common_retry">Retry</string>
     <string name="common_share">Share</string>
     <string name="log_progress">Generating log · Progress: %1$d/%2$d</string>
-    <string name="log_exporting">Exporting log</string>
+    <string name="log_title_running">Generating log</string>
     <string name="log_export_complete">Log exported</string>
-    <string name="log_saved_to">Also saved to %1$s</string>
+    <string name="log_saved_to">In %1$s</string>
     <string name="log_export_view">Log exported. Tap to view</string>
     <string name="log_export_start">Export log</string>
     <string name="log_stage_count">%1$d/%2$d</string>
     <string name="log_close">Close</string>
-    <string name="log_cancel_export">Cancel log export</string>
     <string name="log_share_failed">Could not open sharing. Tap to retry</string>
     <string name="log_file_missing">Log file is unavailable. Generate it again</string>
     <string name="log_failed_retry">Failed to generate log. Tap to retry</string>

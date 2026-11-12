@@ -281,14 +281,13 @@
     <string name="common_retry">重试</string>
     <string name="common_share">分享</string>
     <string name="log_progress">正在生成日志（已完成 %1$d/%2$d 项）</string>
-    <string name="log_exporting">正在导出日志</string>
+    <string name="log_title_running">正在生成日志</string>
     <string name="log_export_complete">日志已导出</string>
-    <string name="log_saved_to">已另存到 %1$s</string>
+    <string name="log_saved_to">位于 %1$s</string>
     <string name="log_export_view">日志已导出，点击查看</string>
     <string name="log_export_start">导出日志</string>
     <string name="log_stage_count">%1$d/%2$d</string>
     <string name="log_close">关闭</string>
-    <string name="log_cancel_export">取消导出日志</string>
     <string name="log_share_failed">无法打开分享，请重试</string>
     <string name="log_file_missing">日志文件已失效，请重新生成</string>
     <string name="log_failed_retry">日志生成失败，点击重试</string>
