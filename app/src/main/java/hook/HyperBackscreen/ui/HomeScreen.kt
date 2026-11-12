@@ -26,8 +26,11 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.WindowInsets
 import hook.HyperBackscreen.ui.theme.BottomBarMetrics
+import hook.HyperBackscreen.ui.theme.BottomBarStyle
+import hook.HyperBackscreen.ui.theme.currentTopBarBlur
 import hook.HyperBackscreen.ui.components.DialogButtonRow
 import hook.HyperBackscreen.ui.components.DetailPageScaffold
+import hook.HyperBackscreen.ui.components.BlurredBar
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import android.os.Build
 import androidx.compose.foundation.layout.Box
@@ -59,7 +62,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -80,7 +82,6 @@ import hook.HyperBackscreen.ui.battery.BatteryColorPage
 import hook.HyperBackscreen.ui.battery.BatteryColorSlot
 import hook.HyperBackscreen.batteryring.BatteryPercentPosition
 import hook.HyperBackscreen.batteryring.BatteryRingLayout
-import hook.HyperBackscreen.ui.components.BlurredBar
 import hook.HyperBackscreen.ui.components.FloatingBottomBar
 import hook.HyperBackscreen.ui.components.FunctionCountBadge
 import hook.HyperBackscreen.ui.components.LocalUiFeedback
@@ -104,15 +105,18 @@ import hook.HyperBackscreen.ui.function.RearScreenTimingPage
 import hook.HyperBackscreen.ui.home.HomePage
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
+import top.yukonga.miuix.kmp.glass.GlassNavigationBar
+import top.yukonga.miuix.kmp.glass.GlassNavigationItem
+import top.yukonga.miuix.kmp.glass.GlassIconButton
+import top.yukonga.miuix.kmp.glass.GlassTopAppBar
+import top.yukonga.miuix.kmp.material.GlassShadows
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurDefaults
 import top.yukonga.miuix.kmp.blur.layerBackdrop
@@ -264,8 +268,7 @@ internal fun HomeScreen(
     keepRearScreenOnInGame: Boolean,
     fixRearScreenApply: Boolean,
     faceEnrollmentCompat: Boolean,
-    floatingNavBar: Boolean,
-    liquidGlass: Boolean,
+    bottomBarStyle: BottomBarStyle,
     bottomBarBlur: Boolean,
     showFunctionCount: Boolean,
     appLanguage: AppLanguage,
@@ -288,8 +291,7 @@ internal fun HomeScreen(
     onKeepRearScreenOnInGameChange: (Boolean) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFaceEnrollmentCompatChange: (Boolean) -> Unit,
-    onFloatingNavBarChange: (Boolean) -> Unit,
-    onLiquidGlassChange: (Boolean) -> Unit,
+    onBottomBarStyleChange: (BottomBarStyle) -> Unit,
     onBottomBarBlurChange: (Boolean) -> Unit,
     onShowFunctionCountChange: (Boolean) -> Unit,
     onAppLanguageChange: (AppLanguage) -> Unit,
@@ -451,12 +453,10 @@ internal fun HomeScreen(
                         onBack = { navigateBackFrom(page) }
                     )
                     HomeRoute.Theme -> ThemePage(
-                        floatingNavBar = floatingNavBar,
-                        liquidGlass = liquidGlass,
+                        bottomBarStyle = bottomBarStyle,
                         bottomBarBlur = bottomBarBlur,
                         showFunctionCount = showFunctionCount,
-                        onFloatingNavBarChange = onFloatingNavBarChange,
-                        onLiquidGlassChange = onLiquidGlassChange,
+                        onBottomBarStyleChange = onBottomBarStyleChange,
                         onBottomBarBlurChange = onBottomBarBlurChange,
                         onShowFunctionCountChange = onShowFunctionCountChange,
                         onBack = { navigateBackFrom(page) }
@@ -557,8 +557,7 @@ internal fun HomeScreen(
                         removeAppCardLimit = removeAppCardLimit,
                         fixRearScreenApply = fixRearScreenApply,
                         faceEnrollmentCompat = faceEnrollmentCompat,
-                        floatingNavBar = floatingNavBar,
-                        liquidGlass = liquidGlass,
+                        bottomBarStyle = bottomBarStyle,
                         bottomBarBlur = bottomBarBlur,
                         showFunctionCount = showFunctionCount,
                         appLanguage = appLanguage,
@@ -573,8 +572,6 @@ internal fun HomeScreen(
                         onRemoveAppCardLimitChange = onRemoveAppCardLimitChange,
                         onFixRearScreenApplyChange = onFixRearScreenApplyChange,
                         onFaceEnrollmentCompatChange = onFaceEnrollmentCompatChange,
-                        onFloatingNavBarChange = onFloatingNavBarChange,
-                        onLiquidGlassChange = onLiquidGlassChange,
                         onBottomBarBlurChange = onBottomBarBlurChange,
                         onAppLanguageChange = onAppLanguageChange,
                         onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
@@ -609,7 +606,7 @@ internal fun HomeScreen(
                     .padding(
                         bottom = BottomBarMetrics.snackbarBottomPadding(
                             onMainPage = backStack.lastOrNull() == HomeRoute.Main,
-                            floatingBar = floatingNavBar
+                            floatingBar = bottomBarStyle.isFloating
                         )
                     )
             )
@@ -711,37 +708,41 @@ private fun MainTabPage(
         modifier = Modifier.fillMaxSize(),
         containerColor = MiuixTheme.colorScheme.surface,
         topBar = {
+            val tabLabelRes = navItems.first { it.tab == tab }.labelRes
+            val isContentScrolled = scrollBehavior.state.heightOffset < 0f || listState.canScrollBackward
             BlurredBar(backdrop) {
-                val tabLabelRes = navItems.first { it.tab == tab }.labelRes
-                TopAppBar(
-                    title = stringResource(tabLabelRes),
-                    largeTitle = stringResource(tabLabelRes),
-                    color = Color.Transparent,
-                    scrollBehavior = scrollBehavior,
-                    actions = {
-                        val topAction = HomeNavigationPolicy.topActionFor(tab)
-                        IconButton(
-                            onClick = {
-                                when (topAction) {
-                                    HomeNavigationPolicy.TopAction.RESTART -> onRestartClick()
-                                    HomeNavigationPolicy.TopAction.SETTINGS -> onSettingsClick()
-                                }
+            GlassTopAppBar(
+                title = stringResource(tabLabelRes),
+                largeTitle = stringResource(tabLabelRes),
+                isContentScrolled = isContentScrolled,
+                backdrop = backdrop.takeIf { currentTopBarBlur },
+                backgroundAlpha = { 0f },
+                buttonShadow = GlassShadows.Regular.takeIf { isContentScrolled },
+                scrollBehavior = scrollBehavior,
+                actions = {
+                    val topAction = HomeNavigationPolicy.topActionFor(tab)
+                    GlassIconButton(
+                        onClick = {
+                            when (topAction) {
+                                HomeNavigationPolicy.TopAction.RESTART -> onRestartClick()
+                                HomeNavigationPolicy.TopAction.SETTINGS -> onSettingsClick()
                             }
-                        ) {
-                            Icon(
-                                imageVector = when (topAction) {
-                                    HomeNavigationPolicy.TopAction.RESTART -> MiuixIcons.Refresh
-                                    HomeNavigationPolicy.TopAction.SETTINGS -> MiuixIcons.Settings
-                                },
-                                contentDescription = stringResource(when (topAction) {
-                                    HomeNavigationPolicy.TopAction.RESTART -> R.string.restart_scope
-                                    HomeNavigationPolicy.TopAction.SETTINGS -> R.string.settings_title
-                                }),
-                                tint = MiuixTheme.colorScheme.onSurface
-                            )
-                        }
+                        },
+                    ) {
+                        Icon(
+                            imageVector = when (topAction) {
+                                HomeNavigationPolicy.TopAction.RESTART -> MiuixIcons.Refresh
+                                HomeNavigationPolicy.TopAction.SETTINGS -> MiuixIcons.Settings
+                            },
+                            contentDescription = stringResource(when (topAction) {
+                                HomeNavigationPolicy.TopAction.RESTART -> R.string.restart_scope
+                                HomeNavigationPolicy.TopAction.SETTINGS -> R.string.settings_title
+                            }),
+                            tint = MiuixTheme.colorScheme.onSurface
+                        )
                     }
-                )
+                },
+            )
             }
         }
     ) { innerPadding ->
@@ -839,8 +840,7 @@ private fun MainContent(
     removeAppCardLimit: Boolean,
     fixRearScreenApply: Boolean,
     faceEnrollmentCompat: Boolean,
-    floatingNavBar: Boolean,
-    liquidGlass: Boolean,
+    bottomBarStyle: BottomBarStyle,
     bottomBarBlur: Boolean,
     showFunctionCount: Boolean,
     appLanguage: AppLanguage,
@@ -855,8 +855,6 @@ private fun MainContent(
     onRemoveAppCardLimitChange: (Boolean) -> Unit,
     onFixRearScreenApplyChange: (Boolean) -> Unit,
     onFaceEnrollmentCompatChange: (Boolean) -> Unit,
-    onFloatingNavBarChange: (Boolean) -> Unit,
-    onLiquidGlassChange: (Boolean) -> Unit,
     onBottomBarBlurChange: (Boolean) -> Unit,
     onAppLanguageChange: (AppLanguage) -> Unit,
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
@@ -986,7 +984,7 @@ private fun MainContent(
             )
         }
 
-            if (!floatingNavBar) {
+            if (bottomBarStyle == BottomBarStyle.STANDARD) {
                 NavigationBar(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -1025,7 +1023,7 @@ private fun MainContent(
                 }
             }
 
-            if (floatingNavBar && liquidGlass) {
+            if (bottomBarStyle == BottomBarStyle.LIQUID) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -1045,8 +1043,28 @@ private fun MainContent(
                 }
             }
 
-            // 悬浮但不开液态玻璃时走 miuix 原生浮动导航栏，只显示图标。
-            if (floatingNavBar && !liquidGlass) {
+            if (bottomBarStyle == BottomBarStyle.GLASS) {
+                GlassNavigationBar(
+                    items = navItems.map { item ->
+                        val label = stringResource(item.labelRes)
+                        GlassNavigationItem(
+                            icon = item.icon,
+                            label = if (showFunctionCount && enabledFunctionCount > 0 &&
+                                item.tab == HomeNavigationPolicy.Tab.FUNCTION
+                            ) "$label ($enabledFunctionCount)" else label,
+                        )
+                    },
+                    selectedIndex = navigationIndex,
+                    onSelect = ::selectPage,
+                    backdrop = bottomBarBackdrop.takeIf { bottomBarBlur },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 24.dp),
+                )
+            }
+
+            // Miuix 原生悬浮底栏显示图标与标签。
+            if (bottomBarStyle == BottomBarStyle.FLOATING) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)

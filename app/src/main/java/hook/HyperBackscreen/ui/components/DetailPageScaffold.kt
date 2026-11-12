@@ -1,6 +1,7 @@
 package hook.HyperBackscreen.ui.components
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,26 +15,27 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
-import top.yukonga.miuix.kmp.basic.Button
+import hook.HyperBackscreen.ui.theme.currentTopBarBlur
 import top.yukonga.miuix.kmp.basic.ButtonColors
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
+import top.yukonga.miuix.kmp.glass.GlassDialogButton
+import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
+import top.yukonga.miuix.kmp.glass.GlassIconButton
+import top.yukonga.miuix.kmp.glass.GlassTopAppBar
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -56,6 +58,7 @@ internal fun DetailPageScaffold(
     modifier: Modifier = Modifier,
     topSpacing: Dp = HomeUiTokens.DetailListTopSpacing,
     actions: @Composable RowScope.() -> Unit = {},
+    overlay: @Composable BoxScope.() -> Unit = {},
     /**
      * 固定在顶栏下方、不随列表滚动的区域（例如电量页的背屏预览）。
      * 列表在它下面单独滚动，所以调下面的参数时预览始终可见。
@@ -64,34 +67,38 @@ internal fun DetailPageScaffold(
     content: LazyListScope.() -> Unit,
 ) {
     val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
+    val listState = rememberLazyListState()
     val surfaceColor = MiuixTheme.colorScheme.surface
-    // 毛玻璃顶栏采样的是列表这一层；BlurredBar 必须在 layerBackdrop 子树之外，否则采样成环。
+    // 顶栏采样列表内容，顶栏本身处于采样范围之外。
     val backdrop = rememberLayerBackdrop {
         drawRect(surfaceColor)
         drawContent()
     }
 
+    Box(modifier = modifier.fillMaxSize()) {
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         containerColor = MiuixTheme.colorScheme.surface,
         topBar = {
             BlurredBar(backdrop) {
-                TopAppBar(
-                    title = title,
-                    largeTitle = title,
-                    color = Color.Transparent,
-                    scrollBehavior = scrollBehavior,
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = MiuixIcons.Back,
-                                contentDescription = stringResource(R.string.common_back),
-                                tint = MiuixTheme.colorScheme.onBackground
-                            )
-                        }
-                    },
-                    actions = actions
-                )
+            GlassTopAppBar(
+                title = title,
+                largeTitle = title,
+                isContentScrolled = scrollBehavior.state.heightOffset < 0f || listState.canScrollBackward,
+                backdrop = backdrop.takeIf { currentTopBarBlur },
+                backgroundAlpha = { 0f },
+                scrollBehavior = scrollBehavior,
+                navigationIcon = {
+                    GlassIconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = MiuixIcons.Back,
+                            contentDescription = stringResource(R.string.common_back),
+                            tint = MiuixTheme.colorScheme.onBackground
+                        )
+                    }
+                },
+                actions = actions,
+            )
             }
         }
     ) { paddingValues ->
@@ -102,6 +109,7 @@ internal fun DetailPageScaffold(
                 Box(modifier = Modifier.padding(horizontal = 12.dp)) { pinnedHeader() }
             }
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
@@ -127,12 +135,11 @@ internal fun DetailPageScaffold(
         }
         }
     }
+    CompositionLocalProvider(LocalPageBackdrop provides backdrop) { overlay() }
+    }
 }
 
-/**
- * 弹窗底部按钮行的唯一写法：左边次要操作（TextButton），右边主操作（主色 Button），
- * 两者等宽、高 48dp。没有次要操作时主按钮占满整行。
- */
+/** 弹窗底部的玻璃材质按钮行。 */
 @Composable
 internal fun DialogButtonRow(
     primaryText: String,
@@ -148,18 +155,17 @@ internal fun DialogButtonRow(
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
     ) {
         if (secondaryText != null) {
-            TextButton(
-                text = secondaryText,
+            GlassDialogButton(
                 onClick = onSecondary,
                 modifier = Modifier.weight(1f).height(48.dp)
-            )
+            ) { Text(secondaryText, style = MiuixTheme.textStyles.button) }
         }
-        Button(
+        GlassDialogButton(
             onClick = onPrimary,
             modifier = Modifier.weight(1f).height(48.dp),
             enabled = primaryEnabled,
+            role = GlassDialogButtonRole.Primary,
             colors = primaryColors,
-            content = { Text(primaryText) }
-        )
+        ) { Text(primaryText, style = MiuixTheme.textStyles.button) }
     }
 }

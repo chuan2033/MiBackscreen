@@ -1,16 +1,15 @@
 package hook.HyperBackscreen.ui.config
 
-import top.yukonga.miuix.kmp.window.WindowListPopup
-import top.yukonga.miuix.kmp.basic.ListPopupColumn
-import top.yukonga.miuix.kmp.basic.DropdownImpl
-import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.glass.GlassIconButton
+import top.yukonga.miuix.kmp.glass.GlassPopup
+import top.yukonga.miuix.kmp.glass.GlassPopupItem
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.More
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.DetailPageScaffold
+import hook.HyperBackscreen.ui.components.LocalPageBackdrop
 import hook.HyperBackscreen.ui.theme.HomeUiTokens
 import android.content.pm.ApplicationInfo
 import androidx.annotation.StringRes
@@ -39,6 +38,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -142,6 +144,7 @@ internal fun AppPickerPage(
     }
 
     var showFilterMenu by remember { mutableStateOf(false) }
+    var filterAnchorBounds by remember { mutableStateOf(Rect.Zero) }
     val filterLabels = AppFilter.entries.map { entry ->
         if (entry == AppFilter.SELECTED && selectedSet.isNotEmpty()) {
             stringResource(entry.labelRes) + " (" + selectedSet.size + ")"
@@ -155,36 +158,33 @@ internal fun AppPickerPage(
         onBack = onBack,
         // 筛选收进右上角「更多」菜单：列表顶部不再常驻一排分段按钮。
         actions = {
-            Box {
-                IconButton(
-                    onClick = { showFilterMenu = true },
-                    holdDownState = showFilterMenu
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.More,
-                        contentDescription = stringResource(R.string.app_picker_filter_menu),
-                        tint = MiuixTheme.colorScheme.onBackground
+            GlassIconButton(
+                onClick = { showFilterMenu = true },
+                modifier = Modifier.onGloballyPositioned { filterAnchorBounds = it.boundsInRoot() },
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.More,
+                    contentDescription = stringResource(R.string.app_picker_filter_menu),
+                    tint = MiuixTheme.colorScheme.onBackground
+                )
+            }
+        },
+        overlay = {
+            GlassPopup(
+                show = showFilterMenu && filterAnchorBounds != Rect.Zero,
+                onDismissRequest = { showFilterMenu = false },
+                anchorBounds = filterAnchorBounds,
+                backdrop = LocalPageBackdrop.current,
+            ) {
+                filterLabels.forEachIndexed { index, label ->
+                    GlassPopupItem(
+                        text = label,
+                        selected = filter.ordinal == index,
+                        onClick = {
+                            AppFilter.entries.getOrNull(index)?.let { filter = it }
+                            showFilterMenu = false
+                        },
                     )
-                }
-                WindowListPopup(
-                    show = showFilterMenu,
-                    alignment = PopupPositionProvider.Align.End,
-                    onDismissRequest = { showFilterMenu = false }
-                ) {
-                    ListPopupColumn {
-                        filterLabels.forEachIndexed { index, label ->
-                            DropdownImpl(
-                                text = label,
-                                optionSize = filterLabels.size,
-                                isSelected = filter.ordinal == index,
-                                index = index,
-                                onSelectedIndexChange = { selectedIndex ->
-                                    AppFilter.entries.getOrNull(selectedIndex)?.let { filter = it }
-                                    showFilterMenu = false
-                                }
-                            )
-                        }
-                    }
                 }
             }
         },
