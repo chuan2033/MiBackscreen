@@ -691,7 +691,7 @@ private fun MainTabPage(
     rearMedia: RearMediaSwitches,
     onRearMediaChange: (RearMediaSwitch, Boolean) -> Unit,
 ) {
-    val scrollBehavior = rememberPageScrollBehavior()
+    val scrollBehavior = rememberPageScrollBehavior(listState)
     val surfaceColor = MiuixTheme.colorScheme.surface
     // Each retained pager page must own its capture layer and coordinates. Sharing one
     // lets off-screen pages overwrite the current page's backdrop during navigation.

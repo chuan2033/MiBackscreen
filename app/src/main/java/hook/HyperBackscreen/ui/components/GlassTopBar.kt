@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -36,11 +37,23 @@ private val TopBarActionSpacing = 8.dp
  * miuix 的 contentOffset 只累计列表自己吃掉的滚动，而原生渐进模糊和按钮阴影都按它淡入。
  * 内容很短的页面整段拖动都被顶栏折叠吃掉、列表本身不动，顶栏折起来了玻璃底却一直是透明的。
  * 顶栏折叠时内容区的上边距也跟着移动，内容确实已经滑到顶栏下面，所以这段位移同样算「已滚动」。
+ *
+ * 另外按 [listState] 的真实位置校正：列表回到最顶、顶栏完全展开时，顶栏下面没有任何内容，
+ * contentOffset 必须是 0。原生只在惯性滑到顶时清零，拖回顶部、被横滑切页手势打断等情况会留下残值，
+ * 停在顶部时按钮阴影和渐进模糊带就会露出来（灰色圆影、横向条纹）。
  */
 @Composable
-internal fun rememberPageScrollBehavior(): ScrollBehavior {
+internal fun rememberPageScrollBehavior(listState: LazyListState? = null): ScrollBehavior {
     val state = rememberTopAppBarState()
     val behavior = MiuixScrollBehavior(state)
+    if (listState != null) {
+        LaunchedEffect(state, listState) {
+            snapshotFlow {
+                // 顶栏收回的弹簧动画可能停在离 0 不到 1px 的地方，也算展开。
+                !listState.canScrollBackward && state.heightOffset > -1f && state.contentOffset < 0f
+            }.collect { stale -> if (stale) state.contentOffset = 0f }
+        }
+    }
     LaunchedEffect(state) {
         var previous = state.heightOffset
         // 页面恢复时顶栏可能已经是折叠的。
