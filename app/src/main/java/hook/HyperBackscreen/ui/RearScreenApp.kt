@@ -971,6 +971,7 @@ private fun batteryLayoutOf(
         Constants.KEY_BATTERY_RING_STYLE to values.batteryRingStyle,
         Constants.KEY_BATTERY_LOW_THRESHOLD to values.batteryLowThreshold,
         Constants.KEY_BATTERY_CHARGE_SWEEP to values.batteryChargeSweep,
+        Constants.KEY_BATTERY_PERCENT_SHADOW to values.batteryPercentShadow,
     )::get
 )
 

@@ -43,6 +43,11 @@ internal fun parseBatteryColor(value: String): Int? {
     return if (text.length == 6) (0xFF000000L or parsed).toInt() else parsed.toInt()
 }
 
+/** 百分比数字的投影：背屏绘制与设置页预览共用同一组参数。 */
+internal fun applyPercentShadow(paint: android.graphics.Paint) {
+    paint.setShadowLayer(4f, 0f, 1.5f, 0x99000000.toInt())
+}
+
 /** 反解成 `#AARRGGBB`。 */
 internal fun formatBatteryColor(argb: Int): String = String.format("#%08X", argb)
 

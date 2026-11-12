@@ -7,7 +7,7 @@ import org.junit.Test;
 
 import hook.HyperBackscreen.common.Constants;
 
-public class BatteryColorBackupTest {
+public class BatteryDisplayBackupTest {
     private static final String[] COLOR_KEYS = {
             Constants.KEY_BATTERY_COLOR_IDLE,
             Constants.KEY_BATTERY_COLOR_CHARGING,
@@ -32,5 +32,12 @@ public class BatteryColorBackupTest {
             assertNull(key, PrefsBridge.normalizeBackupString(key, "white"));
             assertNull(key, PrefsBridge.normalizeBackupString(key, "#12345"));
         }
+    }
+
+    @Test
+    public void percentShadowBackupAcceptsOnlyZeroOrOne() {
+        assertEquals("1", PrefsBridge.normalizeBackupString(Constants.KEY_BATTERY_PERCENT_SHADOW, " 1 "));
+        assertEquals("0", PrefsBridge.normalizeBackupString(Constants.KEY_BATTERY_PERCENT_SHADOW, "0"));
+        assertNull(PrefsBridge.normalizeBackupString(Constants.KEY_BATTERY_PERCENT_SHADOW, "true"));
     }
 }

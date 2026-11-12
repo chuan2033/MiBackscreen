@@ -52,6 +52,7 @@
     <string name="battery_ring_stroke_title">电量线条粗细</string>
     <string name="battery_ring_track_title">显示底轨</string>
     <string name="battery_charge_sweep_title">充电流光</string>
+    <string name="battery_percent_shadow_title">数字阴影</string>
     <string name="battery_ring_style_contour">整体轮廓</string>
     <string name="battery_ring_style_twin">上下双环</string>
     <string name="battery_percent_text_size_title">数字大小</string>

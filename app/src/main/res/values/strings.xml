@@ -52,6 +52,7 @@
     <string name="battery_ring_stroke_title">Line thickness</string>
     <string name="battery_ring_track_title">Show track</string>
     <string name="battery_charge_sweep_title">Charging shimmer</string>
+    <string name="battery_percent_shadow_title">Number shadow</string>
     <string name="battery_ring_style_contour">Outline</string>
     <string name="battery_ring_style_twin">Dual rings</string>
     <string name="battery_percent_text_size_title">Number size</string>

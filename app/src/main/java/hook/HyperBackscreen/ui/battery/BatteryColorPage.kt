@@ -7,6 +7,7 @@ import hook.HyperBackscreen.batteryring.BatteryRingGeometry
 import hook.HyperBackscreen.batteryring.BatteryRingLayout
 import hook.HyperBackscreen.batteryring.BatteryRingStyle
 import hook.HyperBackscreen.batteryring.CHARGE_SWEEP_DURATION_MS
+import hook.HyperBackscreen.batteryring.applyPercentShadow
 import hook.HyperBackscreen.batteryring.chargeSweepColor
 import hook.HyperBackscreen.batteryring.chargeSweepSegments
 import hook.HyperBackscreen.batteryring.formatBatteryColor
@@ -544,6 +545,7 @@ private enum class BatteryLayoutField(
 ) {
     RING_TRACK(R.string.battery_ring_track_title, BatteryLayoutUnit.PIXEL, toggle = true),
     CHARGE_SWEEP(R.string.battery_charge_sweep_title, BatteryLayoutUnit.PIXEL, toggle = true),
+    PERCENT_SHADOW(R.string.battery_percent_shadow_title, BatteryLayoutUnit.PIXEL, toggle = true),
     RING_SCALE(R.string.battery_ring_scale_title, BatteryLayoutUnit.PERCENT),
     RING_STROKE(R.string.battery_ring_stroke_title, BatteryLayoutUnit.PIXEL),
     PERCENT_X(R.string.battery_percent_offset_x_title, BatteryLayoutUnit.OFFSET),
@@ -555,6 +557,7 @@ private enum class BatteryLayoutField(
     fun read(layout: BatteryRingLayout): Int = when (this) {
         RING_TRACK -> if (layout.ringTrackVisible) 1 else 0
         CHARGE_SWEEP -> if (layout.chargeSweepEnabled) 1 else 0
+        PERCENT_SHADOW -> if (layout.percentShadowEnabled) 1 else 0
         RING_SCALE -> layout.ringScalePercent
         RING_STROKE -> layout.ringStrokeWidth
         PERCENT_X -> layout.percentOffsetXPercent
@@ -567,6 +570,7 @@ private enum class BatteryLayoutField(
     fun write(layout: BatteryRingLayout, value: Int): BatteryRingLayout = when (this) {
         RING_TRACK -> layout.copy(ringTrackVisible = value != 0)
         CHARGE_SWEEP -> layout.copy(chargeSweepEnabled = value != 0)
+        PERCENT_SHADOW -> layout.copy(percentShadowEnabled = value != 0)
         RING_SCALE -> layout.copy(ringScalePercent = value)
         RING_STROKE -> layout.copy(ringStrokeWidth = value)
         PERCENT_X -> layout.copy(percentOffsetXPercent = value)
@@ -592,7 +596,7 @@ private enum class BatteryLayoutField(
             BatteryRingLayout.PERCENT_TEXT_WEIGHT_MIN..BatteryRingLayout.PERCENT_TEXT_WEIGHT_MAX
         LOW_THRESHOLD -> BatteryRingLayout.LOW_THRESHOLD_MIN..BatteryRingLayout.LOW_THRESHOLD_MAX
         // 开关不用区间，给个占位值让调用方不必特判。
-        RING_TRACK, CHARGE_SWEEP -> 0..1
+        RING_TRACK, CHARGE_SWEEP, PERCENT_SHADOW -> 0..1
     }
 
     /**
@@ -622,12 +626,13 @@ private val BatteryRingFields = listOf(
 /** 「颜色自定义」里的可调项：低电量阈值。 */
 private val BatteryColorFields = listOf(BatteryLayoutField.LOW_THRESHOLD)
 
-/** 「数字电量」折叠里的可调项：数字相对摄像头模组的偏移、字号与字重。 */
+/** 「数字电量」折叠里的可调项：数字相对摄像头模组的偏移、字号、字重与投影开关。 */
 private val BatteryPercentFields = listOf(
     BatteryLayoutField.PERCENT_X,
     BatteryLayoutField.PERCENT_Y,
     BatteryLayoutField.PERCENT_TEXT_SIZE,
-    BatteryLayoutField.PERCENT_TEXT_WEIGHT
+    BatteryLayoutField.PERCENT_TEXT_WEIGHT,
+    BatteryLayoutField.PERCENT_SHADOW
 )
 
 /**
@@ -863,7 +868,6 @@ private fun BatteryRearScreenPreview(
         AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
             textAlign = AndroidPaint.Align.CENTER
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            setShadowLayer(4f, 0f, 1.5f, 0x99000000.toInt())
         }
     }
     // 字重变化时才重建 Typeface，拖动滑杆不会每帧新建。
@@ -990,6 +994,9 @@ private fun BatteryRearScreenPreview(
                 percentPaint.color = percentColor.toArgb()
                 percentPaint.textSize = layout.percentTextSize.toFloat()
                 percentPaint.typeface = percentTypeface
+                // 投影开关随偏好变，每次绘制按草稿值设一遍（开关拨动时预览即时跟着变）。
+                if (layout.percentShadowEnabled) applyPercentShadow(percentPaint)
+                else percentPaint.clearShadowLayer()
                 val metrics = percentPaint.fontMetrics
                 val baseline = anchor.y - (metrics.ascent + metrics.descent) / 2f
                 drawIntoCanvas { canvas ->
