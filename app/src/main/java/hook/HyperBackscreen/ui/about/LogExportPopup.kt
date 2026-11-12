@@ -5,6 +5,8 @@ import androidx.compose.runtime.setValue
 import hook.HyperBackscreen.ui.components.AppDialog
 import hook.HyperBackscreen.ui.components.DialogButtonRow
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -107,13 +109,23 @@ internal fun LogExportPopup(
                     )
                 }
             }
-            // 导出的包会同时往手机存储根目录放一份：写出文件名和所在目录，方便在文件管理器里直接找到。
+            // 导出的包会同时往手机存储根目录放一份：文件名、所在目录和「复制路径」收进一张小卡片，
+            // 方便在文件管理器里直接找到。
             val savedFile = (state as? LogExportState.Ready)?.sharedPath?.takeIf { !fileMissing }
             val savedDirectory = savedFile?.parent
             if (savedFile != null && savedDirectory != null) {
                 val context = LocalContext.current
                 var copied by remember(savedFile) { mutableStateOf(false) }
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            MiuixTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+                            RoundedCornerShape(16.dp),
+                        )
+                        .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = savedFile.name,
@@ -133,28 +145,10 @@ internal fun LogExportPopup(
                     // 复制完整文件路径，方便在文件管理器或电脑上直接定位这份日志。
                     PressFadeLink(
                         text = stringResource(if (copied) R.string.log_path_copied else R.string.log_copy_path),
-                        modifier = Modifier.padding(start = 12.dp, top = 12.dp, bottom = 12.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
                     ) {
                         copyToClipboard(context, savedFile.absolutePath)
                         copied = true
-                    }
-                }
-            }
-            // 去 GitHub 新建 Issue：链接预填环境信息；文件没法随链接上传，先复制日志路径，提示用户在网页里添加附件。
-            val readyState = state as? LogExportState.Ready
-            if (readyState != null && !fileMissing) {
-                val context = LocalContext.current
-                PressFadeLink(
-                    text = stringResource(R.string.log_report_issue),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                ) {
-                    val archive = readyState.sharedPath ?: readyState.file
-                    val url = FeedbackIssue.buildUrl(context, archive.name)
-                    if (openUrl(context, url)) {
-                        copyToClipboard(context, archive.absolutePath)
-                        Toast.makeText(context, R.string.log_report_issue_copied, Toast.LENGTH_LONG).show()
-                    } else {
-                        Toast.makeText(context, R.string.log_report_issue_failed, Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -165,6 +159,24 @@ internal fun LogExportPopup(
                 ) { Text(stringResource(R.string.common_cancel), style = MiuixTheme.textStyles.button) }
             } else {
                 val ready = state is LogExportState.Ready && !fileMissing
+                // 去 GitHub 新建 Issue：链接预填环境信息；文件没法随链接上传，先复制日志路径，提示用户在网页里添加附件。
+                val readyState = state as? LogExportState.Ready
+                if (ready && readyState != null) {
+                    val context = LocalContext.current
+                    GlassDialogButton(
+                        onClick = {
+                            val archive = readyState.sharedPath ?: readyState.file
+                            val url = FeedbackIssue.buildUrl(context, archive.name)
+                            if (openUrl(context, url)) {
+                                copyToClipboard(context, archive.absolutePath)
+                                Toast.makeText(context, R.string.log_report_issue_copied, Toast.LENGTH_LONG).show()
+                            } else {
+                                Toast.makeText(context, R.string.log_report_issue_failed, Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                    ) { Text(stringResource(R.string.log_report_issue), style = MiuixTheme.textStyles.button) }
+                }
                 DialogButtonRow(
                     secondaryText = if (ready) stringResource(R.string.log_regenerate) else null,
                     onSecondary = onExport,
