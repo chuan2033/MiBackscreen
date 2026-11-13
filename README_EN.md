@@ -119,7 +119,6 @@ app/                         LSPosed module (app + hooks in one APK)
 ksu-module/                  Rear-screen add-on resource module (KernelSU / Magisk)
   packaging/                 Module scripts and WebUI
   tools/                     Build, validation and device diagnostic scripts
-docs/release-notes/          Release notes
 ```
 
 ## Add-on resource module

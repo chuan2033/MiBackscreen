@@ -105,7 +105,6 @@ app/                         LSPosed 模块（App + Hook，同一个 APK）
 ksu-module/                  背屏附加资源模块（KernelSU / Magisk）
   packaging/                 模块脚本与 WebUI
   tools/                     构建、校验与设备诊断脚本
-docs/release-notes/          各版本发行说明
 ```
 
 ## 附加资源模块
