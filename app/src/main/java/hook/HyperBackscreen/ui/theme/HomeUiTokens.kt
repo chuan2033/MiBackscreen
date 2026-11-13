@@ -27,13 +27,13 @@ object HomeUiTokens {
     val AboutLogoSize = 100.dp
     /** 关于页图标白色底板的圆角。 */
     val AboutLogoCornerRadius = 26.dp
-    /** 图标在白色底板里的尺寸。图标是横向宽图，给到 68dp 左右才不贴边。 */
-    val AboutLogoInnerSize = 68.dp
+    /** 图标在白色底板里的尺寸。图标是横向宽图，78dp 时左右仍留有白边、不贴边。 */
+    val AboutLogoInnerSize = 78.dp
     /**
      * 图标的视觉居中修正：右下角的闪电把外框撑宽，几何居中时矩形主体和视觉重心都偏左偏下，
      * 往右、往上挪一点才看起来在底板正中（按截图实测的重心偏移换算）。
      */
-    val AboutLogoOpticalOffsetX = 3.dp
+    val AboutLogoOpticalOffsetX = 3.5.dp
     val AboutLogoOpticalOffsetY = (-1.5).dp
 
     val AboutAvatarSize = 30.dp
