@@ -49,6 +49,13 @@ internal data class TeamMember(
     val role: String,
     val github: String,
 ) {
+    /**
+     * GitHub 头像站按用户名直接返回图片，不经 github.com 跳转（国内网络下 github.com 常连不上），
+     * 也不占 API 次数，资料没读到时头像照样能显示。头像显示 40dp，3 倍屏约 120px，按 256px 要图。
+     */
+    val avatarUrl: String
+        get() = "https://avatars.githubusercontent.com/$github?s=256"
+
     val profileUrl: String
         get() = "https://github.com/$github"
 }
@@ -64,11 +71,6 @@ internal val TEAM: List<TeamMember> = listOf(
 internal data class GitHubProfile(
     val name: String?,
     val bio: String?,
-    /**
-     * 接口给的头像地址，直接落在 avatars.githubusercontent.com。不用 `github.com/<用户名>.png`：
-     * 它要先经 github.com 跳转，国内网络下 github.com 常常连不上，而头像域名能正常访问。
-     */
-    val avatarUrl: String?,
 )
 
 /**
@@ -107,9 +109,7 @@ private object GitHubProfiles {
     private fun parse(json: String): GitHubProfile {
         val obj = JSONObject(json)
         fun field(key: String) = obj.optString(key).takeIf { !obj.isNull(key) && it.isNotBlank() }?.trim()
-        // 头像显示 40dp，3 倍屏上约 120px；按 256px 要图，留出清晰度余量。
-        val avatar = field("avatar_url")?.let { url -> url + (if ('?' in url) "&" else "?") + "s=256" }
-        return GitHubProfile(name = field("name"), bio = field("bio"), avatarUrl = avatar)
+        return GitHubProfile(name = field("name"), bio = field("bio"))
     }
 
     private fun fetch(login: String): String {
