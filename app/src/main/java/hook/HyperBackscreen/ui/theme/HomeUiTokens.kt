@@ -25,7 +25,10 @@ object HomeUiTokens {
     val AboutHeaderTopPadding = 48.dp
     val AboutHeaderBottomPadding = 42.dp
     val AboutLogoSize = 100.dp
-    val AboutLogoCornerRadius = 18.dp
+    /** 关于页图标白色底板的圆角。 */
+    val AboutLogoCornerRadius = 26.dp
+    /** 图标在白色底板里的尺寸，四周留出白边。 */
+    val AboutLogoInnerSize = 80.dp
 
     val AboutAvatarSize = 30.dp
 

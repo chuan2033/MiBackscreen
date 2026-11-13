@@ -1,5 +1,6 @@
 package hook.HyperBackscreen.ui.about
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -151,16 +152,18 @@ private fun AboutHeader(onVersionClick: () -> Unit) {
             ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // 图标放在白色圆角矩形底板上，像桌面上的应用图标；深色模式下底板也保持白色。
         Box(
             modifier = Modifier
                 .size(HomeUiTokens.AboutLogoSize)
-                .squircleClip(HomeUiTokens.AboutLogoCornerRadius),
+                .squircleClip(HomeUiTokens.AboutLogoCornerRadius)
+                .background(Color.White),
             contentAlignment = Alignment.Center
         ) {
             Image(
                 painter = painterResource(id = R.drawable.ic_about_logo),
                 contentDescription = null,
-                modifier = Modifier.size(HomeUiTokens.AboutLogoSize),
+                modifier = Modifier.size(HomeUiTokens.AboutLogoInnerSize),
                 contentScale = ContentScale.Fit
             )
         }
