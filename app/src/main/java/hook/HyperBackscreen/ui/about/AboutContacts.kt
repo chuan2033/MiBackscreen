@@ -107,8 +107,8 @@ private object GitHubProfiles {
     private fun parse(json: String): GitHubProfile {
         val obj = JSONObject(json)
         fun field(key: String) = obj.optString(key).takeIf { !obj.isNull(key) && it.isNotBlank() }?.trim()
-        // 头像只显示几十 dp，按 160px 要图。
-        val avatar = field("avatar_url")?.let { url -> url + (if ('?' in url) "&" else "?") + "s=160" }
+        // 头像显示 40dp，3 倍屏上约 120px；按 256px 要图，留出清晰度余量。
+        val avatar = field("avatar_url")?.let { url -> url + (if ('?' in url) "&" else "?") + "s=256" }
         return GitHubProfile(name = field("name"), bio = field("bio"), avatarUrl = avatar)
     }
 
@@ -209,8 +209,11 @@ internal fun AboutAvatar(
 private object AvatarCache {
     val memory = ConcurrentHashMap<String, ImageBitmap>()
 
-    /** 头像只显示几十 dp，640px 的原图缩到 1/4 就够了。 */
-    private const val SAMPLE_SIZE = 4
+    /**
+     * 解码后的最短边不小于这个像素数。头像显示 40dp，3 倍屏要 120px，留一倍余量；
+     * 不能写死缩放倍数：QQ 头像 640px、GitHub 头像 256px，固定缩到 1/4 会把后者缩成 64px 以下而发糊。
+     */
+    private const val MIN_DECODED_PX = 256
     private const val TIMEOUT_MS = 8_000
 
     suspend fun load(context: Context, url: String): ImageBitmap? = withContext(Dispatchers.IO) {
@@ -219,8 +222,12 @@ private object AvatarCache {
         val bytes = runCatching { file.takeIf { it.isFile && it.length() > 0 }?.readBytes() }.getOrNull()
             ?: runCatching { download(url) }.getOrNull()?.also { runCatching { file.writeBytes(it) } }
             ?: return@withContext null
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= MIN_DECODED_PX) sample *= 2
         val bitmap: Bitmap = BitmapFactory.decodeByteArray(
-            bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = SAMPLE_SIZE },
+            bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample },
         ) ?: run {
             file.delete()
             return@withContext null
