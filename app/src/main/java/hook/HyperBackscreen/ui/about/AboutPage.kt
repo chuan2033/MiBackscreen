@@ -71,7 +71,8 @@ internal fun AboutPage(
                 summary = profile?.bio ?: member.role,
                 url = member.profileUrl,
                 startAction = {
-                    AboutAvatar(url = member.avatarUrl, fallback = MiuixIcons.Contacts)
+                    // 头像地址来自 GitHub 资料；资料还没读到时先显示图标。
+                    AboutAvatar(url = profile?.avatarUrl, fallback = MiuixIcons.Contacts)
                 },
             )
         }

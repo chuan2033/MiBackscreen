@@ -49,10 +49,6 @@ internal data class TeamMember(
     val role: String,
     val github: String,
 ) {
-    /** GitHub 头像的公开地址，用户名即地址，不消耗 API 次数。 */
-    val avatarUrl: String
-        get() = "https://github.com/$github.png?size=160"
-
     val profileUrl: String
         get() = "https://github.com/$github"
 }
@@ -68,6 +64,11 @@ internal val TEAM: List<TeamMember> = listOf(
 internal data class GitHubProfile(
     val name: String?,
     val bio: String?,
+    /**
+     * 接口给的头像地址，直接落在 avatars.githubusercontent.com。不用 `github.com/<用户名>.png`：
+     * 它要先经 github.com 跳转，国内网络下 github.com 常常连不上，而头像域名能正常访问。
+     */
+    val avatarUrl: String?,
 )
 
 /**
@@ -106,7 +107,9 @@ private object GitHubProfiles {
     private fun parse(json: String): GitHubProfile {
         val obj = JSONObject(json)
         fun field(key: String) = obj.optString(key).takeIf { !obj.isNull(key) && it.isNotBlank() }?.trim()
-        return GitHubProfile(name = field("name"), bio = field("bio"))
+        // 头像只显示几十 dp，按 160px 要图。
+        val avatar = field("avatar_url")?.let { url -> url + (if ('?' in url) "&" else "?") + "s=160" }
+        return GitHubProfile(name = field("name"), bio = field("bio"), avatarUrl = avatar)
     }
 
     private fun fetch(login: String): String {
@@ -168,14 +171,14 @@ internal fun openInQq(context: Context, uri: String, number: String): Boolean {
  */
 @Composable
 internal fun AboutAvatar(
-    url: String,
+    url: String?,
     fallback: ImageVector,
     modifier: Modifier = Modifier,
     size: Dp = 40.dp,
 ) {
     val context = LocalContext.current
-    val image by produceState(initialValue = AvatarCache.memory[url], url) {
-        if (value == null) value = AvatarCache.load(context.applicationContext, url)
+    val image by produceState(initialValue = url?.let { AvatarCache.memory[it] }, url) {
+        value = url?.let { AvatarCache.memory[it] ?: AvatarCache.load(context.applicationContext, it) }
     }
     Box(
         modifier = modifier
