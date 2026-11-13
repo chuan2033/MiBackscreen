@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import top.yukonga.miuix.kmp.squircle.squircleClip
@@ -163,7 +164,9 @@ private fun AboutHeader(onVersionClick: () -> Unit) {
             Image(
                 painter = painterResource(id = R.drawable.ic_about_logo),
                 contentDescription = null,
-                modifier = Modifier.size(HomeUiTokens.AboutLogoInnerSize),
+                modifier = Modifier
+                    .offset(HomeUiTokens.AboutLogoOpticalOffsetX, HomeUiTokens.AboutLogoOpticalOffsetY)
+                    .size(HomeUiTokens.AboutLogoInnerSize),
                 contentScale = ContentScale.Fit
             )
         }
