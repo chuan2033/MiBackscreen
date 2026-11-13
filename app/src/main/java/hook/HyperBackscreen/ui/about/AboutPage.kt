@@ -1,6 +1,5 @@
 package hook.HyperBackscreen.ui.about
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -172,12 +171,11 @@ private fun AboutHeader(onVersionClick: () -> Unit) {
             style = MiuixTheme.textStyles.title1
         )
         Spacer(modifier = Modifier.height(HomeUiTokens.AboutVersionSpacing))
-        // 版本号做成胶囊按钮：点它直接进「应用更新」，底色提示它可以点。
+        // 版本号是纯文字，没有底色和箭头；点它仍然直接进「应用更新」。
         Text(
-            text = stringResource(R.string.about_version, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE) + "  ›",
+            text = stringResource(R.string.about_version, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
-                .background(MiuixTheme.colorScheme.surfaceContainer)
                 .clickable(
                     onClickLabel = stringResource(R.string.about_update_title),
                     role = Role.Button,
