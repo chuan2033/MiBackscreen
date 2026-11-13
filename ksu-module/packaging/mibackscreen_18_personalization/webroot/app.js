@@ -266,78 +266,141 @@ function esc(s) {
 }
 function escNl(s) { return esc(s).replace(/\n/g, '<br>'); }
 
+// 分组展开状态跨刷新保留：用户点开了哪组，重新检测后还是开着。
+const openGroups = {};
+
+function itemHTML(r, withIcon, withFix) {
+    let html = '<div class="dot">' + (MARK[r.level] || MARK.info) + '</div>';
+    if (withIcon && r.pkg && hasBridge()) {
+        html += '<img class="icon" alt="" src="ksu://icon/' + encodeURIComponent(r.pkg) +
+                '" onerror="this.style.display=\'none\'">';
+    }
+    html += '<div class="body">';
+    html += '<div class="t">' + esc(r.title) + '</div>';
+    if (r.detail) html += '<div class="d">' + esc(r.detail) + '</div>';
+    if (withFix && r.fix) html += '<div class="fix">' + esc(r.fix) + '</div>';
+    if (withFix && r.action && ACTIONS[r.action]) {
+        html += '<button class="fixbtn" type="button">' + esc(ACTIONS[r.action].label) + '</button>';
+    }
+    html += '</div>';
+    return html;
+}
+
+function makeItem(r, withIcon, withFix) {
+    const el = document.createElement('div');
+    el.className = 'item ' + (MARK[r.level] ? r.level : 'info');
+    el.innerHTML = itemHTML(r, withIcon, withFix);
+    const ab = el.querySelector('button.fixbtn');
+    if (ab) ab.addEventListener('click', function () { runAction(r.action, ab); });
+    return el;
+}
+
+function sectionOf(r) {
+    for (let i = 0; i < SECTIONS.length; i++) {
+        const k = SECTIONS[i].key;
+        if (r.id === k || r.id.indexOf(k + '.') === 0) return SECTIONS[i];
+    }
+    return null;
+}
+
+// 总览里的大号结论。status.sh 的结论行是 level=verdict，title 放 ok|warn|fail，
+// detail 是一句总结（如「2 项注意」），fix 是解释。
+function setVerdict(level, title, text) {
+    const v = document.getElementById('verdict');
+    v.className = 'verdict ' + level;
+    const icon = v.querySelector('.vicon');
+    if (level === 'busy') icon.innerHTML = '<span class="spinner"></span>';
+    else icon.textContent = MARK[level] || MARK.info;
+    document.getElementById('vtitle').textContent = title;
+    document.getElementById('vtext').textContent = text || '';
+}
+
 function render(records) {
+    const issuesWrap = document.getElementById('issues');
     const wrap = document.getElementById('sections');
+    issuesWrap.innerHTML = '';
     wrap.innerHTML = '';
 
+    const checks = records.filter(function (r) { return r.id !== 'result' && r.id.indexOf('result.') !== 0; });
+    const verdict = records.filter(function (r) { return r.id === 'result' || r.id.indexOf('result.') === 0; })[0];
+
+    // 顶部副标题：模块版本 · Root 方案 · 系统
+    const pick = function (id) {
+        const r = checks.filter(function (x) { return x.id === id; })[0];
+        return r && r.detail ? r.detail : '';
+    };
+    const metaParts = [pick('env.module'), pick('env.root'), (pick('env.os').split(' ')[0] || '')]
+        .filter(function (x) { return x; });
+    document.getElementById('meta').textContent =
+        metaParts.length ? metaParts.join(' · ') : '18 系列个性化 · KSU 附加模块';
+
+    // 需要处理：异常排前面，注意其次；带修复说明和修复按钮
+    const issues = checks.filter(function (r) { return r.level === 'fail'; })
+        .concat(checks.filter(function (r) { return r.level === 'warn'; }));
+    if (issues.length) {
+        const g = document.createElement('div');
+        g.className = 'group';
+        g.innerHTML = '<h2>需要处理</h2>';
+        const card = document.createElement('div');
+        card.className = 'card';
+        issues.forEach(function (r) {
+            const sec = sectionOf(r);
+            card.appendChild(makeItem(r, !!(sec && sec.key === 'card'), true));
+        });
+        g.appendChild(card);
+        issuesWrap.appendChild(g);
+    }
+
+    // 逐项明细：每组一张可折叠卡片，标题行带小结，默认收起
     let nOk = 0, nWarn = 0, nFail = 0;
+    const detailGroup = document.createElement('div');
+    detailGroup.className = 'group';
+    detailGroup.innerHTML = '<h2>详细检查</h2>';
 
     SECTIONS.forEach(function (sec) {
-        const items = records.filter(function (r) {
-            return r.id === sec.key || r.id.indexOf(sec.key + '.') === 0;
-        });
+        if (sec.key === 'result') return;
+        const items = checks.filter(function (r) { return sectionOf(r) === sec; });
         if (!items.length) return;
 
-        const div = document.createElement('div');
-        div.className = 'section';
-
-        const h2 = document.createElement('h2');
-        h2.textContent = sec.title;
-        div.appendChild(h2);
-
+        let ok = 0, warn = 0, fail = 0;
         items.forEach(function (r) {
-            // 「结论」是汇总，不是检查项 —— 算进徽章会重复计数
-            if (r.id.indexOf('result.') !== 0) {
-                if (r.level === 'ok') nOk++;
-                else if (r.level === 'warn') nWarn++;
-                else if (r.level === 'fail') nFail++;
-            }
-
-            const el = document.createElement('div');
-            el.className = 'item ' + (r.level || 'info');
-
-            let html = '<div class="dot">' + (MARK[r.level] || MARK.info) + '</div>';
-
-            if (sec.key === 'card' && r.pkg && hasBridge()) {
-                html += '<img class="icon" alt="" src="ksu://icon/' + encodeURIComponent(r.pkg) +
-                        '" onerror="this.style.display=\'none\'">';
-            }
-
-            html += '<div class="body">';
-            html += '<div class="t">' + esc(r.title) + '</div>';
-            if (r.detail) html += '<div class="d">' + esc(r.detail) + '</div>';
-            if (r.fix)    html += '<div class="fix">' + esc(r.fix) + '</div>';
-            if (r.action && ACTIONS[r.action]) {
-                html += '<button class="fixbtn" type="button">' +
-                        esc(ACTIONS[r.action].label) + '</button>';
-            }
-            html += '</div>';
-
-            el.innerHTML = html;
-
-            const ab = el.querySelector('button.fixbtn');
-            if (ab) {
-                ab.addEventListener('click', function () { runAction(r.action, ab); });
-            }
-            div.appendChild(el);
+            if (r.level === 'ok') ok++;
+            else if (r.level === 'warn') warn++;
+            else if (r.level === 'fail') fail++;
         });
+        nOk += ok; nWarn += warn; nFail += fail;
 
-        wrap.appendChild(div);
+        const chip = fail ? ['fail', fail + ' 项异常']
+            : warn ? ['warn', warn + ' 项注意']
+                : ok ? ['ok', ok === items.length ? '全部正常' : ok + ' 项正常']
+                    : ['info', items.length + ' 项'];
+
+        const fold = document.createElement('details');
+        fold.className = 'card fold';
+        if (openGroups[sec.key]) fold.open = true;
+        fold.addEventListener('toggle', function () { openGroups[sec.key] = fold.open; });
+
+        const summary = document.createElement('summary');
+        summary.innerHTML = '<span class="ftitle">' + esc(sec.title) + '</span>' +
+            '<span class="chip ' + chip[0] + '">' + esc(chip[1]) + '</span><span class="chev"></span>';
+        fold.appendChild(summary);
+
+        const rows = document.createElement('div');
+        rows.className = 'rows';
+        items.forEach(function (r) { rows.appendChild(makeItem(r, sec.key === 'card', false)); });
+        fold.appendChild(rows);
+
+        detailGroup.appendChild(fold);
     });
+    wrap.appendChild(detailGroup);
 
-    const badge = document.getElementById('badge');
-    badge.className = 'badge';
-    if (nFail > 0) {
-        badge.classList.add('fail');
-        badge.textContent = nFail + ' 项异常';
-    } else if (nWarn > 0) {
-        badge.classList.add('warn');
-        badge.textContent = nWarn + ' 项注意';
-    } else if (nOk > 0) {
-        badge.classList.add('ok');
-        badge.textContent = '一切正常';
+    // 结论优先用脚本给的（它还能判断「视图被隔离」这类计数看不出的情况）；没有就按计数自己判断
+    if (verdict && MARK[verdict.title] && verdict.detail) {
+        setVerdict(verdict.title, verdict.detail, verdict.fix);
     } else {
-        badge.textContent = '无数据';
+        const lv = nFail ? 'fail' : nWarn ? 'warn' : nOk ? 'ok' : 'info';
+        setVerdict(lv, lv === 'fail' ? nFail + ' 项异常' : lv === 'warn' ? nWarn + ' 项注意'
+            : lv === 'ok' ? '全部通过' : '没有检测数据', '');
     }
 }
 
@@ -361,13 +424,10 @@ async function refresh(silent) {
 }
 
 async function refreshInner(silent) {
-    const badge = document.getElementById('badge');
     const wrap = document.getElementById('sections');
 
-    badge.className = 'badge busy';
-    badge.innerHTML = '<span class="spinner"></span>检测中';
-    if (!silent && !wrap.querySelector('.section')) {
-        wrap.innerHTML = '<div class="empty"><span class="spinner"></span>正在检查模块状态…</div>';
+    if (!silent || !wrap.querySelector('.fold')) {
+        setVerdict('busy', '正在检测…', '稍等几秒，正在检查模块状态');
     }
 
     if (!hasBridge()) {
@@ -376,8 +436,7 @@ async function refreshInner(silent) {
             '请从 <b>APatch / KernelSU 管理器的模块卡片</b>点开本页面，<br>' +
             '或安装 WebUI X / KSU WebUI Standalone 后再打开。<br><br>' +
             '不想装的话，直接在管理器模块卡片上点「操作」也能看到同样的诊断。</div>';
-        badge.className = 'badge fail';
-        badge.textContent = '无法访问';
+        setVerdict('fail', '无法访问', '当前环境没有 WebUI 桥');
         return;
     }
 
@@ -385,16 +444,14 @@ async function refreshInner(silent) {
 
     if (res.errno !== 0 && res.stderr) {
         wrap.innerHTML = '<div class="err">诊断脚本执行失败：<br>' + esc(res.stderr) + '</div>';
-        badge.className = 'badge fail';
-        badge.textContent = '执行失败';
+        setVerdict('fail', '执行失败', '诊断脚本没能跑完');
         return;
     }
 
     const records = parseProtocol(res.stdout);
     if (!records.length) {
         wrap.innerHTML = '<div class="err">诊断脚本没有输出。<br>修复：在管理器里重刷模块，或点「导出日志」反馈。</div>';
-        badge.className = 'badge fail';
-        badge.textContent = '无输出';
+        setVerdict('fail', '没有输出', '在管理器里重刷模块，或点「导出日志」反馈');
         return;
     }
 
@@ -414,15 +471,19 @@ async function actRestartHosts(btn) {
     showToast('已停止背屏中心/主题商店/应用卡中心，重新打开即会读取预设');
 }
 
-function prependCard(title, detail, fix) {
+// 操作结果（修复、导出日志）放在总览下面，最新的在最上
+function prependCard(title, detail, fix, level) {
+    const card = document.createElement('div');
+    card.className = 'card';
     const box = document.createElement('div');
-    box.className = 'item info';
-    box.innerHTML = '<div class="dot">\u00b7</div><div class="body">' +
+    box.className = 'item ' + (level || 'info');
+    box.innerHTML = '<div class="dot">' + (MARK[level] || MARK.info) + '</div><div class="body">' +
         '<div class="t">' + esc(title) + '</div>' +
         (detail ? '<div class="d">' + escNl(detail) + '</div>' : '') +
         (fix ? '<div class="fix">' + escNl(fix) + '</div>' : '') + '</div>';
-    const wrap = document.getElementById('sections');
-    wrap.insertBefore(box, wrap.firstChild);
+    card.appendChild(box);
+    const wrap = document.getElementById('notices');
+    wrap.insertBefore(card, wrap.firstChild);
 }
 
 async function runAction(id, btn) {
@@ -474,7 +535,8 @@ async function runAction(id, btn) {
                 : partial ? (a.titlePartial || a.titleFail || '只成功了一部分')
                     : (a.titleFail || '操作失败'),
         human || (ok ? '已完成' : '请导出日志反馈'),
-        (ok || partial) ? (a.fixOk || '') : ''
+        (ok || partial) ? (a.fixOk || '') : '',
+        ok || nothing ? 'ok' : partial ? 'warn' : 'fail'
     );
     window.scrollTo(0, 0);
     showToast(ok ? '已完成' : (nothing ? '无需处理' : (partial ? '补了一部分' : '操作失败')));
@@ -495,14 +557,8 @@ async function actLogpack(btn) {
     if (path && path.indexOf('/') === 0) {
         showToast('日志已保存：' + path);
         window.__lastLogPath = path;
-        const box = document.createElement('div');
-        box.className = 'item info';
-        box.innerHTML = '<div class="dot">\u00b7</div><div class="body">' +
-            '<div class="t">日志包已生成</div>' +
-            '<div class="d">' + esc(path) + '</div>' +
-            '<div class="fix">用文件管理器进入 内部存储/Download 就能看到，直接发给开发者即可</div></div>';
-        const wrap = document.getElementById('sections');
-        wrap.insertBefore(box, wrap.firstChild);
+        prependCard('日志包已生成', path,
+            '用文件管理器进入 内部存储/Download 就能看到，直接发给开发者即可', 'ok');
     } else {
         showToast('打包失败，请把下面这段发给我');
         copyFallback();

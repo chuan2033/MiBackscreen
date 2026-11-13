@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#f7f7f7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <title>MiBackscreen背屏附加资源 · 状态</title>
 <!-- 官方推荐的内联引入方式：命中宿主虚拟域时由 SuFilePathHandler 动态生成安全区变量，
@@ -17,23 +17,33 @@
 
 <div class="busybar" id="busybar" hidden><i></i></div>
 
+<!-- 总览：模块信息 + 一眼能看到的结论 -->
 <div class="hero">
-    <div class="hero-top">
-        <div>
-            <h1>MiBackscreen背屏附加资源</h1>
-            <div class="ver">18 系列个性化 · KSU 附加模块</div>
+    <div class="hero-head">
+        <h1>MiBackscreen 背屏附加资源</h1>
+        <div class="meta" id="meta">18 系列个性化 · KSU 附加模块</div>
+    </div>
+    <div class="verdict busy" id="verdict">
+        <div class="vicon"><span class="spinner"></span></div>
+        <div class="vbody">
+            <div class="vtitle" id="vtitle">正在检测…</div>
+            <div class="vtext" id="vtext">稍等几秒，正在检查模块状态</div>
         </div>
-        <div class="badge busy" id="badge">检测中…</div>
     </div>
 </div>
 
-<div id="sections">
-    <div class="empty"><span class="spinner"></span>正在检查模块状态…</div>
-</div>
+<!-- 操作结果（修复、导出日志）插在这里 -->
+<div id="notices"></div>
+
+<!-- 需要处理的项：异常、注意 -->
+<div id="issues"></div>
+
+<!-- 各分组的逐项明细，默认收起 -->
+<div id="sections"></div>
 
 <div class="hint">
     卡住了？先点「重新检测」。<br>
-    卡片不出现多半是配套 App 没装，看「卡片就绪度」那一栏。
+    卡片不出现多半是配套 App 没装，展开「卡片就绪度」看看。
 </div>
 
 <div class="dock">
