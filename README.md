@@ -8,7 +8,8 @@
 </p>
 
 <p  align="center">
- 基于 Modern Xposed 的小米背屏模块。当前分支 `feat/18pro-max-rear-screen` 包含新版背屏中心、主题商店和负一屏应用卡适配。分支名及请求中使用的机型标识不代表实际设备支持范围。
+ 小米 17 Pro 系列的背屏增强模块，基于 Modern Xposed（LSPosed）。<br>
+ 背屏小部件、实时歌词、录屏与投屏，并同步 18 Pro Max 的背屏个性化和应用卡。
 </p>
 
 <p  align="center">
