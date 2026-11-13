@@ -12,7 +12,7 @@ MiBackscreen 附加模块的打包工程，产出 zip 模块包（支持 **Kerne
 | 目录 | 内容 |
 | --- | --- |
 | `packaging/mibackscreen_18_personalization/` | **模块源码**：`module.prop`、`customize.sh`、`post-fs-data.sh` / `service.sh` / `uninstall.sh` / `action.sh`、`appinfo_txn.sh` / `appinfo_utils.sh`（appInfo.json 事务读改写）、`lib.sh`、`status.sh`（诊断面板）、`fix-*.sh` / `clear-reareye.sh` / `logpack.sh`、`webroot/`（面板前端）。改功能的唯一入口。`mibackscreen_resources/`、`appcard_entries/`、`appcard_appInfo_patch.json` 与 `META-INF/` 不在源码里，由构建脚本从 ROM 生成 |
-| `tools/` | 构建、校验、诊断脚本（见下） |
+| `tools/` | 构建与校验脚本（见下）；设备诊断脚本只在本地，不进库 |
 | `device_popsicle_template/` | 测试机 `popsicle` 的模板快照（`normal` / `default` 的 `rearScreen.json`），比对 ROM 原始模板用 |
 | `out/` | 构建输出目录：`MiBackscreen_v<version>.zip`（不进库）。APK 产物只认主仓 `app/build/outputs/apk/release/app-release.apk`，不往这里复制 |
 | `analysis/`（仅本地） | 逆向分析产物：智能助理 `personalassistant` 的 `base.apk` + 手挑的关键类，属于小米的代码，不进库 |
@@ -56,20 +56,6 @@ adb reboot
 | `build_personalization_module.ps1` | 从指定 ROM 构建最终 zip：复制模块脚本与 webroot 并统一成「UTF-8 无 BOM + LF」，生成资源、`appcard_entries/`，以及 Magisk 安装器 `META-INF/com/google/android/update-binary`（官方 module_installer）/ `updater-script`（`#MAGISK`） |
 | `validate_personalization_module.ps1` | 校验包结构（含 `appinfo_txn.sh`、`META-INF`）、脚本权限、原始字节里无 BOM / CR、JSON、资源引用、ROM 文件哈希，以及 `module.prop` 的 id / version / versionCode（期望值读打包源文件，升版本只改 `module.prop`） |
 | `repack_from_previous.py` | Linux / macOS 可用，不需要 ROM 和 PowerShell：沿用上一版交付包里的 ROM 产物，换上当前脚本重新打包并按上面的规则校验（ROM 哈希改为与上一版逐字节比对）。只适用于 ROM 没变、只改了脚本 / webroot / module.prop 的情况。用法：`python3 ksu-module/tools/repack_from_previous.py --base ksu-module/out/MiBackscreen_v<旧版本>.zip` |
-
-**设备诊断（开发者用）**
-
-| 文件 | 用途 |
-| --- | --- |
-| `diagnose_rear_presets.sh` | 分层只读诊断：视图隔离 / 模块结构 / data-root 资源 / 权限 context / appInfo 六卡 / 宿主视角 / 冲突检测 / 卡片就绪度。默认不放剪贴板，加 `--clipboard` 才放 |
-| `check_mount.sh` | 环境与模块结构快照（也被 `run_check.bat` 调用）；会列出已装模块目录名和过滤后的 logcat |
-
-**发给用户的客服脚本**
-
-| 文件 | 用途 |
-| --- | --- |
-| `run_check.bat` + `check_mount.sh` + `诊断说明.txt` | 一套自助诊断（双击 bat，结果落同目录）。**三个文件必须同目录**，bat 用 `%~dp0` 引用。bat 必须是 CRLF（`.gitattributes` 里按原样存取） |
-| `fix_aiapp_dir_perms.sh` | 修 `rearScreenAiApp_Theme` 目录属主（「AI 生成应用卡点应用失败」故障的自助修复） |
 
 ## 运行时约定（改脚本前先看）
 

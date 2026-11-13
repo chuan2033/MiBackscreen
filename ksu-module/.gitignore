@@ -6,3 +6,9 @@ archive/
 out/*.zip
 out/*.apk
 out/screenshots/
+# 开发者自用的设备诊断 / 客服脚本只留在本地（功能已由模块内的 status.sh 与 fix-*.sh 覆盖）
+tools/check_mount.sh
+tools/run_check.bat
+tools/诊断说明.txt
+tools/fix_aiapp_dir_perms.sh
+tools/diagnose_rear_presets.sh
