@@ -101,7 +101,7 @@ internal fun ConfigPage(
         )
         ArrowPreference(
             title = stringResource(R.string.config_restore_action_title),
-            summary = stringResource(R.string.config_restore_action_summary, PreferencesBackup.FILE_NAME),
+            summary = stringResource(R.string.config_restore_action_summary),
             onClick = onRestorePreferences
         )
     }

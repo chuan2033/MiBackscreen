@@ -1,6 +1,7 @@
 package hook.HyperBackscreen.ui.config
 
 import android.content.Context
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import hook.HyperBackscreen.BuildConfig
@@ -23,9 +24,12 @@ import java.util.concurrent.TimeUnit
 /**
  * 配置备份 / 恢复：把模块偏好导出成一份 JSON 放在手机存储根目录，换机或重装后读回来。
  *
- * 为什么走 root 读写根目录：JSON 不是媒体文件，分区存储下应用写不进 /storage/emulated/0；
- * 走 MediaStore 只能落到 Download。模块本身有 root，借 su 直接 cp/cat 最省事，也就没有
- * 文件选择器的来回。
+ * 备份走 root 写根目录：JSON 不是媒体文件，分区存储下应用写不进 /storage/emulated/0；
+ * 走 MediaStore 只能落到 Download。模块本身有 root，借 su 直接 cp 最省事，固定文件名也好找。
+ *
+ * 恢复让用户用系统文件选择器自己挑文件（[inspect] / [restore] 收 Uri）：备份常常是从别的手机、
+ * 微信或网盘拿来的，放在 Download、名字也可能变成「…(1).json」，固定去根目录找就找不到。
+ * 选择器给的 Uri 应用直接可读，恢复不需要 root。
  *
  * 只备份偏好，不动 data-root 资源与 appInfo 索引 —— 那些由 KSU 模块安装时重建。
  */
@@ -82,9 +86,9 @@ internal object PreferencesBackup {
         val appVersion: String?,
     )
 
-    /** 只读取备份概要、不写任何偏好；返回 null 表示文件缺失或无法识别（与 [restore] 同一判据）。 */
-    fun inspect(): BackupInfo? {
-        val payload = readPayload() ?: return null
+    /** 只读取所选备份文件的概要、不写任何偏好；返回 null 表示读不到或不是本模块的备份（与 [restore] 同一判据）。 */
+    fun inspect(context: Context, uri: Uri): BackupInfo? {
+        val payload = readPayload(context, uri) ?: return null
         if (payload.format != FORMAT || payload.values.isEmpty()) return null
         return BackupInfo(
             keyCount = payload.values.size,
@@ -93,9 +97,9 @@ internal object PreferencesBackup {
         )
     }
 
-    /** 从根目录读回并覆盖当前偏好；返回 null 表示文件缺失或无法识别。 */
-    fun restore(context: Context): RestoreResult? {
-        val payload = readPayload() ?: return null
+    /** 从所选备份文件读回并覆盖当前偏好；返回 null 表示读不到或无法识别。 */
+    fun restore(context: Context, uri: Uri): RestoreResult? {
+        val payload = readPayload(context, uri) ?: return null
         if (payload.format != FORMAT) return null
         val applied = PrefsBridge.applyPreferencesFromBackup(context, payload.values)
         if (applied == 0) return null
@@ -113,9 +117,25 @@ internal object PreferencesBackup {
         val values: Map<String, String>,
     )
 
+    /** 根目录那份备份（只用于备份时提示「覆盖了哪次的备份」）。 */
     private fun readPayload(): Payload? {
         val text = runRoot("cat ${shellQuote(targetFile().absolutePath)}", MAX_READ_BYTES)
             ?: return null
+        return parsePayload(text)
+    }
+
+    /** 用户在文件选择器里选的备份；超过上限的文件直接当作无法识别，不整个读进内存。 */
+    private fun readPayload(context: Context, uri: Uri): Payload? {
+        val text = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val bytes = input.readNBytes(MAX_READ_BYTES + 1)
+                if (bytes.size > MAX_READ_BYTES) null else String(bytes, Charsets.UTF_8)
+            }
+        }.getOrNull() ?: return null
+        return parsePayload(text)
+    }
+
+    private fun parsePayload(text: String): Payload? {
         return runCatching {
             val root = compactJson.parseToJsonElement(text).jsonObject
             val values = root["values"]?.jsonObject?.mapValues { (_, value) ->

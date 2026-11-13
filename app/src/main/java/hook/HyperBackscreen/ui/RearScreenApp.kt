@@ -27,6 +27,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import hook.HyperBackscreen.ui.components.LocalUiFeedback
 import hook.HyperBackscreen.ui.components.rememberUiFeedback
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.net.Uri
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -250,9 +253,23 @@ internal fun RearScreenApp() {
     var showRearDisplayWarning by rememberSaveable { mutableStateOf(false) }
     var rearDisplayWarningChecked by rememberSaveable { mutableStateOf(false) }
     var startupUpdateChecked by rememberSaveable { mutableStateOf(false) }
-    // 恢复配置会覆盖当前设置：先读出备份概要让用户确认，确认后才真正写入。
+    // 恢复配置会覆盖当前设置：用户先在文件选择器里选备份，读出概要让用户确认，确认后才真正写入。
     var pendingRestore by remember { mutableStateOf<PreferencesBackup.BackupInfo?>(null) }
+    var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var showRestoreConfirm by remember { mutableStateOf(false) }
+    val pickBackupFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val info = withContext(Dispatchers.IO) { PreferencesBackup.inspect(context, uri) }
+            if (info == null) {
+                feedback.show(resources.getString(R.string.config_restore_failed))
+            } else {
+                pendingRestore = info
+                pendingRestoreUri = uri
+                showRestoreConfirm = true
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         if (rearDisplayWarningChecked) return@LaunchedEffect
@@ -441,10 +458,11 @@ internal fun RearScreenApp() {
     }
 
     fun performRestore() {
+        val uri = pendingRestoreUri ?: return
         scope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 val before = ModulePreferencesSnapshot.read(modulePreferences)
-                val result = PreferencesBackup.restore(context)
+                val result = PreferencesBackup.restore(context, uri)
                 Triple(result, before, ModulePreferencesSnapshot.read(modulePreferences))
             }
             val (result, before, after) = outcome
@@ -808,15 +826,12 @@ internal fun RearScreenApp() {
                 }
             },
             onRestorePreferences = {
-                scope.launch {
-                    val info = withContext(Dispatchers.IO) { PreferencesBackup.inspect() }
-                    if (info == null) {
-                        feedback.show(resources.getString(R.string.config_restore_failed))
-                    } else {
-                        pendingRestore = info
-                        showRestoreConfirm = true
-                    }
-                }
+                // 备份可能被改名或经第三方应用转存，类型不一定标成 JSON，放宽到常见的几种；
+                // 不是本模块的备份会在读概要时被拒，并提示用户。
+                val opened = runCatching {
+                    pickBackupFile.launch(arrayOf("application/json", "text/*", "application/octet-stream"))
+                }.isSuccess
+                if (!opened) feedback.show(resources.getString(R.string.config_restore_picker_failed))
             },
             rearMedia = rearMedia,
             onRearMediaChange = { switch, newValue ->
@@ -917,7 +932,10 @@ internal fun RearScreenApp() {
                 )
             },
             onDismissRequest = { showRestoreConfirm = false },
-            onDismissFinished = { pendingRestore = null }
+            onDismissFinished = {
+                pendingRestore = null
+                pendingRestoreUri = null
+            }
         ) {
             DialogButtonRow(
                 secondaryText = stringResource(R.string.common_cancel),

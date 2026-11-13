@@ -74,12 +74,13 @@
     <string name="config_backup_action_title">Back up configuration</string>
     <string name="config_backup_action_summary">Export to %1$s in internal storage</string>
     <string name="config_restore_action_title">Restore configuration</string>
-    <string name="config_restore_action_summary">Read back from %1$s; battery ring settings apply after reopening the rear screen</string>
+    <string name="config_restore_action_summary">Pick a backup file to restore. Rear battery settings apply after reopening the rear screen</string>
     <string name="config_backup_done">Backed up %1$d settings to %2$s</string>
     <string name="config_backup_done_overwrite">Backed up %1$d settings, replacing the copy from %2$s</string>
     <string name="config_backup_failed">Backup failed: root access is required to write internal storage</string>
     <string name="config_restore_done">Restored %1$d settings (backup from %2$s)</string>
-    <string name="config_restore_failed">Restore failed: no usable backup file, or its content was not recognized</string>
+    <string name="config_restore_failed">Restore failed: the selected file is not a MiBackscreen config backup, or it cannot be read</string>
+    <string name="config_restore_picker_failed">Could not open the file picker</string>
     <plurals name="enabled_function_count">
         <item quantity="one">%1$d function enabled</item>
         <item quantity="other">%1$d functions enabled</item>

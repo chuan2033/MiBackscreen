@@ -74,12 +74,13 @@
     <string name="config_backup_action_title">备份配置</string>
     <string name="config_backup_action_summary">导出到根目录 %1$s</string>
     <string name="config_restore_action_title">恢复配置</string>
-    <string name="config_restore_action_summary">从 %1$s 读回；背屏电量相关设置需重进背屏生效</string>
+    <string name="config_restore_action_summary">选择备份文件读回；背屏电量相关设置需重进背屏生效</string>
     <string name="config_backup_done">已备份 %1$d 项配置到 %2$s</string>
     <string name="config_backup_done_overwrite">已备份 %1$d 项配置，覆盖了 %2$s 的备份</string>
     <string name="config_backup_failed">备份失败：需要 root 权限写入手机存储根目录</string>
     <string name="config_restore_done">已恢复 %1$d 项配置（备份时间 %2$s）</string>
-    <string name="config_restore_failed">恢复失败：没找到可用的备份文件，或内容无法识别</string>
+    <string name="config_restore_failed">恢复失败：所选文件不是 MiBackscreen 的配置备份，或内容无法识别</string>
+    <string name="config_restore_picker_failed">无法打开文件选择器</string>
     <plurals name="enabled_function_count">
         <item quantity="other">已开启 %1$d 项功能</item>
     </plurals>
