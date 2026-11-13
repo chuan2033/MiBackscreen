@@ -74,33 +74,19 @@ count_in(){ [ -f "$1" ] && grep -a -c "$2" "$1" 2>/dev/null; }
 count_occ(){ [ -f "$1" ] && grep -a -o -- "$2" "$1" 2>/dev/null | wc -l | tr -d ' '; }
 json_num(){ [ -f "$1" ] && grep -a -m1 -o "\"$2\":[ ]*[0-9]*" "$1" 2>/dev/null | tr -dc '0-9'; }
 
-# 资源文件权限是否「应用也读得到」：文件 o+r，路径上每层目录 o+x
-# 文件清单按行读（here-doc，循环在当前 shell 里，计数不会丢）；
-# 不用 for f in $(find ...)：路径里有空格会被拆开。
+# 资源文件权限是否「应用也读得到」：文件 o+r，根目录以下每层目录 o+x。
+# 一次 find 筛出不合格的文件和目录。以前逐个文件 stat、再逐层往上 stat 目录，
+# 58 个文件要起几百个子进程，这一段就占了整次检测的 3 秒多；find 一次约 0.03 秒，判据不变。
 perm_issues() {
-    _root="$1"; _bad=0; _sample=""
+    _root="$1"
     [ -d "$_root" ] || { echo 0; return; }
-    _files=$(find "$_root" -type f 2>/dev/null)
-    while IFS= read -r f; do
-        [ -n "$f" ] || continue
-        p=$(stat -c %a "$f" 2>/dev/null)
-        case "$p" in
-            *4|*5|*6|*7) ;;                       # 末位含读
-            *) _bad=$((_bad + 1)); [ -z "$_sample" ] && _sample="${f#"$_root"/}";;
-        esac
-        d=$(dirname "$f")
-        while [ "$d" != "$_root" ] && [ "$d" != "/" ]; do
-            dp=$(stat -c %a "$d" 2>/dev/null)
-            case "$dp" in
-                *1|*3|*5|*7) ;;
-                *) _bad=$((_bad + 1)); [ -z "$_sample" ] && _sample="${d#"$_root"/}/ (目录)";;
-            esac
-            d=$(dirname "$d")
-        done
-    done <<EOF
-$_files
-EOF
-    echo "$_bad ${_sample:-}"
+    _bad=$(find "$_root" -mindepth 1 \( -type f ! -perm -004 \) -o \( -type d ! -perm -001 \) 2>/dev/null)
+    [ -n "$_bad" ] || { echo 0; return; }
+    _n=$(printf '%s\n' "$_bad" | wc -l | tr -d ' ')
+    _first=$(printf '%s\n' "$_bad" | head -1)
+    _sample="${_first#"$_root"/}"
+    [ -d "$_first" ] && _sample="$_sample/ (目录)"
+    echo "$_n $_sample"
 }
 
 # ------------------------------------------------------------------ 文本模式辅助
@@ -314,11 +300,11 @@ for spec in "$PA_PKG|应用卡中心|pa" \
     elif is_num "$old_start" && is_num "$MODULE_APK_MTIME" && [ "$old_start" -lt "$MODULE_APK_MTIME" ]; then
         emit inj.$hid warn "$hrole" \
             "进程还是模块更新前启动的（pid $old_pid），新模块没进去" \
-            "强制停止「$hrole」再打开就装上了；重启手机同样有效。" "$hpkg"
+            "点下面的按钮重启「$hrole」就装上了；重启手机同样有效。" "$hpkg" "restart_$hid"
         tshow inj "!" "$hrole 需重启该应用"
     else
-        emit inj.$hid warn "$hrole" "进程在跑但模块没进去（pid $hpids）" \
-            "在 LSPosed 里确认本模块作用域勾选了「$hrole」；勾选后重启该应用，仍无效就重启手机。" "$hpkg"
+        emit inj.$hid warn "$hrole" "进程在跑但模块没进去（pid $(printf '%s' "$hpids" | tr '\n' ' ')）" \
+            "在 LSPosed 里确认本模块作用域勾选了「$hrole」；勾选后点下面的按钮重启该应用，仍无效就重启手机。" "$hpkg" "restart_$hid"
         tshow inj "!" "$hrole 未注入"
     fi
 done
@@ -388,19 +374,23 @@ fi
 
 # ============================================================ 6. 卡片就绪度
 tgroup "卡片就绪度"
+# 检查项 id 用卡片 resId 的前 8 位：以前用卡片名去掉非字母数字，中文名全被滤空，6 张卡的 id 都成了 card.
+# 依赖 App 没装记为 info 而不是 warn：小米汽车、米家这类卡本来就只给装了对应 App 的人用，
+# 没车的人不该因此一直看到「注意」；装了但版本太低才是需要处理的问题。
 card_check() {  # resId 名称 包名 最低版本
     _id=$1; _name=$2; _pkg=$3; _min=$4
+    _cid=card.$(printf '%s' "$_id" | cut -c1-8)
     _v=$(pkg_version "$_pkg")
     if [ -z "$_v" ]; then
-        emit card.$(printf '%s' "$_name" | sed 's/[^A-Za-z0-9]//g') warn "$_name" \
-            "依赖 App 未安装：$_pkg" "装上它这张卡才会出现。" "$_pkg"
-        tshow card "!" "$_name：未装 $_pkg"
+        emit "$_cid" info "$_name" \
+            "没装 $_pkg，这张卡不会显示" "需要这张卡时装上对应 App 即可。" "$_pkg"
+        tshow card "·" "$_name：未装 $_pkg（不显示）"
     elif is_num "$_min" && [ "$_min" -gt 0 ] && [ "${_v:-0}" -lt "$_min" ]; then
-        emit card.$(printf '%s' "$_name" | sed 's/[^A-Za-z0-9]//g') warn "$_name" \
+        emit "$_cid" warn "$_name" \
             "$_pkg 版本 $_v < 要求 $_min" "升级 App 后这张卡才会出现。" "$_pkg"
         tshow card "!" "$_name：版本不足"
     else
-        emit card.$(printf '%s' "$_name" | sed 's/[^A-Za-z0-9]//g') ok "$_name" \
+        emit "$_cid" ok "$_name" \
             "$_pkg $_v" "" "$_pkg"
         tshow card "✓" "$_name：就绪"
     fi

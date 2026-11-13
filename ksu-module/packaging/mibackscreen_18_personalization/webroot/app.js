@@ -213,6 +213,20 @@ const SECTIONS = [
 
 const MARK = { ok: '\u2713', warn: '!', fail: '\u2715', info: '\u00b7' };
 
+function restartAction(pkg, name) {
+    return {
+        label: '重启' + name,
+        busy: '重启中…',
+        hint: '再点一次就会强制停止「' + name + '」，下次打开时会加载新模块',
+        titleOk: '已重启' + name,
+        titleFail: '没能停止' + name,
+        fixOk: '重新打开「' + name + '」后点「重新检测」确认',
+        // 输出约定：第一行是标题行（会被丢掉），中间是说明，最后一行 RESULT=…
+        cmd: 'am force-stop ' + pkg + ' && { echo restart; echo ' + q('已强制停止「' + name + '」') +
+             '; echo RESULT=ok; } || { echo restart; echo RESULT=fail; }'
+    };
+}
+
 // status.sh 通过 action=<id> 指定修复动作，这里查表执行。
 // 动作脚本输出末尾一行 RESULT=ok|nothing|partial|fail。
 const ACTIONS = {
@@ -247,6 +261,10 @@ const ACTIONS = {
         fixOk: '重启手机后打开背屏即可看到卡片',
         cmd: 'sh ' + q(MODDIR + '/clear-reareye.sh')
     },
+    // 注入状态里「进程还是模块更新前启动的 / 模块没进去」：强制停止对应应用，下次打开就会加载新模块
+    restart_pa:  restartAction(PA_PKG,  '应用卡中心'),
+    restart_ssc: restartAction(SSC_PKG, '背屏中心'),
+    restart_tm:  restartAction(TM_PKG,  '主题商店'),
     fix_aiapp: {
         label: '修好 AI 卡目录',
         busy: '修复中…',
