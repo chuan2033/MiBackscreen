@@ -12,7 +12,7 @@ MiBackscreen 附加模块的打包工程，产出 zip 模块包（支持 **Kerne
 | 目录 | 内容 |
 | --- | --- |
 | `packaging/mibackscreen_18_personalization/` | **模块源码**：`module.prop`、`customize.sh`、`post-fs-data.sh` / `service.sh` / `uninstall.sh` / `action.sh`、`appinfo_txn.sh` / `appinfo_utils.sh`（appInfo.json 事务读改写）、`lib.sh`、`status.sh`（诊断面板）、`fix-*.sh` / `clear-reareye.sh` / `logpack.sh`、`webroot/`（面板前端）。改功能的唯一入口。`mibackscreen_resources/`、`appcard_entries/`、`appcard_appInfo_patch.json` 与 `META-INF/` 不在源码里，由构建脚本从 ROM 生成 |
-| `tools/` | 构建与校验脚本（见下）；设备诊断脚本只在本地，不进库 |
+| `tools/` | 构建与校验脚本（见下）；设备诊断用模块自带的状态面板（`status.sh`） |
 | `device_popsicle_template/` | 测试机 `popsicle` 的模板快照（`normal` / `default` 的 `rearScreen.json`），比对 ROM 原始模板用 |
 | `out/` | 构建输出目录：`MiBackscreen_v<version>.zip`（不进库）。APK 产物只认主仓 `app/build/outputs/apk/release/app-release.apk`，不往这里复制 |
 | `analysis/`（仅本地） | 逆向分析产物：智能助理 `personalassistant` 的 `base.apk` + 手挑的关键类，属于小米的代码，不进库 |
