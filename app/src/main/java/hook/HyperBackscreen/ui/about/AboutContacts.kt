@@ -35,30 +35,94 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
+import org.json.JSONObject
 
 /**
- * 关于页里「怎么找到做这个模块的人」——全应用唯一的一份，换号、换群只改这里。
+ * 关于页里「怎么找到做这个模块的人」——全应用唯一的一份，换人、换群只改这里。
+ *
+ * 成员的昵称、简介、头像都从各自的 GitHub 主页读（[rememberGitHubProfile]），这里的 [name]、[role]
+ * 只是读不到 GitHub 时的兜底：国内网络经常连不上，关于页不能因此空着。
  */
 @Immutable
 internal data class TeamMember(
     val name: String,
     val role: String,
-    val qq: String,
+    val github: String,
 ) {
-    /** QQ 头像的公开端点，号码即地址。 */
+    /** GitHub 头像的公开地址，用户名即地址，不消耗 API 次数。 */
     val avatarUrl: String
-        get() = "https://q.qlogo.cn/headimg_dl?dst_uin=$qq&spec=640&img_type=jpg"
+        get() = "https://github.com/$github.png?size=160"
 
-    /** 临时会话；对方不必是好友。 */
-    val chatUri: String
-        get() = "mqqwpa://im/chat?chat_type=wpa&uin=$qq&version=1"
+    val profileUrl: String
+        get() = "https://github.com/$github"
 }
 
-/** 排序即署名顺序，不按号码或拼音自动排。 */
+/** 排序即署名顺序，不按用户名或拼音自动排。 */
 internal val TEAM: List<TeamMember> = listOf(
-    TeamMember(name = "小语义", role = "作者", qq = "1284025052"),
-    TeamMember(name = "川意", role = "UI设计", qq = "3299699002"),
+    TeamMember(name = "小语义", role = "作者", github = "chuan2033"),
+    TeamMember(name = "川意", role = "UI设计", github = "MiChongs"),
 )
+
+/** GitHub 公开资料里关于页要用的部分；没填的字段为 null。 */
+@Immutable
+internal data class GitHubProfile(
+    val name: String?,
+    val bio: String?,
+)
+
+/**
+ * 读成员的 GitHub 公开资料。先给缓存（内存，其次缓存目录），缓存超过 [GitHubProfiles.REFRESH_MS]
+ * 才再请求接口；请求失败就继续用旧缓存，一次都没读到时为 null，由调用方用 [TeamMember] 的兜底文字。
+ */
+@Composable
+internal fun rememberGitHubProfile(login: String): GitHubProfile? {
+    val context = LocalContext.current
+    val profile by produceState(initialValue = GitHubProfiles.memory[login], login) {
+        value = GitHubProfiles.load(context.applicationContext, login) ?: value
+    }
+    return profile
+}
+
+private object GitHubProfiles {
+    val memory = ConcurrentHashMap<String, GitHubProfile>()
+
+    /** 未登录的 GitHub API 每小时只给 60 次，资料一天刷一次足够。 */
+    const val REFRESH_MS = 24L * 60 * 60 * 1000
+    private const val TIMEOUT_MS = 8_000
+
+    suspend fun load(context: Context, login: String): GitHubProfile? = withContext(Dispatchers.IO) {
+        val file = File(File(context.cacheDir, "github").apply { mkdirs() }, "$login.json")
+        val cached = runCatching { parse(file.readText()) }.getOrNull()
+        if (cached != null) memory[login] = cached
+        val fresh = cached != null && System.currentTimeMillis() - file.lastModified() < REFRESH_MS
+        if (fresh) return@withContext cached
+        val body = runCatching { fetch(login) }.getOrNull() ?: return@withContext cached
+        val profile = runCatching { parse(body) }.getOrNull() ?: return@withContext cached
+        runCatching { file.writeText(body) }
+        memory[login] = profile
+        profile
+    }
+
+    private fun parse(json: String): GitHubProfile {
+        val obj = JSONObject(json)
+        fun field(key: String) = obj.optString(key).takeIf { !obj.isNull(key) && it.isNotBlank() }?.trim()
+        return GitHubProfile(name = field("name"), bio = field("bio"))
+    }
+
+    private fun fetch(login: String): String {
+        val connection = URL("https://api.github.com/users/$login").openConnection() as HttpURLConnection
+        try {
+            connection.connectTimeout = TIMEOUT_MS
+            connection.readTimeout = TIMEOUT_MS
+            connection.setRequestProperty("Accept", "application/vnd.github+json")
+            connection.setRequestProperty("User-Agent", "MiBackscreen")
+            check(connection.responseCode == HttpURLConnection.HTTP_OK) { "HTTP ${connection.responseCode}" }
+            return connection.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
+    }
+}
 
 internal const val GROUP_QQ = "1098311165"
 

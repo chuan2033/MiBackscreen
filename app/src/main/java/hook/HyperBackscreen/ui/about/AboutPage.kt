@@ -61,17 +61,18 @@ internal fun AboutPage(
         }
     }
 
-    // 成员头像按 QQ 号联网获取，点一下直接发起 QQ 临时会话。
+    // 成员的昵称、简介、头像读各自的 GitHub 主页；读不到时用代码里的名字和角色。点一下打开 GitHub 主页。
     SmallTitle(text = stringResource(R.string.about_developer_title), insideMargin = PaddingValues(16.dp, 8.dp))
     CardBlock(pressFeedbackType = PressFeedbackType.None) {
         TEAM.forEach { member ->
+            val profile = rememberGitHubProfile(member.github)
             AboutArrowPreference(
-                title = member.name,
-                summary = member.role,
+                title = profile?.name ?: member.name,
+                summary = profile?.bio ?: member.role,
+                url = member.profileUrl,
                 startAction = {
                     AboutAvatar(url = member.avatarUrl, fallback = MiuixIcons.Contacts)
                 },
-                onClick = { openQq(member.chatUri, member.qq) }
             )
         }
     }
