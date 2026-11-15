@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.common.Constants
@@ -22,6 +23,9 @@ internal object RearLiveUpdateDemo {
 
     fun post(context: Context): Result {
         return try {
+            if (Build.VERSION.SDK_INT_FULL < Build.VERSION_CODES_FULL.BAKLAVA_1) {
+                return Result.PROMOTION_DISABLED
+            }
             val manager = context.getSystemService(NotificationManager::class.java)
             if (!manager.areNotificationsEnabled()) return Result.NOTIFICATIONS_DISABLED
             if (!manager.canPostPromotedNotifications()) return Result.PROMOTION_DISABLED

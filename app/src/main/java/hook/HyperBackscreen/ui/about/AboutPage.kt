@@ -28,6 +28,7 @@ import top.yukonga.miuix.kmp.icon.extended.ContactsCircle
 import top.yukonga.miuix.kmp.icon.extended.Contacts
 import hook.HyperBackscreen.ui.components.LocalUiFeedback
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import android.widget.Toast
 import hook.HyperBackscreen.ui.components.AboutArrowPreference
 import hook.HyperBackscreen.ui.components.CardBlock
@@ -48,11 +49,12 @@ internal fun AboutPage(
     AboutHeader(onVersionClick = onAppUpdateClick)
 
     val context = LocalContext.current
+    val resources = LocalResources.current
     val feedback = LocalUiFeedback.current
     // 打不开 QQ 时号码已经复制好了，提示用户自己去 QQ 里搜。
     fun openQq(uri: String, number: String) {
         if (!openInQq(context, uri, number)) {
-            val message = context.getString(R.string.about_qq_open_failed, number)
+            val message = resources.getString(R.string.about_qq_open_failed, number)
             if (feedback != null) feedback.show(message)
             else Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }
