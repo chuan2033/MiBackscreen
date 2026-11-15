@@ -176,11 +176,7 @@ public final class SettingsEntryHooks {
     @Nullable
     private volatile Bitmap cachedIcon;
 
-    /**
-     * 首页图标：取模块面板图标里的 Logo 本体——把和图片边缘连通的白底抠成透明、裁掉留白，
-     * 再按设置自己的 {@code header_icon_size} 等比缩放到满宽、居中。直接塞原图 ImageView 会按原始像素
-     * 显示（图标大出一圈）；整张缩小又会因为四周白边让 Logo 只剩一点、白底和卡片融在一起。
-     */
+    /** 将关于页图标按系统设置的图标尺寸等比绘制。 */
     @Nullable
     private Bitmap moduleIcon(@NonNull Context context) {
         Bitmap cached = cachedIcon;
@@ -192,83 +188,29 @@ public final class SettingsEntryHooks {
                     ? hostRes.getDimensionPixelSize(sizeId)
                     : Math.round(28 * hostRes.getDisplayMetrics().density);
             Resources moduleRes = context.createPackageContext(Constants.MODULE_PACKAGE, 0).getResources();
-            int id = moduleRes.getIdentifier("panel_icon", "drawable", Constants.MODULE_PACKAGE);
+            int id = moduleRes.getIdentifier("ic_about_logo", "drawable", Constants.MODULE_PACKAGE);
             if (id == 0 || size <= 0) return null;
-            Bitmap source = android.graphics.BitmapFactory.decodeResource(moduleRes, id);
+            android.graphics.BitmapFactory.Options options = new android.graphics.BitmapFactory.Options();
+            options.inScaled = false;
+            Bitmap source = android.graphics.BitmapFactory.decodeResource(moduleRes, id, options);
             if (source == null) return null;
-            Bitmap logo = extractLogo(source);
-            float scale = Math.min((float) size / logo.getWidth(), (float) size / logo.getHeight());
-            int w = Math.max(1, Math.round(logo.getWidth() * scale));
-            int h = Math.max(1, Math.round(logo.getHeight() * scale));
+            float scale = Math.min((float) size / source.getWidth(), (float) size / source.getHeight());
+            int w = Math.max(1, Math.round(source.getWidth() * scale));
+            int h = Math.max(1, Math.round(source.getHeight() * scale));
             Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
             Canvas canvas = new Canvas(bitmap);
             android.graphics.Paint paint = new android.graphics.Paint(
                     android.graphics.Paint.ANTI_ALIAS_FLAG | android.graphics.Paint.FILTER_BITMAP_FLAG);
             int left = (size - w) / 2;
             int top = (size - h) / 2;
-            canvas.drawBitmap(logo, null, new android.graphics.Rect(left, top, left + w, top + h), paint);
+            canvas.drawBitmap(source, null, new android.graphics.Rect(left, top, left + w, top + h), paint);
+            source.recycle();
             cachedIcon = bitmap;
             return bitmap;
         } catch (Throwable error) {
             module.log(Log.WARN, Constants.LOG_TAG, "Settings entry icon unavailable", error);
             return null;
         }
-    }
-
-    /** 从边缘开始把连通的近白像素抠成透明（Logo 内部的白色被渐变边框围住，不受影响），再裁到不透明区域。 */
-    @NonNull
-    private static Bitmap extractLogo(@NonNull Bitmap source) {
-        int width = source.getWidth();
-        int height = source.getHeight();
-        int[] pixels = new int[width * height];
-        source.getPixels(pixels, 0, width, 0, 0, width, height);
-        boolean[] visited = new boolean[pixels.length];
-        java.util.ArrayDeque<Integer> queue = new java.util.ArrayDeque<>();
-        for (int x = 0; x < width; x++) {
-            queue.add(x);
-            queue.add((height - 1) * width + x);
-        }
-        for (int y = 0; y < height; y++) {
-            queue.add(y * width);
-            queue.add(y * width + width - 1);
-        }
-        while (!queue.isEmpty()) {
-            int index = queue.poll();
-            if (visited[index]) continue;
-            visited[index] = true;
-            if (!isBackground(pixels[index])) continue;
-            pixels[index] = 0;
-            int x = index % width;
-            int y = index / width;
-            if (x > 0) queue.add(index - 1);
-            if (x < width - 1) queue.add(index + 1);
-            if (y > 0) queue.add(index - width);
-            if (y < height - 1) queue.add(index + width);
-        }
-        int minX = width, minY = height, maxX = -1, maxY = -1;
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                if ((pixels[y * width + x] >>> 24) > 24) {
-                    if (x < minX) minX = x;
-                    if (x > maxX) maxX = x;
-                    if (y < minY) minY = y;
-                    if (y > maxY) maxY = y;
-                }
-            }
-        }
-        if (maxX < minX || maxY < minY) return source;
-        Bitmap cleared = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888);
-        return Bitmap.createBitmap(cleared, minX, minY, maxX - minX + 1, maxY - minY + 1);
-    }
-
-    /** 底色：透明，或接近纯白（含 Logo 外围的浅灰投影）。 */
-    private static boolean isBackground(int color) {
-        int alpha = color >>> 24;
-        if (alpha < 24) return true;
-        int r = (color >> 16) & 0xFF;
-        int g = (color >> 8) & 0xFF;
-        int b = color & 0xFF;
-        return r > 232 && g > 232 && b > 232;
     }
 
     private static long readLong(@Nullable Object target, @NonNull String name) {

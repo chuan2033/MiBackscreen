@@ -24,5 +24,6 @@ internal enum class HomeRoute : NavKey {
     RearMusic,
     Theme,
     RearWidgets,
-    RearWidgetPicker
+    RearWidgetPicker,
+    RearLiveUpdate
 }

@@ -106,6 +106,7 @@ import hook.HyperBackscreen.ui.function.FunctionPage
 import hook.HyperBackscreen.ui.function.RearDoubleTapPage
 import hook.HyperBackscreen.ui.function.RearCastPage
 import hook.HyperBackscreen.ui.function.RearMusicPage
+import hook.HyperBackscreen.ui.function.RearLiveUpdatePage
 import hook.HyperBackscreen.ui.function.RearWidgetPickerPage
 import hook.HyperBackscreen.ui.function.RearWidgetsPage
 import hook.HyperBackscreen.ui.function.RearScreenTimingPage
@@ -528,6 +529,7 @@ internal fun HomeScreen(
                         onWhitelistClick = { openDetail(page, HomeRoute.MusicWhitelistAppPicker) },
                         onBack = { navigateBackFrom(page) }
                     )
+                    HomeRoute.RearLiveUpdate -> RearLiveUpdatePage(onBack = { navigateBackFrom(page) })
                     HomeRoute.RearScreenRecord -> RearScreenRecordPage(onBack = { navigateBackFrom(page) })
                     HomeRoute.RearWidgets -> RearWidgetsPage(
                         onAddClick = { openDetail(page, HomeRoute.RearWidgetPicker) },
@@ -576,6 +578,7 @@ internal fun HomeScreen(
                         onSettingsClick = { openDetail(page, HomeRoute.Settings) },
                         onRearDoubleTapClick = { openDetail(page, HomeRoute.RearDoubleTap) },
                         onRearMusicClick = { openDetail(page, HomeRoute.RearMusic) },
+                        onRearLiveUpdateClick = { openDetail(page, HomeRoute.RearLiveUpdate) },
                         onRearWidgetsClick = { openDetail(page, HomeRoute.RearWidgets) },
                         onRearScreenRecordClick = { openDetail(page, HomeRoute.RearScreenRecord) },
                         onLicenseClick = { openDetail(page, HomeRoute.License) },
@@ -684,6 +687,7 @@ private fun MainTabPage(
     onDisableRearScreenCoverChange: (Boolean) -> Unit,
     onRearDoubleTapClick: () -> Unit,
     onRearMusicClick: () -> Unit,
+    onRearLiveUpdateClick: () -> Unit,
     onRearWidgetsClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit,
     onBatteryColorClick: () -> Unit,
@@ -808,6 +812,7 @@ private fun MainTabPage(
                             onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                             onRearDoubleTapClick = onRearDoubleTapClick,
                             onRearMusicClick = onRearMusicClick,
+                            onRearLiveUpdateClick = onRearLiveUpdateClick,
                             onRearWidgetsClick = onRearWidgetsClick,
                             onRearScreenRecordClick = onRearScreenRecordClick,
                             onBatteryColorClick = onBatteryColorClick,
@@ -874,6 +879,7 @@ private fun MainContent(
     onSettingsClick: () -> Unit,
     onRearDoubleTapClick: () -> Unit,
     onRearMusicClick: () -> Unit,
+    onRearLiveUpdateClick: () -> Unit,
     onRearWidgetsClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit,
     onLicenseClick: () -> Unit,
@@ -983,6 +989,7 @@ private fun MainContent(
                 onDisableRearScreenCoverChange = onDisableRearScreenCoverChange,
                 onRearDoubleTapClick = onRearDoubleTapClick,
                 onRearMusicClick = onRearMusicClick,
+                onRearLiveUpdateClick = onRearLiveUpdateClick,
                 onRearWidgetsClick = onRearWidgetsClick,
                 onRearScreenRecordClick = onRearScreenRecordClick,
                 onBatteryColorClick = onBatteryColorClick,

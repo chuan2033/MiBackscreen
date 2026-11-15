@@ -361,6 +361,25 @@
     <string name="rear_music_section_lyric">实时歌词</string>
     <string name="rear_music_summary_lyric_on">实时歌词已开启</string>
     <string name="rear_music_summary_lyric_off">实时歌词未开启</string>
+    <string name="rear_live_update_title">背屏实时通知</string>
+    <string name="rear_live_update_access_title">允许背屏中心读取通知</string>
+    <string name="rear_live_update_access_summary">符合条件的实时通知可以显示在背屏</string>
+    <string name="rear_live_update_access_checking">正在检查背屏支持情况…</string>
+    <string name="rear_live_update_access_unavailable">当前背屏中心版本没有实时通知功能</string>
+    <string name="rear_live_update_access_saved">背屏通知接收权限已更新</string>
+    <string name="rear_live_update_access_failed">通知接收权限更新失败，请检查 root 授权</string>
+    <string name="rear_live_update_demo_channel">实时通知演示</string>
+    <string name="rear_live_update_demo_title">实时通知演示</string>
+    <string name="rear_live_update_demo_text">两分钟倒计时正在进行</string>
+    <string name="rear_live_update_demo_summary">发布两分钟的实时通知，查看背屏显示效果</string>
+    <string name="rear_live_update_demo_send">发送演示通知</string>
+    <string name="rear_live_update_demo_stop">结束演示</string>
+    <string name="rear_live_update_demo_posted">演示通知已发布</string>
+    <string name="rear_live_update_demo_permission">请允许 MiBackscreen 显示通知</string>
+    <string name="rear_live_update_demo_promotion">请在系统设置中允许 MiBackscreen 发布实时通知</string>
+    <string name="rear_live_update_demo_invalid">系统未接受这条实时通知的格式</string>
+    <string name="rear_live_update_demo_failed">演示通知发布失败</string>
+    <string name="rear_live_update_hint">系统会判定实时通知的资格；背屏中心还会检查通知格式和应用开关。</string>
     <!-- 应用投放到背屏 / 拉回主屏 -->
     <string name="panel_tile_rear_cast">投放</string>
     <string name="panel_tile_rear_cast_to_rear">切到背屏</string>

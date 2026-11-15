@@ -1,21 +1,17 @@
 package hook.HyperBackscreen.ui.about
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import top.yukonga.miuix.kmp.squircle.squircleClip
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -152,23 +148,12 @@ private fun AboutHeader(onVersionClick: () -> Unit) {
             ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 图标放在白色圆角矩形底板上，像桌面上的应用图标；深色模式下底板也保持白色。
-        Box(
-            modifier = Modifier
-                .size(HomeUiTokens.AboutLogoSize)
-                .squircleClip(HomeUiTokens.AboutLogoCornerRadius)
-                .background(Color.White),
-            contentAlignment = Alignment.Center
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.ic_about_logo),
-                contentDescription = null,
-                modifier = Modifier
-                    .offset(HomeUiTokens.AboutLogoOpticalOffsetX, HomeUiTokens.AboutLogoOpticalOffsetY)
-                    .size(HomeUiTokens.AboutLogoInnerSize),
-                contentScale = ContentScale.Fit
-            )
-        }
+        Image(
+            painter = painterResource(R.drawable.ic_about_logo),
+            contentDescription = null,
+            modifier = Modifier.size(HomeUiTokens.AboutLogoSize),
+            contentScale = ContentScale.Fit,
+        )
         Spacer(modifier = Modifier.height(HomeUiTokens.AboutHeaderSpacing))
         Text(
             text = "MiBackscreen",

@@ -367,6 +367,25 @@
     <string name="rear_music_section_lyric">Live lyrics</string>
     <string name="rear_music_summary_lyric_on">Live lyrics on</string>
     <string name="rear_music_summary_lyric_off">Live lyrics off</string>
+    <string name="rear_live_update_title">Rear screen live updates</string>
+    <string name="rear_live_update_access_title">Allow rear screen notification access</string>
+    <string name="rear_live_update_access_summary">Eligible live updates can appear on the rear screen</string>
+    <string name="rear_live_update_access_checking">Checking rear screen support…</string>
+    <string name="rear_live_update_access_unavailable">This rear screen center version does not provide live updates</string>
+    <string name="rear_live_update_access_saved">Rear screen notification access updated</string>
+    <string name="rear_live_update_access_failed">Could not update notification access; check root authorization</string>
+    <string name="rear_live_update_demo_channel">Live update demonstration</string>
+    <string name="rear_live_update_demo_title">Live update demonstration</string>
+    <string name="rear_live_update_demo_text">Two-minute countdown in progress</string>
+    <string name="rear_live_update_demo_summary">Post a two-minute live update to inspect its rear screen display</string>
+    <string name="rear_live_update_demo_send">Post demonstration</string>
+    <string name="rear_live_update_demo_stop">End demonstration</string>
+    <string name="rear_live_update_demo_posted">Demonstration notification posted</string>
+    <string name="rear_live_update_demo_permission">Allow MiBackscreen to show notifications</string>
+    <string name="rear_live_update_demo_promotion">Allow MiBackscreen live updates in system settings</string>
+    <string name="rear_live_update_demo_invalid">The system did not accept this live update format</string>
+    <string name="rear_live_update_demo_failed">Could not post the demonstration notification</string>
+    <string name="rear_live_update_hint">The system decides which notifications qualify. The rear screen center also checks their format and app settings.</string>
     <!-- 应用投放到背屏 / 拉回主屏 -->
     <string name="panel_tile_rear_cast">Cast</string>
     <string name="panel_tile_rear_cast_to_rear">To rear</string>

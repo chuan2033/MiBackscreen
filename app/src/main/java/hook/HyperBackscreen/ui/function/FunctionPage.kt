@@ -38,6 +38,7 @@ internal fun FunctionPage(
     doubleTapSleepDisabledPackages: String,
     musicWidgetWhitelistPackages: String,
     onRearMusicClick: () -> Unit,
+    onRearLiveUpdateClick: () -> Unit,
     onRearWidgetsClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit,
     rearMedia: RearMediaSwitches = RearMediaSwitches(),
@@ -114,6 +115,11 @@ internal fun FunctionPage(
                     title = stringResource(R.string.rear_music_title),
                     summary = rearMusicEntrySummary(rearMedia.rearLyric, musicWidgetWhitelistPackages),
                     onClick = onRearMusicClick
+                )
+                ArrowPreference(
+                    title = stringResource(R.string.rear_live_update_title),
+                    summary = stringResource(R.string.rear_live_update_access_summary),
+                    onClick = onRearLiveUpdateClick
                 )
                 ArrowPreference(
                     title = stringResource(R.string.rear_widgets_title),
