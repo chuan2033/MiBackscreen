@@ -8,7 +8,8 @@
 </p>
 
 <p  align="center">
- 基于 Modern Xposed 的小米背屏模块。当前分支 `feat/18pro-max-rear-screen` 包含新版背屏中心、主题商店和负一屏应用卡适配。分支名及请求中使用的机型标识不代表实际设备支持范围。
+ 小米 17 Pro 系列的背屏增强模块，基于 Modern Xposed（LSPosed）。<br>
+ 背屏小部件、实时歌词、录屏与投屏，并同步 18 Pro Max 的背屏个性化和应用卡。
 </p>
 
 <p  align="center">
@@ -24,7 +25,7 @@
 | 功能 | 默认 | 说明 |
 | --- | --- | --- |
 | 背屏电量环 | 关 | 沿摄像头轮廓显示电量，每 1% 更新；充电绿、低电红、其余白 |
-| 18 Pro 功能 | 开 | AI 背屏入口、机型与下载适配、应用卡解锁、负一屏商店适配、AI 索引同步 |
+| 18 Pro 功能 | 开 | AI 背屏入口、机型与下载适配、应用卡解锁、智能助理应用卡商店适配、AI 索引同步 |
 | 禁用长按切换壁纸 | 开 | 长按不进编辑 |
 | 定时切换背屏壁纸 | 关 | 每 1 / 5 / 15 分钟按列表循环；AOD 可见时计时 |
 | 移除壁纸数量限制 | 开 | 解除主题商店 15 张限制 |
@@ -55,7 +56,7 @@
 | `system` | 背屏保护提示、双击唤醒拦截、息屏时间、游戏保持亮、定时关闭 |
 | `com.xiaomi.subscreencenter` | 长按、壁纸轮换、应用卡与快捷面板 |
 | `com.android.thememanager` | 壁纸数量/应用、设置入口、AI 与人脸兼容 |
-| `com.miui.personalassistant` | 负一屏应用卡商店适配 |
+| `com.miui.personalassistant` | 智能助理的背屏应用卡商店适配 |
 
 「重启作用域」含系统、背屏、主题商店和智能助理；勾选系统会整机重启。主页「已激活」只表示服务已连接，不证明 Hook 成功。
 
@@ -92,7 +93,7 @@ app/                         LSPosed 模块（App + Hook，同一个 APK）
       subscreen/             背屏中心：长按、应用卡上限、快捷面板入口、自动换壁纸、视频壁纸续播 / 声音、歌词 Hook 点
       appindex/              appInfo.json 应用卡索引读写与跨进程锁、模块应用卡资源
       theme/                 主题商店：下载与设备适配、设置页入口、应用流程资源修复、背屏视频导入限制 / 音轨
-      assistant/             智能助理：负一屏应用卡商店
+      assistant/             智能助理：背屏应用卡商店
       target/                DexKit 结构定位（混淆名随宿主版本变化）
       util/                  反射与文件工具
     panel/                   注入背屏中心的快捷面板（原生 View）
@@ -105,7 +106,6 @@ app/                         LSPosed 模块（App + Hook，同一个 APK）
 ksu-module/                  背屏附加资源模块（KernelSU / Magisk）
   packaging/                 模块脚本与 WebUI
   tools/                     构建、校验与设备诊断脚本
-docs/release-notes/          各版本发行说明
 ```
 
 ## 附加资源模块

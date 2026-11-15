@@ -42,3 +42,6 @@ docs/miuix-nav-migration.md
 docs/validation-2026-09-27.md
 tools/face-enrollment-validation/
 tools/feedback-validation/
+
+# 发行说明只在本地维护，不上传
+docs/release-notes/

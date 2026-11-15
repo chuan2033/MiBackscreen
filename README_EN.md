@@ -8,7 +8,8 @@
 </p>
 
 <p  align="center">
- A Xiaomi rear-screen module using Modern Xposed. The `feat/18pro-max-rear-screen` branch adapts newer Rear Screen Center, Theme Manager and Personal Assistant app-card hosts. Neither the branch name nor a device identity sent in requests establishes hardware compatibility.
+ A rear-screen enhancement module for the Xiaomi 17 Pro series, built on Modern Xposed (LSPosed).<br>
+ Rear-screen widgets, live lyrics, screen recording and app casting, plus the 18 Pro Max rear-screen personalization and app cards.
 </p>
 
 <p  align="center">
@@ -119,7 +120,6 @@ app/                         LSPosed module (app + hooks in one APK)
 ksu-module/                  Rear-screen add-on resource module (KernelSU / Magisk)
   packaging/                 Module scripts and WebUI
   tools/                     Build, validation and device diagnostic scripts
-docs/release-notes/          Release notes
 ```
 
 ## Add-on resource module
