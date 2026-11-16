@@ -70,7 +70,8 @@ public final class RearAppWidgetHooks {
     @NonNull private volatile List<String> selected = Collections.emptyList();
 
     @NonNull private WeakReference<Object> panelRef = new WeakReference<>(null);
-    private int lastSource;
+    /** 宿主最近一次传给面板更新入口的当前页下标；-1 表示宿主还没有给过页面。 */
+    private int lastSource = -1;
     @Nullable private List<Object> lastBase;
     @NonNull private WeakReference<Context> receiverContext = new WeakReference<>(null);
     @Nullable private BroadcastReceiver receiver;
@@ -121,7 +122,7 @@ public final class RearAppWidgetHooks {
                             panelRef = new WeakReference<>(panel);
                             if (lastBase == null) {
                                 lastBase = new ArrayList<>();
-                                lastSource = 0;
+                                lastSource = -1;
                             }
                         }
                     }
@@ -145,15 +146,30 @@ public final class RearAppWidgetHooks {
                 lastBase = new ArrayList<>(base);
             }
             if (panel instanceof View) ensureReceiver(((View) panel).getContext());
+            int source = (Integer) args.get(0);
             List<String> components = currentSelection();
-            if (components.isEmpty() && base.size() == incoming.size()) return chain.proceed();
-            List<Object> merged = new ArrayList<>(base);
-            Context context = panel instanceof View ? ((View) panel).getContext() : null;
-            merged.addAll(buildPages(factory, panel.getClass(), components, context));
-            if (merged.isEmpty()) return chain.proceed();
-            args.set(1, merged);
-            module.log(Log.INFO, TAG, "Rear widget pages: base=" + base.size()
-                    + ", widgets=" + (merged.size() - base.size()));
+            List<Object> merged = null;
+            if (!components.isEmpty() || base.size() != incoming.size()) {
+                merged = new ArrayList<>(base);
+                Context context = panel instanceof View ? ((View) panel).getContext() : null;
+                merged.addAll(buildPages(factory, panel.getClass(), components, context));
+                if (merged.isEmpty()) merged = null;
+            }
+            boolean replaced = merged != null;
+            List<?> pages = replaced ? merged : incoming;
+            // 空列表的下标改成 -1，见 RearWidgetList.panelIndex。
+            int index = RearWidgetList.panelIndex(source, pages.size());
+            if (!replaced && index == source) return chain.proceed();
+            if (replaced) {
+                args.set(1, merged);
+                module.log(Log.INFO, TAG, "Rear widget pages: base=" + base.size()
+                        + ", widgets=" + (merged.size() - base.size()));
+            }
+            if (index != source) {
+                args.set(0, index);
+                module.log(Log.INFO, TAG, "Rear widget panel index " + source + " -> " + index
+                        + " (pages=" + pages.size() + ")");
+            }
             return chain.proceed(args.toArray());
         });
     }

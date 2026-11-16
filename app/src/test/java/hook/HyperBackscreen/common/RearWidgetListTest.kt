@@ -42,6 +42,22 @@ class RearWidgetListTest {
     }
 
     @Test
+    fun panelIndexIsMinusOneForEmptyList() {
+        assertEquals(-1, RearWidgetList.panelIndex(0, 0))
+        assertEquals(-1, RearWidgetList.panelIndex(-1, 0))
+        assertEquals(-1, RearWidgetList.panelIndex(3, 0))
+    }
+
+    @Test
+    fun panelIndexKeepsHostIndexForNonEmptyList() {
+        assertEquals(0, RearWidgetList.panelIndex(0, 1))
+        assertEquals(1, RearWidgetList.panelIndex(1, 3))
+        assertEquals(-1, RearWidgetList.panelIndex(-1, 3))
+        // 下标等于长度是宿主隐藏面板的写法
+        assertEquals(3, RearWidgetList.panelIndex(3, 3))
+    }
+
+    @Test
     fun moduleIdRange() {
         assertTrue(RearWidgetList.isModuleId(RearWidgetList.idFor(0)))
         assertTrue(RearWidgetList.isModuleId(RearWidgetList.idFor(5)))

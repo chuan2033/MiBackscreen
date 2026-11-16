@@ -76,4 +76,15 @@ public final class RearWidgetList {
     public static boolean isModuleId(int id) {
         return id >= BASE_ID && id < BASE_ID + ID_SPAN;
     }
+
+    /**
+     * 交给背屏中心面板更新入口 {@code SmartAssistantPanel.f(int, List)} 的当前页下标。
+     *
+     * <p>列表为空时改成 -1（宿主表示「没有当前页」）：宿主在列表为空、下标不小于 0 时会按下标取元素并抛出
+     * 越界异常，异常发生在面板操作执行中途，面板状态停在「忙碌」，之后的操作（含实时通知弹出）全部只能排队。
+     * 列表非空时原样保留：下标等于列表长度是宿主「隐藏面板」的约定写法，不能收进范围。
+     */
+    public static int panelIndex(int index, int size) {
+        return size <= 0 ? -1 : index;
+    }
 }
