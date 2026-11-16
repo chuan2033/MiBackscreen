@@ -207,6 +207,10 @@ public final class Constants {
     // 同时把值写进该设置项做兜底 —— 两层都指向同一档位。
     public static final String SYSTEM_ADJUST_SCREEN_OFF_TIMEOUT_METHOD =
             "adjustScreenOffTimeoutIfNeededLocked";
+    // 电源键熄屏时背屏是否跟随：PowerManagerServiceImpl.shouldSubScreenGoToSleepGroup(PowerGroup, int)，
+    // 判定逻辑见 RearScreenSleepPolicy。
+    public static final String SYSTEM_SHOULD_SUB_SCREEN_GO_TO_SLEEP_METHOD =
+            "shouldSubScreenGoToSleepGroup";
     public static final String SYSTEM_POWER_GROUP_CLASS = "com.android.server.power.PowerGroup";
     public static final String SYSTEM_POWER_GROUP_GET_GROUP_ID_METHOD = "getGroupId";
     public static final String SYSTEM_SUBSCREEN_DISPLAY_TIME_SETTING = "subscreen_display_time";

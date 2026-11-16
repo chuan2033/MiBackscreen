@@ -16,12 +16,13 @@ import java.util.LinkedHashSet;
 
 import hook.HyperBackscreen.bridge.PrefsBridge;
 import hook.HyperBackscreen.common.Constants;
+import hook.HyperBackscreen.common.RearScreenSleepPolicy;
 import hook.HyperBackscreen.common.RearScreenWakeMatcher;
 import hook.HyperBackscreen.hook.ModuleMain;
 
 /**
  * system_server 进程里的 Hook：背屏封面显示开关、背屏双击 / 定时关闭期间的唤醒拦截、
- * 背屏息屏超时覆盖、主屏高负载（游戏）时保持背屏常亮；应用投放到背屏的执行端在
+ * 背屏息屏超时覆盖、「一直亮屏」时背屏不跟随电源键熄灭、主屏高负载（游戏）时保持背屏常亮；应用投放到背屏的执行端在
  * {@link RearCastHost}（systemReady 之后注册接收器）。
  *
  * <p>{@link ModuleMain} 在 onModuleLoaded / onSystemServerStarting / onPackageReady("android")
@@ -251,10 +252,38 @@ public final class SystemServerHooks {
                         return overrideMillis;
                     }
             );
+            // 电源键熄屏时背屏跟随：系统先让主屏 doze，再按这个方法的返回值决定背屏是否一起 doze。
+            // 原方法已经检查过背屏组、电源键原因和背屏亮屏状态，这里只把它的 true 改成 false。
+            module.hookMethodIfPresent(
+                    powerManagerServiceImplClass,
+                    Constants.SYSTEM_SHOULD_SUB_SCREEN_GO_TO_SLEEP_METHOD,
+                    new Class[]{powerGroupClass, int.class},
+                    Constants.SYSTEM_POWER_MANAGER_SERVICE_IMPL_CLASS + "#"
+                            + Constants.SYSTEM_SHOULD_SUB_SCREEN_GO_TO_SLEEP_METHOD,
+                    chain -> {
+                        Object result = chain.proceed();
+                        if (!Boolean.TRUE.equals(result)
+                                || chain.getArgs().size() < 2
+                                || !(chain.getArgs().get(1) instanceof Integer)) {
+                            return result;
+                        }
+                        int reason = (Integer) chain.getArgs().get(1);
+                        if (RearScreenSleepPolicy.keepsRearAwakeOnPowerButton(
+                                reason,
+                                PrefsBridge.readRearScreenOffTimeoutMillis(module),
+                                PrefsBridge.isRearScreenScheduleActiveNow(module))) {
+                            module.log(Log.INFO, Constants.LOG_TAG,
+                                    "Rear screen kept awake on power button sleep");
+                            return false;
+                        }
+                        return result;
+                    }
+            );
             // 预热远程偏好：首次 getRemotePreferences 可能走 Binder，别让它发生在 PMS 锁内。
             try {
                 PrefsBridge.readRearScreenOffTimeoutMillis(module);
                 PrefsBridge.shouldKeepRearScreenOnInGame(module);
+                PrefsBridge.isRearScreenScheduleActiveNow(module);
             } catch (Throwable ignored) {
             }
         }
