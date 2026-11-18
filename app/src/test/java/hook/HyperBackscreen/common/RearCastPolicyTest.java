@@ -124,6 +124,10 @@ public class RearCastPolicyTest {
         assertEquals(Op.TO_MAIN, Op.fromExtra(Constants.REAR_CAST_OP_TO_MAIN));
         assertEquals(Op.TOGGLE, Op.fromExtra(Constants.REAR_CAST_OP_TOGGLE));
         assertEquals(Op.QUERY, Op.fromExtra(Constants.REAR_CAST_OP_QUERY));
+        assertEquals(Op.DESKTOP_OPEN, Op.fromExtra(Constants.REAR_CAST_OP_DESKTOP_OPEN));
+        assertEquals(Op.DESKTOP_START, Op.fromExtra(Constants.REAR_CAST_OP_DESKTOP_START));
+        assertEquals(Op.DESKTOP_STOP, Op.fromExtra(Constants.REAR_CAST_OP_DESKTOP_STOP));
+        assertEquals(Op.BACK, Op.fromExtra(Constants.REAR_CAST_OP_BACK));
         assertNull(Op.fromExtra(null));
         assertNull(Op.fromExtra("TO_REAR"));
         assertNull(Op.fromExtra(""));
@@ -142,6 +146,7 @@ public class RearCastPolicyTest {
         assertEquals(Outcome.LOCKED, RearCastPolicy.outcomeOf(Constants.REAR_CAST_RESULT_LOCKED));
         assertEquals(Outcome.REAR_HAS_APP, RearCastPolicy.outcomeOf(Constants.REAR_CAST_RESULT_REAR_HAS_APP));
         assertEquals(Outcome.REAR_EMPTY, RearCastPolicy.outcomeOf(Constants.REAR_CAST_RESULT_REAR_EMPTY));
+        assertEquals(Outcome.DONE, RearCastPolicy.outcomeOf(Constants.REAR_CAST_RESULT_DONE));
         assertEquals(Outcome.TIMEOUT, RearCastPolicy.outcomeOf(Constants.REAR_CAST_RESULT_TIMEOUT));
         assertEquals(Outcome.UNKNOWN, RearCastPolicy.outcomeOf(99));
     }
@@ -167,6 +172,7 @@ public class RearCastPolicyTest {
                 Constants.REAR_CAST_RESULT_LOCKED,
                 Constants.REAR_CAST_RESULT_REAR_HAS_APP,
                 Constants.REAR_CAST_RESULT_REAR_EMPTY,
+                Constants.REAR_CAST_RESULT_DONE,
                 Constants.REAR_CAST_RESULT_TIMEOUT,
         };
         assertEquals(codes.length, Arrays.stream(codes).distinct().count());
@@ -199,6 +205,30 @@ public class RearCastPolicyTest {
         assertFalse(RearCastPolicy.isAllowedSender(""));
         assertFalse(RearCastPolicy.isAllowedSender("com.example.evil"));
         assertFalse(RearCastPolicy.isAllowedSender(Constants.SYSTEM_UI_PACKAGE));
+    }
+
+    @Test
+    public void desktopOpsAcceptOnlyModule() {
+        assertTrue(Op.DESKTOP_OPEN.isDesktopOp());
+        assertTrue(Op.DESKTOP_START.isDesktopOp());
+        assertTrue(Op.DESKTOP_STOP.isDesktopOp());
+        assertTrue(Op.BACK.isDesktopOp());
+        assertFalse(Op.TO_REAR.isDesktopOp());
+        assertFalse(Op.QUERY.isDesktopOp());
+        assertTrue(RearCastPolicy.isAllowedDesktopSender(Constants.MODULE_PACKAGE));
+        assertFalse(RearCastPolicy.isAllowedDesktopSender(Constants.TARGET_PACKAGE));
+        assertFalse(RearCastPolicy.isAllowedDesktopSender(null));
+    }
+
+    @Test
+    public void rearDesktopTaskIsNeverCast() {
+        // 背屏桌面本身在背屏上，不能被当成「背屏上的投放应用」拉回主屏。
+        List<TaskEntry> rear = Arrays.asList(
+                task(77, Constants.MODULE_PACKAGE, STANDARD, FULLSCREEN, true),
+                task(41, "com.example.app", STANDARD, FULLSCREEN, false));
+        assertEquals(41, RearCastPolicy.pickRearToMain(rear).rootTaskId);
+        assertNull(RearCastPolicy.pickRearToMain(Arrays.asList(
+                task(77, Constants.MODULE_PACKAGE, STANDARD, FULLSCREEN, true))));
     }
 
     @Test

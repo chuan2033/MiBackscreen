@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import hook.HyperBackscreen.app.ModuleApp;
 import hook.HyperBackscreen.common.Constants;
+import hook.HyperBackscreen.common.RearDesktopPolicy;
 import hook.HyperBackscreen.common.RearScreenSchedule;
 import hook.HyperBackscreen.common.RearScreenWakeMatcher;
 import hook.HyperBackscreen.hook.subscreen.AutoWallpaperRotationPolicy;
@@ -92,7 +93,8 @@ public final class PrefsBridge {
             Constants.KEY_LIQUID_GLASS,
             Constants.KEY_BOTTOM_BAR_STYLE,
             Constants.KEY_BOTTOM_BAR_BLUR,
-            Constants.KEY_SHOW_FUNCTION_COUNT));
+            Constants.KEY_SHOW_FUNCTION_COUNT,
+            Constants.KEY_REAR_DESKTOP_DENSITY));
 
     public static final boolean DEFAULT_DISABLE_LONG_PRESS_EDIT = true;
     public static final boolean DEFAULT_REMOVE_WALLPAPER_LIMIT = true;
@@ -238,6 +240,8 @@ public final class PrefsBridge {
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_REAR_SCREEN_OFF_TIMEOUT, DEFAULT_REAR_SCREEN_OFF_TIMEOUT);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_SETTINGS_ENTRY, DEFAULT_SETTINGS_ENTRY);
         BACKUP_STRING_DEFAULTS.put(Constants.KEY_BOTTOM_BAR_STYLE, "standard");
+        BACKUP_STRING_DEFAULTS.put(Constants.KEY_REAR_DESKTOP_DENSITY,
+                String.valueOf(RearDesktopPolicy.DEFAULT_DENSITY));
         BACKUP_STRING_DEFAULTS.put(
                 Constants.KEY_REAR_SCREEN_SCHEDULE_START,
                 DEFAULT_REAR_SCREEN_SCHEDULE_START);
@@ -989,6 +993,8 @@ public final class PrefsBridge {
                 // 包名列表：按同一套编码重新规范化，非法项直接丢掉。
                 return hook.HyperBackscreen.common.PackageListCodec.encode(
                         hook.HyperBackscreen.common.PackageListCodec.parse(value));
+            case Constants.KEY_REAR_DESKTOP_DENSITY:
+                return RearDesktopPolicy.normalizeDensity(value);
             case Constants.KEY_REAR_APP_WIDGETS:
                 return hook.HyperBackscreen.common.RearWidgetList.encode(
                         hook.HyperBackscreen.common.RearWidgetList.parse(value));
@@ -1328,6 +1334,18 @@ public final class PrefsBridge {
 
     public static void writeBottomBarBlur(@NonNull Context context, boolean enabled) {
         local(context).edit().putBoolean(Constants.KEY_BOTTOM_BAR_BLUR, enabled).apply();
+    }
+
+    /** 背屏桌面运行期间的背屏密度（dpi，0 = 不调整）。只在模块 App 本地，随会话请求交给 system_server。 */
+    public static int readRearDesktopDensity(@NonNull Context context) {
+        return RearDesktopPolicy.parseDensity(local(context).getString(
+                Constants.KEY_REAR_DESKTOP_DENSITY, String.valueOf(RearDesktopPolicy.DEFAULT_DENSITY)));
+    }
+
+    public static void writeRearDesktopDensity(@NonNull Context context, int density) {
+        String normalized = RearDesktopPolicy.normalizeDensity(String.valueOf(density));
+        if (normalized == null) return;
+        local(context).edit().putString(Constants.KEY_REAR_DESKTOP_DENSITY, normalized).apply();
     }
 
     public static boolean readShowFunctionCount(@NonNull Context context) {

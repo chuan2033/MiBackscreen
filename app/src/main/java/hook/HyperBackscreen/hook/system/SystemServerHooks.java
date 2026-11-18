@@ -51,6 +51,8 @@ public final class SystemServerHooks {
     private static volatile Field sGestureEnableField;
     /** 最近一次因名单关掉双击熄屏的包名，只在变化时记日志。 */
     private volatile String lastDoubleTapSleepBlockedPackage;
+    /** 最近一次因背屏桌面放行的包名，只在变化时记日志。 */
+    private volatile String lastRearDesktopAllowedPackage;
 
     public SystemServerHooks(@NonNull ModuleMain module) {
         this.module = module;
@@ -321,7 +323,45 @@ public final class SystemServerHooks {
         );
         // 按应用禁用双击熄屏：与上面的 Hook 互不依赖，类缺失只记 WARN，不影响返回值。
         installDoubleTapSleepFilterHook(classLoader);
+        // 背屏桌面：会话期间放行应用显示在背屏。同样互不依赖。
+        installRearDesktopLaunchHook(classLoader);
         return coverHookInstalled && (powerWakeHookInstalled || coverWakeHookInstalled);
+    }
+
+    /**
+     * 背屏桌面会话期间放行应用显示在背屏。
+     *
+     * <p>{@code ActivityStarterImpl.isShouldShowOnRearDisplay(ActivityInfo)} 按 meta-data
+     * {@code miui.rear.policy} 与内置名单判定；背屏启动（不通过就以 102 中止）和「从背屏来源启动时重定向到主屏」
+     * 都调它。原结果为 false 且会话进行中时改成 true。锁屏时系统另有一层只认内置名单的检查，这里不改。
+     * 回调在 WindowManager 全局锁内，只读 volatile 会话状态。
+     */
+    private void installRearDesktopLaunchHook(@NonNull ClassLoader classLoader) {
+        Class<?> starterClass = findClass(Constants.SYSTEM_ACTIVITY_STARTER_IMPL_CLASS, classLoader);
+        if (starterClass == null) {
+            module.log(Log.WARN, Constants.LOG_TAG,
+                    "System hook target missing: " + Constants.SYSTEM_ACTIVITY_STARTER_IMPL_CLASS);
+            return;
+        }
+        module.hookMethodIfPresent(
+                starterClass,
+                Constants.SYSTEM_SHOULD_SHOW_ON_REAR_METHOD,
+                new Class[]{android.content.pm.ActivityInfo.class},
+                Constants.SYSTEM_ACTIVITY_STARTER_IMPL_CLASS + "#" + Constants.SYSTEM_SHOULD_SHOW_ON_REAR_METHOD,
+                chain -> {
+                    Object result = chain.proceed();
+                    if (Boolean.TRUE.equals(result) || !RearDesktopHost.isSessionActive()) return result;
+                    Object info = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                    String packageName = info instanceof android.content.pm.ActivityInfo
+                            ? ((android.content.pm.ActivityInfo) info).packageName
+                            : null;
+                    if (packageName != null && !packageName.equals(lastRearDesktopAllowedPackage)) {
+                        lastRearDesktopAllowedPackage = packageName;
+                        module.log(Log.INFO, Constants.LOG_TAG, "Rear desktop allowed " + packageName);
+                    }
+                    return true;
+                }
+        );
     }
 
     /**

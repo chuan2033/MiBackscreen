@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 背屏桌面控制条：把当前应用移到主屏（手机轮廓 + 向下箭头）。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M8,2h8a2,2 0,0 1,2 2v16a2,2 0,0 1,-2 2h-8a2,2 0,0 1,-2 -2v-16a2,2 0,0 1,2 -2zM8,4v16h8v-16z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M11.25,6v4.5h-1.75l2.5,3l2.5,-3h-1.75v-4.5z" />
+</vector>

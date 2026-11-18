@@ -479,4 +479,34 @@
     <string name="rear_widgets_search_hint">搜索小部件或应用</string>
     <string name="rear_widgets_search_empty">没有匹配的小部件</string>
     <string name="rear_widgets_already_added">已添加</string>
+    <!-- 背屏桌面 -->
+    <string name="rear_desktop_title">背屏桌面</string>
+    <string name="rear_desktop_tile_label">MiBackscreen 背屏桌面</string>
+    <string name="rear_desktop_entry_summary">在背屏上直接打开和运行应用</string>
+    <string name="rear_desktop_open">在背屏打开</string>
+    <string name="rear_desktop_open_summary">在背屏显示应用列表，点哪个应用就在背屏运行它</string>
+    <string name="rear_desktop_exit">退出背屏桌面</string>
+    <string name="rear_desktop_running">运行中，退出后恢复背屏密度</string>
+    <string name="rear_desktop_density_title">背屏密度</string>
+    <string name="rear_desktop_density_summary">数值越小，应用在背屏上的布局越宽。只在背屏桌面运行期间生效</string>
+    <string name="rear_desktop_density_unchanged">不调整</string>
+    <string name="rear_desktop_density_value">%1$d dpi</string>
+    <string name="rear_desktop_overlay_title">浮动控制条</string>
+    <string name="rear_desktop_overlay_summary">需要悬浮窗权限。其它应用盖住背屏桌面时，背屏右侧的把手可以展开返回、桌面、移到主屏和退出</string>
+    <string name="rear_desktop_overlay_manual">请在打开的系统设置页里授予权限</string>
+    <string name="rear_desktop_note_reboot">勾选「系统框架」作用域并重启手机后，应用才能在背屏上运行。</string>
+    <string name="rear_desktop_note_locked">打开背屏桌面、从背屏桌面启动应用前需要先解锁手机。主屏锁定后，已经在背屏上的应用继续运行。</string>
+    <string name="rear_desktop_note_tile">控制中心的「背屏桌面」磁贴可以打开和退出背屏桌面；「投到背屏」磁贴照常在主屏和背屏之间移动当前应用。</string>
+    <string name="rear_desktop_note_timeout">背屏按「息屏与定时」里的息屏时间熄灭，使用应用时可以选「一直亮屏」。</string>
+    <string name="rear_desktop_note_compat">部分应用不支持小窗口或会检查运行的屏幕，在背屏上可能显示不正常。</string>
+    <string name="rear_desktop_locked">请先解锁手机</string>
+    <string name="rear_desktop_failed">无法打开背屏桌面</string>
+    <string name="rear_desktop_launch_failed">无法在背屏打开这个应用</string>
+    <string name="rear_desktop_empty">没有应用</string>
+    <string name="rear_desktop_notification_title">背屏桌面运行中</string>
+    <string name="rear_desktop_control_back">返回</string>
+    <string name="rear_desktop_control_home">背屏桌面</string>
+    <string name="rear_desktop_control_to_main">移到主屏</string>
+    <string name="rear_desktop_control_exit">退出背屏桌面</string>
+    <string name="rear_desktop_control_expand">展开控制条</string>
 </resources>

@@ -192,6 +192,36 @@ public final class Constants {
     /** 发送方本地超时（不经过 system_server）。 */
     public static final int REAR_CAST_RESULT_TIMEOUT = -100;
 
+    // ---- 背屏桌面 ----
+    // 与投放共用 ACTION_REAR_CAST 通道与鉴权，执行端在 RearDesktopHost；只接受模块 App 发来的请求。
+    /** 在背屏上打开背屏桌面（system_server 以系统身份启动 Activity，免后台启动限制）。 */
+    public static final String REAR_CAST_OP_DESKTOP_OPEN = "desktop_open";
+    /** 开始背屏桌面会话：extra {@link #EXTRA_REAR_DESKTOP_TOKEN} 为会话令牌，{@link #EXTRA_REAR_DESKTOP_DENSITY} 为背屏密度。 */
+    public static final String REAR_CAST_OP_DESKTOP_START = "desktop_start";
+    /** 结束背屏桌面会话，恢复背屏密度与方向设置。 */
+    public static final String REAR_CAST_OP_DESKTOP_STOP = "desktop_stop";
+    /** 向背屏发送返回键。 */
+    public static final String REAR_CAST_OP_BACK = "back";
+    /** 会话令牌（Bundle#putBinder）：system_server 监听它的死亡，模块进程被杀时自动结束会话。 */
+    public static final String EXTRA_REAR_DESKTOP_TOKEN = "rear_desktop_token";
+    /** 会话期间背屏使用的密度；0 表示不调整。 */
+    public static final String EXTRA_REAR_DESKTOP_DENSITY = "rear_desktop_density";
+    /** 操作已执行（打开、开始、结束、返回键）。 */
+    public static final int REAR_CAST_RESULT_DONE = 12;
+    /** 背屏桌面 Activity。 */
+    public static final String REAR_DESKTOP_ACTIVITY = MODULE_PACKAGE + ".desktop.RearDesktopActivity";
+    /** 背屏桌面运行期间的背屏密度（仅本地偏好）：0 = 不调整，其余为 dpi，见 RearDesktopPolicy。 */
+    public static final String KEY_REAR_DESKTOP_DENSITY = "rear_desktop_density";
+    /**
+     * system_server 记录的会话现场（Settings.Global）：会话开始前背屏的强制密度与方向设置。
+     * 会话正常结束时清掉；开机时仍在说明上次没恢复（重启 / 崩溃），按它恢复。
+     */
+    public static final String SETTING_REAR_DESKTOP_RESTORE = "mibackscreen_rear_desktop_restore";
+    // 背屏启动拦截：ActivityStarterImpl.isShouldShowOnRearDisplay(ActivityInfo) 按 meta-data
+    // miui.rear.policy 与内置名单决定 Activity 能否显示在背屏；背屏启动与「从背屏来源重定向到主屏」都调它。
+    public static final String SYSTEM_ACTIVITY_STARTER_IMPL_CLASS = "com.android.server.wm.ActivityStarterImpl";
+    public static final String SYSTEM_SHOULD_SHOW_ON_REAR_METHOD = "isShouldShowOnRearDisplay";
+
     // Theme store hook targets
     // 注意：以下 R8 混淆名（o5、cmzf、qp5l 等）与目标应用版本绑定，主题商店一更新即可能失效。
     public static final String THEME_STORE_PACKAGE = "com.android.thememanager";

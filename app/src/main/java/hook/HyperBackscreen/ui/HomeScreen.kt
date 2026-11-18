@@ -105,6 +105,7 @@ import hook.HyperBackscreen.ui.config.ConfigPage
 import hook.HyperBackscreen.ui.function.FunctionPage
 import hook.HyperBackscreen.ui.function.RearDoubleTapPage
 import hook.HyperBackscreen.ui.function.RearCastPage
+import hook.HyperBackscreen.ui.function.RearDesktopPage
 import hook.HyperBackscreen.ui.function.RearMusicPage
 import hook.HyperBackscreen.ui.function.RearLiveUpdatePage
 import hook.HyperBackscreen.ui.function.RearWidgetPickerPage
@@ -531,6 +532,7 @@ internal fun HomeScreen(
                     )
                     HomeRoute.RearLiveUpdate -> RearLiveUpdatePage(onBack = { navigateBackFrom(page) })
                     HomeRoute.RearScreenRecord -> RearScreenRecordPage(onBack = { navigateBackFrom(page) })
+                    HomeRoute.RearDesktop -> RearDesktopPage(onBack = { navigateBackFrom(page) })
                     HomeRoute.RearWidgets -> RearWidgetsPage(
                         onAddClick = { openDetail(page, HomeRoute.RearWidgetPicker) },
                         onBack = { navigateBackFrom(page) }
@@ -581,6 +583,7 @@ internal fun HomeScreen(
                         onRearLiveUpdateClick = { openDetail(page, HomeRoute.RearLiveUpdate) },
                         onRearWidgetsClick = { openDetail(page, HomeRoute.RearWidgets) },
                         onRearScreenRecordClick = { openDetail(page, HomeRoute.RearScreenRecord) },
+                        onRearDesktopClick = { openDetail(page, HomeRoute.RearDesktop) },
                         onLicenseClick = { openDetail(page, HomeRoute.License) },
                         onDonateClick = { openDetail(page, HomeRoute.Donate) },
                         onAppUpdateClick = { openDetail(page, HomeRoute.AppUpdate) },
@@ -690,6 +693,7 @@ private fun MainTabPage(
     onRearLiveUpdateClick: () -> Unit,
     onRearWidgetsClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit,
+    onRearDesktopClick: () -> Unit,
     onBatteryColorClick: () -> Unit,
     onRearScreenTimingClick: () -> Unit,
     onLicenseClick: () -> Unit,
@@ -815,6 +819,7 @@ private fun MainTabPage(
                             onRearLiveUpdateClick = onRearLiveUpdateClick,
                             onRearWidgetsClick = onRearWidgetsClick,
                             onRearScreenRecordClick = onRearScreenRecordClick,
+                            onRearDesktopClick = onRearDesktopClick,
                             onBatteryColorClick = onBatteryColorClick,
                             onRearScreenTimingClick = onRearScreenTimingClick,
                             rearMedia = rearMedia,
@@ -882,6 +887,7 @@ private fun MainContent(
     onRearLiveUpdateClick: () -> Unit,
     onRearWidgetsClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit,
+    onRearDesktopClick: () -> Unit,
     onLicenseClick: () -> Unit,
     onDonateClick: () -> Unit,
     onAppUpdateClick: () -> Unit,
@@ -992,6 +998,7 @@ private fun MainContent(
                 onRearLiveUpdateClick = onRearLiveUpdateClick,
                 onRearWidgetsClick = onRearWidgetsClick,
                 onRearScreenRecordClick = onRearScreenRecordClick,
+                onRearDesktopClick = onRearDesktopClick,
                 onBatteryColorClick = onBatteryColorClick,
                 onRearScreenTimingClick = onRearScreenTimingClick,
                 onLicenseClick = onLicenseClick,

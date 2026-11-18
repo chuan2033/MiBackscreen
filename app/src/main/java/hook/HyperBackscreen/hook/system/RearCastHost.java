@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Binder;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Process;
@@ -43,7 +44,7 @@ import hook.HyperBackscreen.hook.ModuleMain;
  *
  * <p>执行：反射 {@code ActivityTaskManager.getService()}（IActivityTaskManager），用
  * {@code getAllRootTaskInfosOnDisplay} 读两块屏的根任务，{@code moveRootTaskToDisplay} 移动；
- * 只移动已经在跑的任务，不在背屏上启动 Activity（那条路径会被 MIUI 的 handleSubScreen 拦成 102）。
+ * 只移动已经在跑的任务。背屏桌面的操作（打开、会话、返回键）转给 {@link RearDesktopHost}。
  *
  * <p>稳妥性：system_server 最敏感 —— 安装、注册、每次请求都 try/catch 全包，异常只记日志；
  * 任一环节失败只让本功能不可用（发送方收到对应结果码），不影响开机与其它 Hook。
@@ -135,7 +136,7 @@ public final class RearCastHost {
             Handler handler = new Handler(thread.getLooper());
             IntentFilter filter = new IntentFilter(Constants.ACTION_REAR_CAST);
             try {
-                context.registerReceiver(new CastReceiver(module), filter, null, handler,
+                context.registerReceiver(new CastReceiver(module, handler), filter, null, handler,
                         Context.RECEIVER_EXPORTED);
             } catch (Throwable error) {
                 thread.quitSafely();
@@ -143,6 +144,8 @@ public final class RearCastHost {
             }
             receiverRegistered = true;
             module.log(Log.INFO, TAG, LOG_LABEL + ": receiver registered");
+            // 上次背屏桌面会话没正常结束（重启 / 崩溃）时恢复背屏密度与方向设置。
+            handler.post(() -> RearDesktopHost.restoreAfterBoot(module, context));
         }
     }
 
@@ -165,9 +168,11 @@ public final class RearCastHost {
     /** 接收器本体；onReceive 在 MiBackscreenRearCast 线程上执行。 */
     private static final class CastReceiver extends BroadcastReceiver {
         private final ModuleMain module;
+        private final Handler handler;
 
-        CastReceiver(@NonNull ModuleMain module) {
+        CastReceiver(@NonNull ModuleMain module, @NonNull Handler handler) {
             this.module = module;
+            this.handler = handler;
         }
 
         @Override
@@ -189,6 +194,10 @@ public final class RearCastHost {
                     Op op = Op.fromExtra(opValue);
                     if (op == null) {
                         code = Constants.REAR_CAST_RESULT_BAD_REQUEST;
+                    } else if (op.isDesktopOp()) {
+                        code = RearCastPolicy.isAllowedDesktopSender(sender)
+                                ? executeDesktop(module, context, handler, op, intent, senderUid)
+                                : Constants.REAR_CAST_RESULT_DENIED;
                     } else {
                         Result result = execute(module, context, op);
                         code = result.code;
@@ -276,6 +285,30 @@ public final class RearCastHost {
         } catch (TaskApiException error) {
             module.log(Log.WARN, TAG, LOG_LABEL + ": task api failed", error);
             return new Result(Constants.REAR_CAST_RESULT_API_UNAVAILABLE, null);
+        } finally {
+            Binder.restoreCallingIdentity(token);
+        }
+    }
+
+    private static int executeDesktop(@NonNull ModuleMain module, @NonNull Context context, @NonNull Handler handler,
+                                      @NonNull Op op, @NonNull Intent intent, int senderUid) {
+        long token = Binder.clearCallingIdentity();
+        try {
+            switch (op) {
+                case DESKTOP_OPEN:
+                    return RearDesktopHost.open(module, context, senderUid / PER_USER_UID_RANGE);
+                case DESKTOP_START:
+                    Bundle extras = intent.getExtras();
+                    return RearDesktopHost.start(module, context, handler,
+                            extras == null ? null : extras.getBinder(Constants.EXTRA_REAR_DESKTOP_TOKEN),
+                            intent.getIntExtra(Constants.EXTRA_REAR_DESKTOP_DENSITY, -1));
+                case DESKTOP_STOP:
+                    return RearDesktopHost.stop(module, context, "request");
+                case BACK:
+                    return RearDesktopHost.back(module);
+                default:
+                    return Constants.REAR_CAST_RESULT_BAD_REQUEST;
+            }
         } finally {
             Binder.restoreCallingIdentity(token);
         }

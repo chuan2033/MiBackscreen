@@ -50,7 +50,13 @@ public final class RearCastPolicy {
 
     /** 请求动作。 */
     public enum Op {
-        TO_REAR, TO_MAIN, TOGGLE, QUERY;
+        TO_REAR, TO_MAIN, TOGGLE, QUERY,
+        /** 背屏桌面：打开、会话开始、会话结束、返回键。只接受模块 App 发来。 */
+        DESKTOP_OPEN, DESKTOP_START, DESKTOP_STOP, BACK;
+
+        public boolean isDesktopOp() {
+            return this == DESKTOP_OPEN || this == DESKTOP_START || this == DESKTOP_STOP || this == BACK;
+        }
 
         /** 解析 {@link Constants#EXTRA_REAR_CAST_OP}；不认识的取值返回 null（按坏请求拒绝）。 */
         @Nullable
@@ -65,6 +71,14 @@ public final class RearCastPolicy {
                     return TOGGLE;
                 case Constants.REAR_CAST_OP_QUERY:
                     return QUERY;
+                case Constants.REAR_CAST_OP_DESKTOP_OPEN:
+                    return DESKTOP_OPEN;
+                case Constants.REAR_CAST_OP_DESKTOP_START:
+                    return DESKTOP_START;
+                case Constants.REAR_CAST_OP_DESKTOP_STOP:
+                    return DESKTOP_STOP;
+                case Constants.REAR_CAST_OP_BACK:
+                    return BACK;
                 default:
                     return null;
             }
@@ -85,6 +99,8 @@ public final class RearCastPolicy {
         LOCKED,
         REAR_HAS_APP,
         REAR_EMPTY,
+        /** 背屏桌面的操作已执行。 */
+        DONE,
         /** 没有接收器处理：system_server 里的 Hook 没生效（未勾作用域 / 未重启）。 */
         NOT_ACTIVE,
         TIMEOUT,
@@ -128,6 +144,8 @@ public final class RearCastPolicy {
                 return Outcome.REAR_HAS_APP;
             case Constants.REAR_CAST_RESULT_REAR_EMPTY:
                 return Outcome.REAR_EMPTY;
+            case Constants.REAR_CAST_RESULT_DONE:
+                return Outcome.DONE;
             case Constants.REAR_CAST_RESULT_NOT_HANDLED:
                 return Outcome.NOT_ACTIVE;
             case Constants.REAR_CAST_RESULT_TIMEOUT:
@@ -143,11 +161,17 @@ public final class RearCastPolicy {
                 || Constants.MODULE_PACKAGE.equals(packageName);
     }
 
-    /** 这些包的任务永远不移动：主屏桌面、系统界面、背屏中心自己。 */
+    /** 背屏桌面的操作只接受模块 App 自己。 */
+    public static boolean isAllowedDesktopSender(@Nullable String packageName) {
+        return Constants.MODULE_PACKAGE.equals(packageName);
+    }
+
+    /** 这些包的任务永远不移动：主屏桌面、系统界面、背屏中心与模块自己（背屏桌面）。 */
     public static boolean isExcludedPackage(@Nullable String packageName) {
         return packageName == null
                 || packageName.isEmpty()
                 || Constants.TARGET_PACKAGE.equals(packageName)
+                || Constants.MODULE_PACKAGE.equals(packageName)
                 || Constants.SYSTEM_UI_PACKAGE.equals(packageName)
                 || Constants.MAIN_LAUNCHER_PACKAGE.equals(packageName);
     }

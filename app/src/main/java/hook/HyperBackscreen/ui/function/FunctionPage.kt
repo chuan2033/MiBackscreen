@@ -41,6 +41,7 @@ internal fun FunctionPage(
     onRearLiveUpdateClick: () -> Unit,
     onRearWidgetsClick: () -> Unit,
     onRearScreenRecordClick: () -> Unit,
+    onRearDesktopClick: () -> Unit,
     rearMedia: RearMediaSwitches = RearMediaSwitches(),
     onRearMediaChange: (RearMediaSwitch, Boolean) -> Unit = { _, _ -> },
 ) {
@@ -78,6 +79,12 @@ internal fun FunctionPage(
                         PackageListCodec.parse(doubleTapSleepDisabledPackages).size,
                     ),
                     onClick = onRearDoubleTapClick
+                )
+                // 背屏桌面的放行与会话都在 system_server 里，归「系统」组。
+                ArrowPreference(
+                    title = stringResource(R.string.rear_desktop_title),
+                    summary = stringResource(R.string.rear_desktop_entry_summary),
+                    onClick = onRearDesktopClick
                 )
             }
 

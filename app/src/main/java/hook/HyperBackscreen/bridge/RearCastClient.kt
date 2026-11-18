@@ -4,6 +4,7 @@ import android.app.BroadcastOptions
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -29,7 +30,11 @@ object RearCastClient {
     }
 
     @JvmStatic
-    fun send(context: Context, op: String, callback: Callback) {
+    fun send(context: Context, op: String, callback: Callback) = send(context, op, null, callback)
+
+    /** [extras] 随请求一起发给 system_server（背屏桌面会话的令牌与密度）。 */
+    @JvmStatic
+    fun send(context: Context, op: String, extras: Bundle?, callback: Callback) {
         val handler = Handler(Looper.getMainLooper())
         val finished = AtomicBoolean(false)
         lateinit var timeout: Runnable
@@ -49,6 +54,7 @@ object RearCastClient {
                 .setPackage(Constants.SYSTEM_FRAMEWORK_PACKAGE)
                 .putExtra(Constants.EXTRA_REAR_CAST_OP, op)
                 .addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+            if (extras != null) intent.putExtras(extras)
             val options = BroadcastOptions.makeBasic()
                 .setShareIdentityEnabled(true)
                 .toBundle()

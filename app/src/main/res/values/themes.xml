@@ -13,4 +13,12 @@
         <item name="android:windowNoTitle">true</item>
     </style>
 
+    <!-- 背屏桌面：背屏上固定黑底，不跟随日夜模式（夜间主题不覆盖它）。 -->
+    <style name="Theme.MiBackscreen.RearDesktop" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">always</item>
+    </style>
+
 </resources>
