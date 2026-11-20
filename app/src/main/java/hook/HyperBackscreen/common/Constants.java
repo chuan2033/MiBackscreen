@@ -453,9 +453,6 @@ public final class Constants {
     public static final String THEME_REAR_APPLY_ENTRY_METHOD = "q";
     public static final String THEME_REAR_AI_COMPANION_RES_TYPE = "ai-mate";
     public static final String THEME_REAR_AI_COMPANION_SUB_TYPE = "ai";
-    public static final String THEME_REAR_AI_WALLPAPER_CATEGORY_TYPE = "ai";
-    public static final String THEME_REAR_GROUP_PHOTO_RES_TYPE = "groupPhoto";
-    public static final String THEME_REAR_PHONE_CASE_RES_TYPE = "phoneCase";
     public static final String THEME_REAR_TEMPLATE_NORMAL_PRODUCT_DIR =
             "/product/media/rearscreen/template/normal";
     public static final String THEME_REAR_TEMPLATE_NORMAL_SYSTEM_DIR =

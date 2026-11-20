@@ -168,12 +168,15 @@ $normalTemplatePath = Join-Path $romRootResolved "product\media\rearscreen\templ
 $defaultTemplatePath = Join-Path $romRootResolved "product\media\rearscreen\template\default\rearScreen.json"
 $appCardTemplatePath = Join-Path $romRootResolved "product\media\rearscreen\appcard\default\rearScreen.json"
 $appCardResourcePath = Join-Path $romRootResolved "product\media\rearscreen\appcard"
+# 17 Pro Max (popsicle) 原生 normal 模板，不在其中的条目由模块提供 (baseline).
+$baselineNormalPath = Join-Path $distRoot "device_popsicle_template\normal\rearScreen.json"
 
 foreach ($path in @(
     $modulePropPath,
     $normalTemplatePath,
     $defaultTemplatePath,
-    $appCardTemplatePath
+    $appCardTemplatePath,
+    $baselineNormalPath
 )) {
     Require-File -Path $path
 }
@@ -182,30 +185,51 @@ Require-FileOrDirectory -Path $appCardResourcePath
 $sourceNormal = Get-Content -Raw -Encoding UTF8 -LiteralPath $normalTemplatePath | ConvertFrom-Json
 $sourceDefault = Get-Content -Raw -Encoding UTF8 -LiteralPath $defaultTemplatePath | ConvertFrom-Json
 $sourceAppCards = Get-Content -Raw -Encoding UTF8 -LiteralPath $appCardTemplatePath | ConvertFrom-Json
+$baselineNormal = Get-Content -Raw -Encoding UTF8 -LiteralPath $baselineNormalPath | ConvertFrom-Json
 
-$sourceCompanion = $sourceNormal.products | Where-Object { $_.type -eq "ai-mate" } | Select-Object -First 1
-$sourceAi = $sourceNormal.products | Where-Object { $_.type -eq "ai" } | Select-Object -First 1
+$baselineIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+foreach ($category in @($baselineNormal.products)) {
+    foreach ($item in @($category.items)) {
+        [void]$baselineIds.Add([string]$item.resId)
+    }
+}
+if ($baselineIds.Count -eq 0) {
+    throw "The 17 Pro Max baseline template has no items: $baselineNormalPath"
+}
+
+# normal 补充模板直接使用 18 Pro Max 的完整 normal 模板，分类和条目顺序与 ROM 相同.
+# 17 Pro Max 已有的条目保留 /product 原路径，APK 只用它们确定新条目的插入位置.
+# 其余条目由模块提供，路径改写到 data-root，资源随包复制.
+$normalSupplement = Clone-JsonNode -Value $sourceNormal
+$moduleItems = @()
+foreach ($category in @($normalSupplement.products)) {
+    foreach ($item in @($category.items)) {
+        if ([string]::IsNullOrWhiteSpace([string]$item.resId)) {
+            throw "18 Pro Max normal template item has no resId in category $($category.type)"
+        }
+        if ($baselineIds.Contains([string]$item.resId)) {
+            continue
+        }
+        foreach ($name in @("resLocalPath", "metaPath")) {
+            if ([string]::IsNullOrWhiteSpace([string]$item.$name)) {
+                throw "Module-provided item $($item.resId) has no $name"
+            }
+        }
+        $moduleItems += [PSCustomObject]@{ Category = [string]$category.type; Item = $item }
+    }
+}
+$moduleResTypes = @($moduleItems | ForEach-Object { [string]$_.Item.resType })
+foreach ($requiredType in @("ai-mate", "groupPhoto", "phoneCase")) {
+    if ($moduleResTypes -notcontains $requiredType) {
+        throw "The 18 Pro Max template provides no $requiredType item"
+    }
+}
+
 $sourceDefaultCompanion = $sourceDefault.products | Where-Object { $_.type -eq "ai-mate" } | Select-Object -First 1
-$newAiItems = @($sourceAi.items | Where-Object { $_.resType -in @("groupPhoto", "phoneCase") })
-
-if ($null -eq $sourceCompanion -or $null -eq $sourceAi -or
-        $null -eq $sourceDefaultCompanion -or $newAiItems.Count -ne 2) {
-    throw "The expected 18 Pro Max personalization entries were not found"
+if ($null -eq $sourceDefaultCompanion) {
+    throw "The 18 Pro Max default template has no ai-mate category"
 }
-
-$normalCompanion = Clone-JsonNode -Value $sourceCompanion
-$normalAi = Clone-JsonNode -Value $sourceAi
-$normalAi.items = @($normalAi.items | Where-Object { $_.resType -in @("groupPhoto", "phoneCase") })
 $defaultCompanion = Clone-JsonNode -Value $sourceDefaultCompanion
-Set-ThemeItemPaths -Category $normalCompanion
-Set-ThemeItemPaths -Category $normalAi
-Set-ThemeItemPaths -Category $defaultCompanion
-
-$normalSupplement = [ordered]@{
-    version = [int]$sourceNormal.version
-    count = 2
-    products = @($normalCompanion, $normalAi)
-}
 $defaultSupplement = [ordered]@{
     version = [int]$sourceDefault.version
     count = 1
@@ -213,22 +237,23 @@ $defaultSupplement = [ordered]@{
 }
 
 $themePaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-foreach ($category in @($sourceCompanion, $sourceDefaultCompanion)) {
-    foreach ($item in @($category.items)) {
-        foreach ($name in @("resPreviewPath", "resLocalPath", "rightPath", "metaPath")) {
-            if (-not [string]::IsNullOrWhiteSpace([string]$item.$name)) {
-                [void]$themePaths.Add([string]$item.$name)
-            }
-        }
-    }
-}
-foreach ($item in $newAiItems) {
+$pathSources = @($moduleItems | ForEach-Object Item) + @($defaultCompanion.items)
+foreach ($item in $pathSources) {
     foreach ($name in @("resPreviewPath", "resLocalPath", "rightPath", "metaPath")) {
         if (-not [string]::IsNullOrWhiteSpace([string]$item.$name)) {
             [void]$themePaths.Add([string]$item.$name)
         }
     }
 }
+foreach ($entry in $moduleItems) {
+    foreach ($name in @("resPreviewPath", "resLocalPath", "rightPath", "metaPath")) {
+        if ($entry.Item.PSObject.Properties.Name -contains $name) {
+            $entry.Item.$name = Convert-ThemePath -Path ([string]$entry.Item.$name)
+        }
+    }
+}
+Set-ThemeItemPaths -Category $defaultCompanion
+$normalSupplement.count = @($normalSupplement.products).Count
 
 New-Item -ItemType Directory -Path $stagePath -Force | Out-Null
 try {
@@ -370,6 +395,9 @@ try {
         Zip = $zipItem.FullName
         Version = $moduleVersion
         Files = (Get-ChildItem -LiteralPath $stagePath -Recurse -File).Count
+        ModuleThemeItems = $moduleItems.Count
+        ModuleThemeItemsByCategory = (($moduleItems | Group-Object Category |
+            ForEach-Object { "{0}={1}" -f $_.Name, $_.Count }) -join " ")
         ZipBytes = $zipItem.Length
         Sha256 = $zipHash
     }

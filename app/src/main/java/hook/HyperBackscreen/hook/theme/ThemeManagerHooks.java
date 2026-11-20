@@ -35,6 +35,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
@@ -54,6 +55,7 @@ import org.json.JSONObject;
 import hook.HyperBackscreen.bridge.PrefsBridge;
 import hook.HyperBackscreen.common.Constants;
 import hook.HyperBackscreen.common.ModuleStrings;
+import hook.HyperBackscreen.common.RearPresetMerger;
 import hook.HyperBackscreen.common.BackgroundTasks;
 import hook.HyperBackscreen.hook.target.MethodTarget;
 import hook.HyperBackscreen.hook.target.TargetMembers;
@@ -772,136 +774,135 @@ public final class ThemeManagerHooks {
                 chain -> {
                     Object result = chain.proceed();
                     if (!PrefsBridge.shouldEnable18ProFeatures(module)) return result;
-                    return ensureRearPersonalizationAiPresets(result, chain.getThisObject());
+                    return ensureRearPersonalizationPresets(result, chain.getThisObject());
                 }
         );
     }
 
-    private Object ensureRearPersonalizationAiPresets(
+    /**
+     * 把 18 Pro Max 补充模板里宿主没有的背屏壁纸并入预设分类列表（AI 陪伴、AI 合照、保护壳 DIY、
+     * 萌宠、创意时间、NFC 萌宠等），合并规则见 {@link RearPresetMerger}。
+     * 依次读模块 data-root、/product、/system 下的 normal 模板，宿主已有的条目不会重复加入。
+     */
+    private Object ensureRearPersonalizationPresets(
             @Nullable Object result,
             @Nullable Object repository
     ) {
-        if (!(result instanceof List<?> rawList)) return result;
-        if (hasRearPersonalizationAiPresets(rawList)) return result;
+        if (!(result instanceof List<?> rawList) || repository == null) return result;
 
-        ArrayList<Object> merged = new ArrayList<>(rawList);
-        int added = 0;
-        added += mergeRearPersonalizationPresetPath(
-                merged, repository, Constants.THEME_REAR_TEMPLATE_NORMAL_DATA_DIR);
-        added += mergeRearPersonalizationPresetPath(
-                merged, repository, Constants.THEME_REAR_TEMPLATE_NORMAL_PRODUCT_DIR);
-        added += mergeRearPersonalizationPresetPath(
-                merged, repository, Constants.THEME_REAR_TEMPLATE_NORMAL_SYSTEM_DIR);
-        if (added > 0) {
-            module.log(Log.INFO, Constants.LOG_TAG,
-                    "Rear personalization AI presets ensured: added=" + added);
-            return merged;
+        List<Object> categories = new ArrayList<>(rawList);
+        int addedItems = 0;
+        int addedCategories = 0;
+        for (String path : new String[]{
+                Constants.THEME_REAR_TEMPLATE_NORMAL_DATA_DIR,
+                Constants.THEME_REAR_TEMPLATE_NORMAL_PRODUCT_DIR,
+                Constants.THEME_REAR_TEMPLATE_NORMAL_SYSTEM_DIR}) {
+            List<?> supplement = readRearPresetSource(repository, path);
+            if (supplement.isEmpty()) continue;
+            try {
+                RearPresetMerger.Result<Object, Object> merge =
+                        RearPresetMerger.merge(categories, supplement, rearPresetAccess);
+                if (!merge.changed()) continue;
+                int written = 0;
+                for (Map.Entry<Object, List<Object>> entry : merge.updatedItems.entrySet()) {
+                    if (writeRearPresetItems(entry.getKey(), entry.getValue())) {
+                        written++;
+                    } else {
+                        module.log(Log.WARN, Constants.LOG_TAG,
+                                "Rear personalization preset items not writable: type="
+                                        + rearPresetAccess.categoryType(entry.getKey()));
+                    }
+                }
+                if (written == 0) continue;
+                categories = merge.categories;
+                addedItems += merge.addedItems;
+                addedCategories += merge.addedCategories;
+                module.log(Log.DEBUG, Constants.LOG_TAG,
+                        "Rear personalization preset merged: path=" + path
+                                + ", items=+" + merge.addedItems
+                                + ", categories=+" + merge.addedCategories);
+            } catch (Throwable e) {
+                module.log(Log.WARN, Constants.LOG_TAG,
+                        "Rear personalization preset merge failed: path=" + path, e);
+            }
         }
-        module.log(Log.DEBUG, Constants.LOG_TAG,
-                "Rear personalization AI preset source unavailable");
-        return result;
+        if (addedItems == 0) return result;
+        module.log(Log.INFO, Constants.LOG_TAG,
+                "Rear personalization presets ensured: items=+" + addedItems
+                        + ", categories=+" + addedCategories
+                        + ", total categories=" + categories.size());
+        return categories;
     }
 
-    private int mergeRearPersonalizationPresetPath(
-            @NonNull ArrayList<Object> target,
-            @Nullable Object repository,
-            @NonNull String path
-    ) {
-        if (repository == null) return 0;
-        ArrayList<Object> supplemental = new ArrayList<>();
+    /** 用宿主自己的模板解析方法读取一份 normal 模板，读不到返回空列表。 */
+    @NonNull
+    private List<?> readRearPresetSource(@NonNull Object repository, @NonNull String path) {
+        if (!new File(path, "rearScreen.json").isFile()) return Collections.emptyList();
+        ArrayList<Object> parsed = new ArrayList<>();
         try {
-            String mergeMethodName = TargetMembers.methodName(
+            String parseMethodName = TargetMembers.methodName(
                     TargetMembers.resolveMethod(
                             repository.getClass(), List.class,
                             new Class<?>[]{ArrayList.class, String.class}, "zurt"), "zurt");
-            Object value = callMethodCompatible(repository, mergeMethodName, supplemental, path);
-            List<?> parsed = value instanceof List<?> list ? list : supplemental;
-            module.log(Log.DEBUG, Constants.LOG_TAG,
-                    "Rear personalization preset source: path=" + path
-                            + ", size=" + parsed.size()
-                            + ", current=" + target.size());
-            int added = mergeRearPersonalizationPresetCategories(target, parsed);
-            if (added == 0) {
-                added = mergeLeadingRearPersonalizationPresetCategories(target, parsed);
-            }
-            return added;
+            Object value = callMethodCompatible(repository, parseMethodName, parsed, path);
+            return value instanceof List<?> list ? list : parsed;
         } catch (Throwable e) {
             module.log(Log.WARN, Constants.LOG_TAG,
                     "Rear personalization preset source failed: path=" + path, e);
-            return 0;
+            return Collections.emptyList();
         }
     }
 
-    private int mergeRearPersonalizationPresetCategories(
-            @NonNull ArrayList<Object> target,
-            @NonNull List<?> supplemental
-    ) {
-        int added = 0;
-        for (Object category : supplemental) {
-            String categoryType = asString(callNoArgMethodQuietly(category, "getCategoryType"));
-            if (!isRearPersonalizationAiCategory(categoryType)) continue;
-            Object existing = findRearPresetCategory(target, categoryType);
-            if (existing == null) {
-                target.add(category);
-                added++;
-                continue;
-            }
-            Object existingItems = callNoArgMethodQuietly(existing, "getItemList");
-            Object supplementalItems = callNoArgMethodQuietly(category, "getItemList");
-            if (!(existingItems instanceof List<?> current)
-                    || !(supplementalItems instanceof List<?> extras)) {
-                continue;
-            }
-            ArrayList<Object> toAdd = new ArrayList<>();
-            for (Object item : extras) {
-                if (isRearPersonalizationAiItem(item)
-                        && !containsRearPresetItem(current, item)
-                        && !containsRearPresetItem(toAdd, item)) {
-                    toAdd.add(item);
-                }
-            }
-            if (toAdd.isEmpty()) continue;
-            // 一次性 addAll：宿主列表若是不可变 List，会在改动前就抛异常，不会留下改了一半的状态；
-            // 这时换成副本，通过 setter 写回。
+    /**
+     * 把合并后的条目写回分类对象。先在原列表上整体替换（不可变列表会在改动前就抛异常，
+     * 不会留下改了一半的状态），不行再通过 setItemList 写入副本。
+     */
+    private static boolean writeRearPresetItems(@NonNull Object category, @NonNull List<Object> items) {
+        Object current = callNoArgMethodQuietly(category, "getItemList");
+        if (current instanceof List<?> list) {
             try {
                 @SuppressWarnings("unchecked")
-                List<Object> mutableCurrent = (List<Object>) current;
-                mutableCurrent.addAll(toAdd);
-                added += toAdd.size();
+                List<Object> mutable = (List<Object>) list;
+                ArrayList<Object> snapshot = new ArrayList<>(items);
+                mutable.clear();
+                mutable.addAll(snapshot);
+                return true;
             } catch (UnsupportedOperationException immutable) {
-                ArrayList<Object> copy = new ArrayList<>(current);
-                copy.addAll(toAdd);
-                if (setListProperty(existing, "setItemList", copy)) {
-                    added += toAdd.size();
-                }
+                // 改用 setter 写入副本
             }
         }
-        return added;
+        return setListProperty(category, "setItemList", new ArrayList<>(items));
     }
 
-    private int mergeLeadingRearPersonalizationPresetCategories(
-            @NonNull ArrayList<Object> target,
-            @NonNull List<?> supplemental
-    ) {
-        int missing = supplemental.size() - target.size();
-        if (missing <= 0) return 0;
-        // 按 categoryType 去重：目标里已有的分类不再从补充来源插一份。
-        ArrayList<Object> leading = new ArrayList<>();
-        for (Object category : supplemental) {
-            if (leading.size() >= missing) break;
-            String type = asString(callNoArgMethodQuietly(category, "getCategoryType"));
-            if (type != null && findRearPresetCategory(target, type) != null) continue;
-            leading.add(category);
-        }
-        int limit = leading.size();
-        if (limit == 0) return 0;
-        target.addAll(0, leading);
-        module.log(Log.INFO, Constants.LOG_TAG,
-                "Rear personalization preset leading categories restored: added=" + limit
-                        + ", source=" + supplemental.size()
-                        + ", result=" + target.size());
-        return limit;
-    }
+    private final RearPresetMerger.Access<Object, Object> rearPresetAccess =
+            new RearPresetMerger.Access<Object, Object>() {
+                @Nullable
+                @Override
+                public String categoryType(@NonNull Object category) {
+                    return asString(callNoArgMethodQuietly(category, "getCategoryType"));
+                }
+
+                @Nullable
+                @Override
+                @SuppressWarnings("unchecked")
+                public List<Object> items(@NonNull Object category) {
+                    Object items = callNoArgMethodQuietly(category, "getItemList");
+                    return items instanceof List<?> list ? (List<Object>) list : null;
+                }
+
+                @Nullable
+                @Override
+                public String itemKey(@NonNull Object item) {
+                    String key = rearPresetItemKey(item);
+                    return key.endsWith(":") ? null : key;
+                }
+
+                @Override
+                public boolean usable(@NonNull Object item) {
+                    String path = asString(callNoArgMethodQuietly(item, "getResLocalPath"));
+                    return !isEmpty(path) && new File(path).exists();
+                }
+            };
 
     private static boolean setListProperty(@NonNull Object target, @NonNull String setter, @NonNull List<?> value) {
         for (Class<?> c = target.getClass(); c != null; c = c.getSuperclass()) {
@@ -916,84 +917,6 @@ public final class ThemeManagerHooks {
                     return false;
                 }
             }
-        }
-        return false;
-    }
-
-    @Nullable
-    private Object findRearPresetCategory(
-            @NonNull List<?> categories,
-            @Nullable String categoryType
-    ) {
-        for (Object category : categories) {
-            if (categoryType != null
-                    && categoryType.equals(asString(
-                    callNoArgMethodQuietly(category, "getCategoryType")))) {
-                return category;
-            }
-        }
-        return null;
-    }
-
-    private boolean hasRearPersonalizationAiPresets(@NonNull List<?> categories) {
-        boolean hasAiCompanion = false;
-        boolean hasGroupPhoto = false;
-        boolean hasPhoneCase = false;
-        for (Object category : categories) {
-            String categoryType = asString(callNoArgMethodQuietly(category, "getCategoryType"));
-            if (Constants.THEME_REAR_AI_COMPANION_RES_TYPE.equals(categoryType)) {
-                hasAiCompanion = true;
-            }
-            Object items = callNoArgMethodQuietly(category, "getItemList");
-            if (!(items instanceof List<?> list)) continue;
-            for (Object item : list) {
-                String resType = asString(callNoArgMethodQuietly(item, "getResType"));
-                if (Constants.THEME_REAR_GROUP_PHOTO_RES_TYPE.equals(resType)) {
-                    hasGroupPhoto = true;
-                } else if (Constants.THEME_REAR_PHONE_CASE_RES_TYPE.equals(resType)) {
-                    hasPhoneCase = true;
-                }
-            }
-        }
-        return hasAiCompanion && hasGroupPhoto && hasPhoneCase;
-    }
-
-    private int countRearPersonalizationPresetItems(@NonNull List<?> categories) {
-        int count = 0;
-        for (Object category : categories) {
-            if (isRearPersonalizationAiCategory(asString(
-                    callNoArgMethodQuietly(category, "getCategoryType")))) {
-                count++;
-            }
-            Object items = callNoArgMethodQuietly(category, "getItemList");
-            if (!(items instanceof List<?> list)) continue;
-            for (Object item : list) {
-                if (isRearPersonalizationAiItem(item)) count++;
-            }
-        }
-        return count;
-    }
-
-    private boolean isRearPersonalizationAiCategory(@Nullable String categoryType) {
-        return Constants.THEME_REAR_AI_COMPANION_RES_TYPE.equals(categoryType)
-                || Constants.THEME_REAR_AI_WALLPAPER_CATEGORY_TYPE.equals(categoryType);
-    }
-
-    private boolean isRearPersonalizationAiItem(@Nullable Object item) {
-        String resType = asString(callNoArgMethodQuietly(item, "getResType"));
-        return Constants.THEME_REAR_AI_COMPANION_RES_TYPE.equals(resType)
-                || Constants.THEME_REAR_GROUP_PHOTO_RES_TYPE.equals(resType)
-                || Constants.THEME_REAR_PHONE_CASE_RES_TYPE.equals(resType)
-                || Constants.THEME_REAR_AI_WALLPAPER_CATEGORY_TYPE.equals(resType);
-    }
-
-    private boolean containsRearPresetItem(
-            @NonNull List<?> items,
-            @Nullable Object targetItem
-    ) {
-        String targetKey = rearPresetItemKey(targetItem);
-        for (Object item : items) {
-            if (targetKey.equals(rearPresetItemKey(item))) return true;
         }
         return false;
     }

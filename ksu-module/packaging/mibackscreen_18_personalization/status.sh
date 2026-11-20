@@ -312,9 +312,10 @@ rm -f "$LSP_LOAD_TMP" 2>/dev/null
 
 # ============================================================ 5. 预设内容
 # 两种「预设」都在这里查，各有用途，别再只查其中一种：
-#   · 模板 template/<x>/rearScreen.json —— 模板里 ai-mate / groupPhoto / phoneCase
-#     三个 resType 槽位，模块靠它把 AI 陪伴 / AI 合照 / 保护壳挂进背屏壁纸。
-#     default 模板本身就只有 ai-mate（精简版，ROM 原生如此），合照/保护壳为 0 属正常。
+#   · 模板 template/<x>/rearScreen.json —— normal 是完整的 18 Pro Max 模板，资源路径指向
+#     data-root 的条目由模块提供（AI 陪伴、AI 合照、保护壳 DIY、萌宠、创意时间、NFC 萌宠），
+#     其余条目保留 /product 路径，APK 只拿它们确定插入位置。
+#     default 模板本身就只有 ai-mate（精简版，ROM 原生如此），其余各项为 0 属正常。
 #   · 预设清单 appcard/default/rearScreen.json —— 模块往智能助理商店页注入预置卡时
 #     读的那份（APK 侧 Constants.PERSONAL_ASSISTANT_PRESET_JSON_PATH）。
 #
@@ -332,13 +333,15 @@ for tdir in "$TEMPLATE_ROOT"/*/; do
     tkey=$(printf '%s' "$t" | tr -c 'A-Za-z0-9_-' '_')
     tp="$tdir/rearScreen.json"
     if [ -s "$tp" ]; then
-        am=$(count_occ "$tp" ai-mate)
-        gp=$(count_occ "$tp" groupPhoto)
-        pc=$(count_occ "$tp" phoneCase)
+        mi=$(count_occ "$tp" "$DATA_ROOT/precust_theme/theme/.data/content/")
+        am=$(count_occ "$tp" '"resType":[ ]*"ai-mate"')
+        gp=$(count_occ "$tp" '"resType":[ ]*"groupPhoto"')
+        pc=$(count_occ "$tp" '"resType":[ ]*"phoneCase"')
+        np=$(count_occ "$tp" '"nfcSerialNo"')
         tv=$(json_num "$tp" version)
         emit pre.tmpl_$tkey ok "模板 $t" \
-            "v${tv:-?} · AI 陪伴 $am 项 · AI 合照 $gp 项 · 保护壳 DIY $pc 项" ""
-        tshow pre "✓" "模板 $t：AI 陪伴=$am AI 合照=$gp 保护壳DIY=$pc"
+            "v${tv:-?} · 模块补充 $mi 项（AI 陪伴 $am · AI 合照 $gp · 保护壳 DIY $pc · NFC 萌宠 $np）" ""
+        tshow pre "✓" "模板 $t：模块补充=$mi AI 陪伴=$am AI 合照=$gp 保护壳DIY=$pc NFC萌宠=$np"
     else
         emit pre.tmpl_$tkey fail "模板 $t" "$tp 不存在或为空" \
             "先在「资源」段确认 data-root；再查模块日志的 resource sync。"

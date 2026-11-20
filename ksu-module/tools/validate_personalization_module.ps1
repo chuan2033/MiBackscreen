@@ -246,30 +246,61 @@ try {
         "mibackscreen_resources/media/rearscreen/template/normal/rearScreen.json") | ConvertFrom-Json
     $default = Read-ZipText -Archive $archive -Name (
         "mibackscreen_resources/media/rearscreen/template/default/rearScreen.json") | ConvertFrom-Json
-    if (@($normal.products).Count -ne 2 -or
-            @($normal.products | Where-Object type -eq "ai-mate").Count -ne 1 -or
-            @($normal.products | Where-Object type -eq "ai").Count -ne 1) {
-        throw "Normal supplemental template has unexpected categories"
-    }
-    $newTypes = @($normal.products | Where-Object type -eq "ai" | ForEach-Object items | ForEach-Object resType)
-    if (@($newTypes | Where-Object { $_ -eq "groupPhoto" }).Count -ne 1 -or
-            @($newTypes | Where-Object { $_ -eq "phoneCase" }).Count -ne 1) {
-        throw "Normal supplemental template is missing AI additions"
-    }
     if (@($default.products).Count -ne 1 -or $default.products[0].type -ne "ai-mate") {
         throw "Default supplemental template has unexpected categories"
     }
 
+    # normal 补充模板是完整的 18 Pro Max 模板：17 Pro Max 已有的条目保留 /product 路径 (anchor),
+    # 其余条目全部指向 data-root，并且资源都在包内 (module item).
+    $baselinePath = Join-Path (Split-Path -Parent $PSScriptRoot) "device_popsicle_template\normal\rearScreen.json"
+    Require-File $baselinePath
+    $baselineIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($item in @((Get-Content -Raw -Encoding UTF8 -LiteralPath $baselinePath | ConvertFrom-Json).products |
+            ForEach-Object items)) {
+        [void]$baselineIds.Add([string]$item.resId)
+    }
+    if (@($normal.products).Count -eq 0) {
+        throw "Normal supplemental template has no categories"
+    }
+    if (@($normal.products | ForEach-Object type | Group-Object | Where-Object Count -gt 1).Count -gt 0) {
+        throw "Normal supplemental template has duplicate category types"
+    }
+
+    $themeProperties = @("resPreviewPath", "resLocalPath", "rightPath", "metaPath")
     $referencedEntries = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-    foreach ($template in @($normal, $default)) {
-        foreach ($category in @($template.products)) {
-            foreach ($item in @($category.items)) {
-                foreach ($property in @("resPreviewPath", "resLocalPath", "rightPath", "metaPath")) {
-                    $path = [string]$item.$property
-                    if (-not [string]::IsNullOrWhiteSpace($path)) {
-                        [void]$referencedEntries.Add((Convert-DataPathToEntry -Path $path))
-                    }
+    $moduleThemeItems = 0
+    $moduleResTypes = @()
+    foreach ($category in @($normal.products)) {
+        foreach ($item in @($category.items)) {
+            $paths = @($themeProperties | ForEach-Object { [string]$item.$_ } |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+            $dataPaths = @($paths | Where-Object { $_.StartsWith("$dataRoot/", [System.StringComparison]::Ordinal) })
+            if ($baselineIds.Contains([string]$item.resId)) {
+                if ($dataPaths.Count -ne 0) {
+                    throw "Baseline item $($item.resId) must keep its ROM paths"
                 }
+                continue
+            }
+            if ($paths.Count -eq 0 -or $dataPaths.Count -ne $paths.Count) {
+                throw "Module item $($item.resId) in $($category.type) does not point to the data root"
+            }
+            foreach ($path in $dataPaths) {
+                [void]$referencedEntries.Add((Convert-DataPathToEntry -Path $path))
+            }
+            $moduleThemeItems++
+            $moduleResTypes += [string]$item.resType
+        }
+    }
+    foreach ($requiredType in @("ai-mate", "groupPhoto", "phoneCase")) {
+        if ($moduleResTypes -notcontains $requiredType) {
+            throw "Normal supplemental template provides no $requiredType item"
+        }
+    }
+    foreach ($item in @($default.products | ForEach-Object items)) {
+        foreach ($property in $themeProperties) {
+            $path = [string]$item.$property
+            if (-not [string]::IsNullOrWhiteSpace($path)) {
+                [void]$referencedEntries.Add((Convert-DataPathToEntry -Path $path))
             }
         }
     }
@@ -349,6 +380,7 @@ try {
         Zip = $zipResolved
         Entries = $archive.Entries.Count
         AppCards = 6
+        ModuleThemeItems = $moduleThemeItems
         ReferencedResources = $referencedEntries.Count
         RomFilesVerified = $romCompared
         Sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $zipResolved).Hash
