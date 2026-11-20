@@ -128,7 +128,7 @@ import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.glass.Refresh
-import top.yukonga.miuix.kmp.icon.glass.Settings
+import top.yukonga.miuix.kmp.icon.glass.SettingsOutline
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Tune
@@ -736,7 +736,7 @@ private fun MainTabPage(
                         Icon(
                             imageVector = when (topAction) {
                                 HomeNavigationPolicy.TopAction.RESTART -> MiuixIcons.Glass.Refresh
-                                HomeNavigationPolicy.TopAction.SETTINGS -> MiuixIcons.Glass.Settings
+                                HomeNavigationPolicy.TopAction.SETTINGS -> MiuixIcons.Glass.SettingsOutline
                             },
                             contentDescription = stringResource(when (topAction) {
                                 HomeNavigationPolicy.TopAction.RESTART -> R.string.restart_scope

@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -89,7 +90,8 @@ internal fun AppPickerPage(
 ) {
     val context = LocalContext.current
 
-    var query by rememberSaveable { mutableStateOf("") }
+    val queryState = rememberTextFieldState()
+    val query = queryState.text.toString()
     var apps by remember { mutableStateOf(emptyList<InstalledAppItem>()) }
     var loading by remember { mutableStateOf(true) }
     var loadFailed by remember { mutableStateOf(false) }
@@ -175,8 +177,7 @@ internal fun AppPickerPage(
         // 搜索框固定在顶栏玻璃里：往下翻很长的应用列表时随时能改关键词。
         topBarBottom = {
             TopBarSearchField(
-                query = query,
-                onQueryChange = { query = it },
+                state = queryState,
                 label = stringResource(R.string.app_picker_search_hint),
             )
         },

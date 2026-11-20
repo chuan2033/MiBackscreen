@@ -51,12 +51,18 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.TextFieldBuffer
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -87,13 +93,14 @@ import hook.HyperBackscreen.ui.components.CardBlock
 import hook.HyperBackscreen.ui.components.CollapsibleFunctionGroup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.basic.ColorPicker
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.basic.TextFieldDefaults
+import top.yukonga.miuix.kmp.glass.GlassTextField
+import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -719,12 +726,13 @@ private fun BatteryLayoutInputDialog(
     onCancel: () -> Unit
 ) {
     // 换一项就换一份草稿，避免上一项的数字串到下一项。
-    var text by remember(field) { mutableStateOf(initialValue.toString()) }
+    val textState = remember(field) { TextFieldState(initialValue.toString()) }
     Column(modifier = Modifier.fillMaxWidth()) {
-        TextField(
-            text,
-            { raw -> text = filterLayoutInput(raw) },
-            Modifier.fillMaxWidth()
+        // 输入框在 GlassDialog 里，用玻璃专用配色，磨砂背景上也看得清。
+        GlassTextField(
+            state = textState,
+            modifier = Modifier.fillMaxWidth(),
+            inputTransformation = LayoutInputTransformation
         )
         // 「恢复默认」是次要操作，降成输入框下方的文字链接，和取消 / 确认分开。
         Text(
@@ -742,7 +750,7 @@ private fun BatteryLayoutInputDialog(
             onSecondary = onCancel,
             primaryText = stringResource(R.string.common_confirm),
             onPrimary = {
-                val parsed = text.toIntOrNull() ?: initialValue
+                val parsed = textState.text.toString().toIntOrNull() ?: initialValue
                 onApply(parsed.coerceIn(range.first, range.last))
             }
         )
@@ -754,6 +762,15 @@ private fun filterLayoutInput(raw: String): String {
     val negative = raw.startsWith('-')
     val digits = raw.filter { it.isDigit() }.take(3)
     return if (negative) "-$digits" else digits
+}
+
+/** 每次输入后按 [filterLayoutInput] 收敛内容，内容没变时不动缓冲区（保留光标位置）。 */
+private val LayoutInputTransformation = object : InputTransformation {
+    override fun TextFieldBuffer.transformInput() {
+        val raw = asCharSequence().toString()
+        val filtered = filterLayoutInput(raw)
+        if (filtered != raw) replace(0, length, filtered)
+    }
 }
 
 /** 自定义值优先；为空或非法时读 SystemUI 电池资源色，读不到再回落默认值。 */
@@ -1030,16 +1047,36 @@ private fun ColumnScope.BatteryColorEditor(
     onColorChange: (String) -> Unit
 ) {
     val initial = color
-    var hexText by remember(editKey) { mutableStateOf(formatBatteryColor(initial.toArgb())) }
+    val hexState = remember(editKey) { TextFieldState(formatBatteryColor(initial.toArgb())) }
+    // 程序写进输入框的内容（色盘、复位、输入合法后规范化），监听用户输入时跳过这一次。
+    val programmaticHex = remember(editKey) { mutableStateOf<String?>(null) }
+    val currentOnColorChange by rememberUpdatedState(onColorChange)
 
     fun fillInputs(argb: Int) {
-        hexText = formatBatteryColor(argb)
+        val formatted = formatBatteryColor(argb)
+        if (hexState.text.toString() == formatted) return
+        programmaticHex.value = formatted
+        hexState.setTextAndPlaceCursorAtEnd(formatted)
     }
 
     fun apply(argb: Int) {
         fillInputs(argb)
-        onColorChange(formatBatteryColor(argb))
+        currentOnColorChange(formatBatteryColor(argb))
     }
+
+    // 用户改了 HEX：合法就立即生效并规范化写回，非法时保留输入、只提示。
+    LaunchedEffect(hexState) {
+        snapshotFlow { hexState.text.toString() }
+            .drop(1)
+            .collect { text ->
+                if (text == programmaticHex.value) {
+                    programmaticHex.value = null
+                    return@collect
+                }
+                parseBatteryColor(text)?.let { apply(it) }
+            }
+    }
+    val hexText = hexState.text.toString()
 
     Text(
         text = stringResource(R.string.battery_color_rgba_label) + ": " +
@@ -1080,19 +1117,15 @@ private fun ColumnScope.BatteryColorEditor(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        TextField(
-            value = hexText,
-            onValueChange = { text ->
-                hexText = text
-                parseBatteryColor(text)?.let { apply(it) }
-            },
+        GlassTextField(
+            state = hexState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
             colors = if (hexInvalid) {
-                TextFieldDefaults.textFieldColors(borderColor = MiuixTheme.colorScheme.error)
+                GlassTextFieldDefaults.textFieldColors(borderColor = MiuixTheme.colorScheme.error)
             } else {
-                TextFieldDefaults.textFieldColors()
+                GlassTextFieldDefaults.textFieldColors()
             }
         )
         TextButton(

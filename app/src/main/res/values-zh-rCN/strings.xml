@@ -94,6 +94,7 @@
     <string name="common_select_all">全选</string>
     <string name="common_confirm">确定</string>
     <string name="common_cancel">取消</string>
+    <string name="common_clear">清除</string>
     <string name="common_version">版本 %1$s</string>
     <string name="about_version">版本 %1$s（%2$d）</string>
     <string name="compat_rear_display_hidden_title">检测到系统背屏显示属性异常</string>
