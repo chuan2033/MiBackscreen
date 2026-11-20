@@ -18,6 +18,9 @@ if (signingValue('RELEASE_STORE_FILE') && !hasReleaseSigning) {
     throw new GradleException('Configured signing key is unavailable or missing RELEASE_STORE_PASSWORD / RELEASE_KEY_PASSWORD')
 }
 
+// miuix 各模块共用的版本号，升级时只改这一处。
+def miuixVersion = '0.9.5-beta02'
+
 // Modern Xposed（libxposed）API 版本的单一来源：依赖坐标、libs/ 下两个 jar 的文件名都由
 // 这里派生；META-INF/xposed/module.prop 的 targetApiVersion 与 jar 是否存在在构建时校验，
 // 对不上直接终止。升版本只改这一个值，再换上同名的新 jar。
@@ -126,15 +129,17 @@ android {
 
 dependencies {
     implementation 'androidx.activity:activity-compose:1.13.0'
-    // miuix 全部模块由 settings.gradle 的 includeBuild 替换成子模块 third_party/miuix 的源码，
-    // 下面这些坐标里的版本号不起作用，只用来标注子模块当前所在的版本（标签或提交）。更新子模块时一起改掉。
-    implementation 'top.yukonga.miuix.kmp:miuix-ui-android:0.9.5-beta02'
-    implementation 'top.yukonga.miuix.kmp:miuix-preference-android:0.9.5-beta02'
-    implementation 'top.yukonga.miuix.kmp:miuix-icons-android:0.9.5-beta02'
-    implementation 'top.yukonga.miuix.kmp:miuix-blur-android:0.9.5-beta02'
-    implementation 'top.yukonga.miuix.kmp:miuix-nav-android:0.9.5-beta02'
-    implementation 'top.yukonga.miuix.kmp:miuix-glass-android:0.9.5-beta02'
-    implementation 'top.yukonga.miuix.kmp:miuix-glass-icons-android:0.9.5-beta02'
+    // miuix 从 Maven Central 获取；App 代码直接 import 的模块都在这里声明（core 提供 utils / icon，
+    // material 提供玻璃材质与 EdgeStroke），不依赖其它模块间接带进来。
+    implementation "top.yukonga.miuix.kmp:miuix-core-android:${miuixVersion}"
+    implementation "top.yukonga.miuix.kmp:miuix-ui-android:${miuixVersion}"
+    implementation "top.yukonga.miuix.kmp:miuix-preference-android:${miuixVersion}"
+    implementation "top.yukonga.miuix.kmp:miuix-icons-android:${miuixVersion}"
+    implementation "top.yukonga.miuix.kmp:miuix-blur-android:${miuixVersion}"
+    implementation "top.yukonga.miuix.kmp:miuix-material-android:${miuixVersion}"
+    implementation "top.yukonga.miuix.kmp:miuix-nav-android:${miuixVersion}"
+    implementation "top.yukonga.miuix.kmp:miuix-glass-android:${miuixVersion}"
+    implementation "top.yukonga.miuix.kmp:miuix-glass-icons-android:${miuixVersion}"
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0'
     compileOnly "io.github.libxposed:api:${libxposedApiVersion}"
