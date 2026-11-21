@@ -52,6 +52,7 @@ import org.json.JSONObject;
 
 import hook.HyperBackscreen.bridge.PrefsBridge;
 import hook.HyperBackscreen.common.Constants;
+import hook.HyperBackscreen.panel.RearDesktopPanel;
 import hook.HyperBackscreen.panel.SwipePanelHost;
 import hook.HyperBackscreen.batteryring.BatteryRingHost;
 import hook.HyperBackscreen.hook.target.MusicWhitelistShape;
@@ -526,6 +527,7 @@ public final class SubScreenCenterHooks {
                         SwipePanelHost.release((Activity) chain.getThisObject());
                         BatteryRingHost.release((Activity) chain.getThisObject());
                         notifyRearLyricLauncher((Activity) chain.getThisObject(), lifecycle);
+                        notifyRearDesktopLauncher((Activity) chain.getThisObject(), false);
                         return chain.proceed();
                     });
         }
@@ -535,8 +537,22 @@ public final class SubScreenCenterHooks {
                     refreshActiveSubscreenAppInfoCache(classLoader);
                     BatteryRingHost.show((Activity) chain.getThisObject(), module);
                     notifyRearLyricLauncher((Activity) chain.getThisObject(), "onResume");
+                    notifyRearDesktopLauncher((Activity) chain.getThisObject(), true);
                     return result;
                 });
+        // 宿主进程启动后（bindApplication 完成、主线程开始处理消息时）注册背屏桌面状态通知并查询一次会话，
+        // 宿主重建时背屏上已在显示的应用能重新得到控制条。
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+            try {
+                Object application = Class.forName("android.app.ActivityThread")
+                        .getMethod("currentApplication").invoke(null);
+                if (application instanceof Context) {
+                    RearDesktopPanel.ensureStarted((Context) application);
+                }
+            } catch (Throwable error) {
+                module.log(Log.WARN, Constants.LOG_TAG, "Rear desktop panel start failed: " + error);
+            }
+        });
         module.hookMethodIfPresent(
                 findDeclaredMethod(launcherClass, "dispatchTouchEvent", MotionEvent.class),
                 Constants.SUBSCREEN_LAUNCHER_ACTIVITY_CLASS + "#dispatchTouchEvent",
@@ -547,8 +563,10 @@ public final class SubScreenCenterHooks {
                         SwipePanelHost.trackLauncherTouch(
                                 (MotionEvent) event,
                                 host instanceof Context ? (Context) host : null);
-                        if (SwipePanelHost.handleLauncherGesture((MotionEvent) event)) {
-                            return true;
+                        if (host instanceof Activity) {
+                            Boolean handled = SwipePanelHost.dispatchLauncherTouch(
+                                    (Activity) host, (MotionEvent) event);
+                            if (handled != null) return handled;
                         }
                     }
                     return chain.proceed();
@@ -574,6 +592,19 @@ public final class SubScreenCenterHooks {
             }
         } catch (Throwable error) {
             module.log(Log.DEBUG, Constants.LOG_TAG, "Rear lyric launcher " + lifecycle + " failed: " + error);
+        }
+    }
+
+    /** 首页恢复时查询会话并处理「回背屏首页」后的面板重开；失败只记日志。 */
+    private void notifyRearDesktopLauncher(@NonNull Activity activity, boolean resumed) {
+        try {
+            if (resumed) {
+                RearDesktopPanel.onLauncherResumed(activity);
+            } else {
+                RearDesktopPanel.onLauncherPaused(activity);
+            }
+        } catch (Throwable error) {
+            module.log(Log.DEBUG, Constants.LOG_TAG, "Rear desktop launcher callback failed: " + error);
         }
     }
 
@@ -633,12 +664,11 @@ public final class SubScreenCenterHooks {
                 Constants.SUBSCREEN_LAUNCHER_PANEL_GESTURE_CLASS + "#"
                         + Constants.SUBSCREEN_LAUNCHER_PANEL_GESTURE_METHOD,
                 chain -> {
-                    if (!PrefsBridge.shouldEnable18ProFeatures(module)) return chain.proceed();
-                    Object event = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
-                    if (event instanceof MotionEvent
-                            && SwipePanelHost.handleLauncherGesture((MotionEvent) event)) {
-                        return gestureReturnsBoolean ? true : null;
+                    if (SwipePanelHost.blocksHostGesture()) {
+                        // 快捷面板显示中：宿主手势预检查不通过，下滑不会收起应用卡列表。
+                        return gestureReturnsBoolean ? false : null;
                     }
+                    if (!PrefsBridge.shouldEnable18ProFeatures(module)) return chain.proceed();
                     setFieldValue(
                             chain.getThisObject(),
                             Constants.SUBSCREEN_LAUNCHER_PANEL_WIDGET_ENABLED_FIELD,

@@ -13,7 +13,7 @@ import hook.HyperBackscreen.common.RearCastPolicy
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 「应用投放到背屏」的发送方：背屏快捷面板（背屏中心进程）与控制中心磁贴（模块 App 进程）共用。
+ * 「应用投放到背屏」与背屏桌面会话的发送方：背屏快捷面板（背屏中心进程）、控制中心磁贴与功能页（模块 App 进程）共用。
  *
  * 发一条只投递给 system_server（setPackage("android")）的有序广播，并用
  * [BroadcastOptions.setShareIdentityEnabled] 公开自己的身份供接收方鉴权；结果码从 resultCode
@@ -29,26 +29,32 @@ object RearCastClient {
         fun onResult(outcome: RearCastPolicy.Outcome, packageName: String?)
     }
 
-    @JvmStatic
-    fun send(context: Context, op: String, callback: Callback) = send(context, op, null, callback)
+    fun interface ResultCallback {
+        /** [extras] 是 system_server 附带的会话快照（会话编号、状态、最近结果），超时或未处理时为 null。 */
+        fun onResult(outcome: RearCastPolicy.Outcome, data: String?, extras: Bundle?)
+    }
 
-    /** [extras] 随请求一起发给 system_server（背屏桌面会话的令牌与密度）。 */
     @JvmStatic
-    fun send(context: Context, op: String, extras: Bundle?, callback: Callback) {
+    fun send(context: Context, op: String, callback: Callback) =
+        send(context, op, null, ResultCallback { outcome, data, _ -> callback.onResult(outcome, data) })
+
+    /** [extras] 随请求一起发给 system_server（背屏桌面的组件、请求编号、会话编号与协议版本）。 */
+    @JvmStatic
+    fun send(context: Context, op: String, extras: Bundle?, callback: ResultCallback) {
         val handler = Handler(Looper.getMainLooper())
         val finished = AtomicBoolean(false)
         lateinit var timeout: Runnable
-        fun finish(code: Int, data: String?) {
+        fun finish(code: Int, data: String?, resultExtras: Bundle?) {
             if (!finished.compareAndSet(false, true)) return
             handler.removeCallbacks(timeout)
             val outcome = RearCastPolicy.outcomeOf(code)
             try {
-                callback.onResult(outcome, data)
+                callback.onResult(outcome, data, resultExtras)
             } catch (t: Throwable) {
                 Log.w(TAG, "Rear cast callback failed", t)
             }
         }
-        timeout = Runnable { finish(Constants.REAR_CAST_RESULT_TIMEOUT, null) }
+        timeout = Runnable { finish(Constants.REAR_CAST_RESULT_TIMEOUT, null, null) }
         try {
             val intent = Intent(Constants.ACTION_REAR_CAST)
                 .setPackage(Constants.SYSTEM_FRAMEWORK_PACKAGE)
@@ -65,7 +71,7 @@ object RearCastClient {
                 options,
                 object : BroadcastReceiver() {
                     override fun onReceive(context: Context, intent: Intent) {
-                        finish(resultCode, resultData)
+                        finish(resultCode, resultData, getResultExtras(false))
                     }
                 },
                 handler,
@@ -75,7 +81,7 @@ object RearCastClient {
             )
         } catch (t: Throwable) {
             Log.w(TAG, "Rear cast request failed: $op", t)
-            handler.post { finish(Constants.REAR_CAST_RESULT_NOT_HANDLED, null) }
+            handler.post { finish(Constants.REAR_CAST_RESULT_NOT_HANDLED, null, null) }
         }
     }
 }

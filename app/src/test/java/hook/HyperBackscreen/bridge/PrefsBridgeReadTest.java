@@ -18,6 +18,18 @@ public class PrefsBridgeReadTest {
     private static final String PACKAGES = "double_tap_wake_disabled_packages";
     private static final String PENDING = "__pending_ui__";
 
+    @Test public void panelWritesOnlyQuickPanelToggles() {
+        assertTrue(PrefsBridge.isPanelWritableKey(Constants.KEY_DISABLE_LONG_PRESS_EDIT));
+        assertTrue(PrefsBridge.isPanelWritableKey(Constants.KEY_REMOVE_WALLPAPER_LIMIT));
+        assertTrue(PrefsBridge.isPanelWritableKey(Constants.KEY_ENABLE_BATTERY_RING));
+        assertTrue(PrefsBridge.isPanelWritableKey(Constants.KEY_REMOVE_APP_CARD_LIMIT));
+        assertTrue(PrefsBridge.isPanelWritableKey(Constants.KEY_ENABLE_REAR_LYRIC));
+        assertTrue(PrefsBridge.isPanelWritableKey(Constants.KEY_REAR_LYRIC_IN_AOD));
+        assertFalse(PrefsBridge.isPanelWritableKey(Constants.KEY_ENABLE_18_PRO_FEATURES));
+        assertFalse(PrefsBridge.isPanelWritableKey(Constants.KEY_KEEP_REAR_SCREEN_ON_IN_GAME));
+        assertFalse(PrefsBridge.isPanelWritableKey(null));
+    }
+
     @Test public void eighteenProDefaultsOnAndOfflineDisableSurvivesStaleRemote() {
         MemoryPrefs local = new MemoryPrefs();
         MemoryPrefs remote = new MemoryPrefs();
@@ -132,6 +144,34 @@ public class PrefsBridgeReadTest {
     }
 
     /** Only the read/cache operations under test; unexpected API calls fail the test. */
+    @Test public void rearDesktopDensityMigratesOnlySavedLocalValueAndRemoteWins() {
+        String key = Constants.KEY_REAR_DESKTOP_DENSITY;
+        MemoryPrefs local = new MemoryPrefs();
+        MemoryPrefs remote = new MemoryPrefs();
+        PrefsBridge.syncSavedStringKey(local.prefs, remote.prefs, key);
+        assertFalse("没保存过的档位不写默认值", remote.values.containsKey(key));
+        assertFalse(local.values.containsKey(key));
+
+        local.values.put(key, "240");
+        PrefsBridge.syncSavedStringKey(local.prefs, remote.prefs, key);
+        assertEquals("240", remote.values.get(key));
+
+        MemoryPrefs upgraded = new MemoryPrefs();
+        MemoryPrefs existing = new MemoryPrefs();
+        upgraded.values.put(key, "240");
+        existing.values.put(key, "320");
+        PrefsBridge.syncSavedStringKey(upgraded.prefs, existing.prefs, key);
+        assertEquals("已有远程值优先", "320", existing.values.get(key));
+        assertEquals("320", upgraded.values.get(key));
+
+        MemoryPrefs pendingLocal = new MemoryPrefs();
+        MemoryPrefs pendingRemote = new MemoryPrefs();
+        pendingLocal.values.put(PENDING + key, "0");
+        pendingRemote.values.put(key, "320");
+        PrefsBridge.syncSavedStringKey(pendingLocal.prefs, pendingRemote.prefs, key);
+        assertFalse("待同步值由补交处理，不被远程旧值覆盖", pendingLocal.values.containsKey(key));
+    }
+
     private static final class MemoryPrefs {
         boolean commitSucceeds = true;
         final Map<String, Object> values = new HashMap<>();

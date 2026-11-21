@@ -225,6 +225,15 @@
     <string name="panel_tile_ring_style">电量环样式</string>
     <string name="panel_tile_off_timeout">息屏时间</string>
     <string name="panel_tile_auto_wallpaper">定时换壁纸</string>
+    <string name="panel_tile_app_card_limit">应用卡数量上限</string>
+    <string name="panel_tile_app_card_limit_on">已移除</string>
+    <string name="panel_tile_app_card_limit_off">原厂限制</string>
+    <string name="panel_tile_rear_lyric">实时歌词</string>
+    <string name="panel_tile_rear_lyric_on">显示</string>
+    <string name="panel_tile_rear_lyric_off">关闭</string>
+    <string name="panel_tile_lyric_in_aod">息屏歌词</string>
+    <string name="panel_tile_lyric_in_aod_on">显示</string>
+    <string name="panel_tile_lyric_in_aod_off">隐藏</string>
 
     <!-- Restart Scope Dialog -->
     <string name="restart_title">重启作用域</string>
@@ -482,32 +491,28 @@
     <string name="rear_widgets_already_added">已添加</string>
     <!-- 背屏桌面 -->
     <string name="rear_desktop_title">背屏桌面</string>
-    <string name="rear_desktop_tile_label">MiBackscreen 背屏桌面</string>
-    <string name="rear_desktop_entry_summary">在背屏上直接打开和运行应用</string>
-    <string name="rear_desktop_open">在背屏打开</string>
-    <string name="rear_desktop_open_summary">在背屏显示应用列表，点哪个应用就在背屏运行它</string>
-    <string name="rear_desktop_exit">退出背屏桌面</string>
-    <string name="rear_desktop_running">运行中，退出后恢复背屏密度</string>
+    <string name="rear_desktop_entry_summary">从背屏快捷面板打开应用</string>
     <string name="rear_desktop_density_title">背屏密度</string>
-    <string name="rear_desktop_density_summary">数值越小，应用在背屏上的布局越宽。只在背屏桌面运行期间生效</string>
+    <string name="rear_desktop_density_summary">越小布局越宽，应用离开背屏后恢复</string>
     <string name="rear_desktop_density_unchanged">不调整</string>
     <string name="rear_desktop_density_value">%1$d dpi</string>
-    <string name="rear_desktop_overlay_title">浮动控制条</string>
-    <string name="rear_desktop_overlay_summary">需要悬浮窗权限。其它应用盖住背屏桌面时，背屏右侧的把手可以展开返回、桌面、移到主屏和退出</string>
-    <string name="rear_desktop_overlay_manual">请在打开的系统设置页里授予权限</string>
-    <string name="rear_desktop_note_reboot">勾选「系统框架」作用域并重启手机后，应用才能在背屏上运行。</string>
-    <string name="rear_desktop_note_locked">打开背屏桌面、从背屏桌面启动应用前需要先解锁手机。主屏锁定后，已经在背屏上的应用继续运行。</string>
-    <string name="rear_desktop_note_tile">控制中心的「背屏桌面」磁贴可以打开和退出背屏桌面；「投到背屏」磁贴照常在主屏和背屏之间移动当前应用。</string>
-    <string name="rear_desktop_note_timeout">背屏按「息屏与定时」里的息屏时间熄灭，使用应用时可以选「一直亮屏」。</string>
-    <string name="rear_desktop_note_compat">部分应用不支持小窗口或会检查运行的屏幕，在背屏上可能显示不正常。</string>
-    <string name="rear_desktop_locked">请先解锁手机</string>
-    <string name="rear_desktop_failed">无法打开背屏桌面</string>
-    <string name="rear_desktop_launch_failed">无法在背屏打开这个应用</string>
-    <string name="rear_desktop_empty">没有应用</string>
-    <string name="rear_desktop_notification_title">背屏桌面运行中</string>
+    <string name="rear_desktop_density_pending">已保存，模块服务重连后生效</string>
+    <string name="rear_desktop_note_entry">点背屏上的 MiBackscreen 应用卡，在「应用」里选择。</string>
+    <string name="rear_desktop_note_reboot">需要勾选「系统框架」和背屏中心作用域并重启手机。</string>
+    <string name="rear_desktop_note_locked">先解锁主屏。锁屏时系统只允许内置名单里的应用显示在背屏。</string>
+    <string name="rear_desktop_note_compat">部分应用在背屏上可能显示不正常。</string>
+    <string name="rear_desktop_note_timeout">背屏按息屏时间熄灭，可选「一直亮屏」。</string>
+    <string name="panel_tab_apps">应用</string>
+    <string name="panel_tab_settings">设置</string>
+    <string name="panel_apps_empty">没有应用</string>
+    <string name="rear_desktop_launch_locked">请先解锁主屏</string>
+    <string name="rear_desktop_launch_rom_denied">系统不允许在背屏显示</string>
+    <string name="rear_desktop_launch_bad_component">无法打开这个应用</string>
+    <string name="rear_desktop_launch_busy">背屏正忙，请稍后再试</string>
+    <string name="rear_desktop_launch_failed">无法在背屏打开</string>
     <string name="rear_desktop_control_back">返回</string>
-    <string name="rear_desktop_control_home">背屏桌面</string>
+    <string name="rear_desktop_control_home">背屏首页</string>
     <string name="rear_desktop_control_to_main">移到主屏</string>
-    <string name="rear_desktop_control_exit">退出背屏桌面</string>
+    <string name="rear_desktop_control_exit">退出</string>
     <string name="rear_desktop_control_expand">展开控制条</string>
 </resources>

@@ -14,8 +14,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
-    <!-- 背屏桌面的浮动控制条：其它应用盖住背屏桌面时，在背屏上显示返回 / 桌面 / 移到主屏 / 退出。 -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
@@ -56,49 +54,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
-
-        <!--
-            背屏桌面：运行在背屏上的应用列表。miui.rear.policy = 1 让系统允许它显示在背屏；
-            由 system_server 在背屏上启动（RearDesktopHost），独立任务、不进最近任务。
-        -->
-        <activity
-            android:name=".desktop.RearDesktopActivity"
-            android:configChanges="density|screenSize|smallestScreenSize|screenLayout|orientation|uiMode"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:label="@string/rear_desktop_title"
-            android:launchMode="singleTask"
-            android:resizeableActivity="true"
-            android:taskAffinity="${applicationId}.rear_desktop"
-            android:theme="@style/Theme.MiBackscreen.RearDesktop">
-            <meta-data
-                android:name="miui.rear.policy"
-                android:value="1" />
-        </activity>
-
-        <service
-            android:name=".desktop.RearDesktopService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps the rear-display desktop session and its floating controls alive while other apps run on the rear display" />
-        </service>
-
-        <!-- 控制中心「背屏桌面」磁贴：在背屏打开或退出背屏桌面。 -->
-        <service
-            android:name=".tile.RearDesktopTileService"
-            android:exported="true"
-            android:icon="@drawable/ic_tile_rear_desktop"
-            android:label="@string/rear_desktop_tile_label"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
-                android:value="true" />
-        </service>
 
         <!-- 控制中心「投到背屏」磁贴：点一下在主屏与背屏之间移动当前应用（执行者在 system_server）。 -->
         <service

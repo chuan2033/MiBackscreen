@@ -6,6 +6,7 @@ import android.view.VelocityTracker
 import hook.HyperBackscreen.batteryring.BatteryRingStyle
 import hook.HyperBackscreen.hook.appindex.PanelAppCard
 import hook.HyperBackscreen.hook.subscreen.AutoWallpaperRotationHost
+import hook.HyperBackscreen.lyric.RearLyricHost
 import android.widget.ImageView
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.HapticFeedbackConstants
@@ -37,8 +38,10 @@ import android.view.animation.DecelerateInterpolator
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.Space
 import android.widget.TextView
+import android.content.ComponentName
 import hook.HyperBackscreen.BuildConfig
 import hook.HyperBackscreen.R
 import hook.HyperBackscreen.bridge.PrefsBridge
@@ -70,24 +73,37 @@ object SwipePanelHost {
     private const val DISMISS_ANIMATION_MS = 340L
     private const val EXPAND_ANIMATION_MS = 340L
     private const val CARD_DISMISS_MIN_SCALE = 0.8f
-    /** 面板展开后的圆角；展开/缩回时在它与胶囊圆角之间过渡。 */
-    /** 底部这条窄区域上的上滑用来关闭面板，并从系统手势区里排除。 */
-    private const val BOTTOM_SWIPE_REGION_RATIO = 0.78f
+    /**
+     * 上滑关闭只从底边这条手势区开始：高度取宿主的 gesture_bottom_height（与宿主自己的「从底部上滑」
+     * 范围一致），宿主没有这个资源时用 [BOTTOM_EDGE_FALLBACK_DP]。这条区域同时从系统手势区里排除。
+     */
+    private const val BOTTOM_EDGE_FALLBACK_DP = 24
+    /** 上滑关闭至少要拖动的距离：面板高度的这一比例，且不少于 [DISMISS_MIN_DISTANCE_DP]。 */
+    private const val DISMISS_MIN_DISTANCE_RATIO = 0.12f
+    private const val DISMISS_MIN_DISTANCE_DP = 32
+    /** 快速上甩时也至少要拖动这么远，避免手指在底边一抖就关闭。 */
+    private const val DISMISS_FLING_MIN_DISTANCE_DP = 16
     private const val ROW_TITLE_TEXT_SP = 16f
     private const val HEADER_TEXT_SP = 15f
     private const val TILE_TITLE_TEXT_SP = 14f
     private const val TILE_VALUE_TEXT_SP = 12f
     private const val TILE_PRESSED_SCALE = 0.96f
+    /** 设置页每行卡片的最小高度。 */
+    private const val TILE_ROW_HEIGHT_DP = 60
     private const val STATUS_VISIBLE_MS = 3000L
     /** 卡片开 / 关、换档时颜色与文字的过渡时长。 */
     private const val TILE_TRANSITION_MS = 150L
     /** 上滑关闭：拖动距离折算成缩放进度的分母（相对面板高度）。 */
     private const val DISMISS_DRAG_RANGE = 0.36f
     /** 松手速度超过这个值（向上）时，即使距离不够也直接关闭。 */
-    private const val DISMISS_FLING_DP_PER_SECOND = 600
+    private const val DISMISS_FLING_DP_PER_SECOND = 900
     /** 带速度收尾时动画的最短时长，避免一甩就闪没。 */
     private const val DISMISS_FLING_MIN_MS = 120L
     private const val MODULE_TITLE = "MiBackscreen"
+    private const val PREVIEW_LAYOUT_REVISION = 2
+    private const val APP_ICON_DP = 40
+    private const val APP_CELL_MIN_DP = 64
+    private const val APP_LABEL_TEXT_SP = 11f
 
     @Volatile
     private var loadedModule = ModuleUpdateState(null, BuildConfig.VERSION_CODE.toLong())
@@ -315,7 +331,7 @@ object SwipePanelHost {
                 exclusionView = WeakReference(decor)
                 originalExclusions = decor.systemGestureExclusionRects.map { Rect(it) }
             }
-            val top = (decor.height * BOTTOM_SWIPE_REGION_RATIO).toInt()
+            val top = (decor.height - bottomEdgeHeight(decor)).toInt().coerceAtLeast(0)
             decor.setSystemGestureExclusionRects(
                 originalExclusions.orEmpty() + Rect(0, top, decor.width, decor.height),
             )
@@ -419,14 +435,32 @@ object SwipePanelHost {
      * 上滑关闭松手：拖够距离，或者往上甩得够快，都算关闭，并把松手速度交给收尾动画；
      * 否则回弹。两个入口（面板自身 / 宿主手势分发）共用这一套判断。
      */
-    private fun releaseDismissDrag(card: View, distance: Float, threshold: Float, upwardVelocity: Float) {
+    private fun releaseDismissDrag(card: View, distance: Float, upwardVelocity: Float) {
+        val threshold = max(dp(card.context, DISMISS_MIN_DISTANCE_DP), card.height * DISMISS_MIN_DISTANCE_RATIO)
         val flingVelocity = dp(card.context, DISMISS_FLING_DP_PER_SECOND)
-        if (distance >= threshold || upwardVelocity >= flingVelocity) {
+        val flung = upwardVelocity >= flingVelocity && distance >= dp(card.context, DISMISS_FLING_MIN_DISTANCE_DP)
+        Log.d(TAG, "dismiss drag released: distance=$distance threshold=$threshold velocity=$upwardVelocity")
+        if (distance >= threshold || flung) {
             dismiss(true, upwardVelocity)
         } else {
             resetLauncherDismissProgress(card)
         }
     }
+
+    /** 底边手势区的高度（px）。 */
+    private fun bottomEdgeHeight(view: View): Float {
+        val id = view.resources.getIdentifier("gesture_bottom_height", "dimen", Constants.TARGET_PACKAGE)
+        val host = if (id == 0) 0 else try {
+            view.resources.getDimensionPixelSize(id)
+        } catch (_: Throwable) {
+            0
+        }
+        return if (host > 0) host.toFloat() else dp(view.context, BOTTOM_EDGE_FALLBACK_DP)
+    }
+
+    /** [y] 是 [view] 坐标系里的按下位置。 */
+    private fun isInBottomEdge(view: View, y: Float): Boolean =
+        view.height > 0 && y >= view.height - bottomEdgeHeight(view)
 
     /** 按屏幕坐标（rawX / rawY）算速度：面板在拖动时会缩放，局部坐标会跟着变形。 */
     private class RawVelocity {
@@ -557,12 +591,48 @@ object SwipePanelHost {
     fun shouldSuppressModuleCardClick(): Boolean =
         SystemClock.uptimeMillis() < launcherSwipeClickSuppressUntil
 
+    /** 本次触摸从按下起由面板接管：整串事件直接交给面板的 View 树，宿主手势管理器收不到。 */
+    private var panelOwnsTouch = false
+
+    /** 面板显示期间宿主的应用卡列表手势一律不启动（宿主下滑会收起列表，面板随之被释放）。 */
     @JvmStatic
-    fun handleLauncherGesture(event: MotionEvent?): Boolean {
+    fun blocksHostGesture(): Boolean = panelOwnsTouch || isShowing()
+
+    /**
+     * SubScreenLauncher.dispatchTouchEvent 的入口。返回 null 表示交给宿主照常处理；
+     * 否则事件已由面板处理，返回值作为 dispatchTouchEvent 的结果。
+     *
+     * 宿主在 dispatchTouchEvent 里先把事件交给自己的手势管理器：应用卡列表展开时下滑会收起列表，
+     * 底部上滑会缩小关闭列表，两者都会连带释放面板。面板显示时按下的这串触摸绕过宿主手势管理器，
+     * 按 Activity.dispatchTouchEvent 的默认流程分发给 View 树；底边上滑关闭由 [handleLauncherGesture] 处理。
+     */
+    @JvmStatic
+    fun dispatchLauncherTouch(activity: Activity, event: MotionEvent): Boolean? {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            panelOwnsTouch = isShowing() && hostActivity.get() === activity
+        }
+        if (!panelOwnsTouch) return null
+        val end = event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL
+        try {
+            if (handleLauncherGesture(event)) return true
+            if (event.actionMasked == MotionEvent.ACTION_DOWN) activity.onUserInteraction()
+            val window = activity.window ?: return null
+            return window.superDispatchTouchEvent(event) || activity.onTouchEvent(event)
+        } catch (t: Throwable) {
+            Log.w(TAG, "Panel touch dispatch failed", t)
+            return true
+        } finally {
+            if (end) panelOwnsTouch = false
+        }
+    }
+
+    private fun handleLauncherGesture(event: MotionEvent?): Boolean {
         // 自己补发的 CANCEL 不参与判定，否则会把刚开始的上滑清掉。
         if (dispatchingSyntheticCancel) return false
         val card = panel ?: return false
-        if (event == null || !isShowing()) return false
+        if (event == null) return false
+        // 按下时面板必须在屏幕上；拖动中面板会缩小、淡出，后续事件不再检查可见性。
+        if (event.actionMasked == MotionEvent.ACTION_DOWN && !isShowing()) return false
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -572,7 +642,9 @@ object SwipePanelHost {
                 launcherGestureDismissDistance = 0f
                 launcherVelocity.clear()
                 launcherVelocity.add(event)
-                launcherGestureFromBottom = event.y > card.height * BOTTOM_SWIPE_REGION_RATIO
+                val location = IntArray(2)
+                card.getLocationOnScreen(location)
+                launcherGestureFromBottom = isInBottomEdge(card, event.rawY - location[1])
                 if (launcherGestureFromBottom) {
                     Log.d(TAG, "launcher gesture armed for panel dismissal")
                 }
@@ -605,16 +677,9 @@ object SwipePanelHost {
             MotionEvent.ACTION_UP -> {
                 if (!launcherGestureFromBottom) return false
                 val wasDragging = launcherGestureDraggingUp
-                val threshold = max(
-                    dp(card.context, 8),
-                    min(card.height * 0.04f, dp(card.context, 18)),
-                )
                 launcherVelocity.add(event)
-                Log.d(TAG, "launcher gesture up: dragging=" + wasDragging
-                        + " distance=" + launcherGestureDismissDistance + " threshold=" + threshold)
                 if (wasDragging) {
-                    releaseDismissDrag(card, launcherGestureDismissDistance, threshold,
-                        launcherVelocity.upwardVelocity())
+                    releaseDismissDrag(card, launcherGestureDismissDistance, launcherVelocity.upwardVelocity())
                 } else {
                     resetLauncherDismissProgress(card)
                 }
@@ -750,11 +815,303 @@ object SwipePanelHost {
             return BuiltPanel(root, card, safeLeft)
         }
 
-        card.addView(buildPanelContent(activity, palette, strings, safeLeft, host = activity))
+        card.addView(buildTabbedContent(activity, palette, strings, safeLeft))
         root.addView(card)
         root.requestFocus()
 
         return BuiltPanel(root, card, safeLeft)
+    }
+
+    /** 面板顶部的提示行（应用区的启动失败等），面板不在屏幕上时为 null。 */
+    private var panelStatus: TextView? = null
+
+    /** 面板正在显示时把 [message] 提示在顶部，返回是否已显示。 */
+    @JvmStatic
+    fun showStatusIfShowing(message: String): Boolean {
+        val status = panelStatus ?: return false
+        if (!isShowing()) return false
+        showStatus(status, message)
+        return true
+    }
+
+    /**
+     * 实际打开的面板：顶部一行是「应用 / 设置」两个标签、提示文字和最右边的模块标识，默认显示应用区；
+     * 设置页是可上下滑动的卡片网格（与预览图同一套绘制）。
+     */
+    private fun buildTabbedContent(
+        activity: Activity,
+        palette: PanelPalette,
+        strings: PanelStrings,
+        safeLeft: Int,
+    ): View {
+        val headerViews = panelHeader(activity, palette, strings, safeLeft)
+        val header = headerViews.row
+        val appsTab = headerViews.appsTab
+        val settingsTab = headerViews.settingsTab
+        val status = headerViews.status
+        val appsPage = buildAppsPage(activity, palette, strings, safeLeft, status)
+        val settingsPage = ScrollView(activity).apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(buildPanelContent(activity, palette, strings, safeLeft, host = activity, status = status),
+                FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        val pages = FrameLayout(activity)
+        pages.addView(appsPage, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        pages.addView(settingsPage, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        fun select(apps: Boolean) {
+            appsPage.visibility = if (apps) View.VISIBLE else View.GONE
+            settingsPage.visibility = if (apps) View.GONE else View.VISIBLE
+            styleTab(appsTab, palette, apps)
+            styleTab(settingsTab, palette, !apps)
+        }
+        appsTab.setOnClickListener { select(true) }
+        settingsTab.setOnClickListener { select(false) }
+        select(true)
+        panelStatus = status
+        return LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+            addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(pages, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        }
+    }
+
+    private fun tabLabel(context: Context, label: String): TextView = TextView(context).apply {
+        text = label
+        textSize = HEADER_TEXT_SP
+        maxLines = 1
+        isClickable = true
+        isFocusable = true
+        val vertical = dp(context, 4).toInt()
+        setPadding(0, vertical, 0, vertical)
+        accessibilityDelegate = object : View.AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = "android.widget.Button"
+                info.isSelected = host.isSelected
+            }
+        }
+    }
+
+    private fun styleTab(tab: TextView, palette: PanelPalette, selected: Boolean) {
+        tab.isSelected = selected
+        tab.setTextColor(if (selected) palette.title else palette.summary)
+        tab.setTypeface(Typeface.DEFAULT, if (selected) Typeface.BOLD else Typeface.NORMAL)
+    }
+
+    /** 面板应用区的一项。 */
+    private class PanelApp(val component: ComponentName, val label: String, val icon: Bitmap?)
+
+    /** 应用区：后台查询桌面入口，加载完成后在主线程填进当前面板。 */
+    private fun buildAppsPage(
+        activity: Activity,
+        palette: PanelPalette,
+        strings: PanelStrings,
+        safeLeft: Int,
+        status: TextView,
+    ): View {
+        val generation = showGeneration
+        val grid = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(safeLeft + dp(activity, 12).toInt(), dp(activity, 6).toInt(),
+                dp(activity, 12).toInt(), dp(activity, 12).toInt())
+        }
+        val scroll = ScrollView(activity).apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(grid, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        val iconPx = dp(activity, APP_ICON_DP).toInt()
+        val available = activity.resources.displayMetrics.widthPixels - safeLeft - dp(activity, 24)
+        val columns = max(3, (available / dp(activity, APP_CELL_MIN_DP)).toInt())
+        requestApps(activity, iconPx) { apps ->
+            if (generation != showGeneration || activity.isDestroyed) return@requestApps
+            fillAppGrid(activity, grid, palette, strings, apps, columns, status)
+            Log.d(TAG, "Panel apps shown: ${apps.size}")
+        }
+        return scroll
+    }
+
+    // 应用列表缓存，只在主线程读写：进程启动时预加载，面板打开时直接显示；
+    // 应用安装、卸载、变更后标记过期，后台重载完成再刷新正在显示的面板。
+    private var cachedApps: List<PanelApp>? = null
+    private var cachedAppsKey: String? = null
+    private var appsStale = true
+    private var appsLoading = false
+    private val appsWaiters = mutableListOf<(List<PanelApp>) -> Unit>()
+
+    private fun appsKey(context: Context, iconPx: Int): String =
+        context.resources.configuration.locales.toLanguageTags() + "|" + iconPx
+
+    /**
+     * 有可用缓存时立即回调；缓存缺失、已过期、语言或图标尺寸变化时后台重载，加载完成后再回调一次。
+     * [onReady] 为 null 时只预加载。
+     */
+    private fun requestApps(context: Context, iconPx: Int, onReady: ((List<PanelApp>) -> Unit)?) {
+        val key = appsKey(context, iconPx)
+        val cached = cachedApps
+        val hit = cached != null && cachedAppsKey == key
+        if (hit) onReady?.invoke(cached!!)
+        if (hit && !appsStale) return
+        if (onReady != null) appsWaiters += onReady
+        if (appsLoading) return
+        appsLoading = true
+        val packageManager = context.packageManager
+        val locale = context.resources.configuration.locales[0]
+        try {
+            BackgroundTasks.execute {
+                val apps = try {
+                    loadPanelApps(packageManager, locale, iconPx)
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Panel app list failed", t)
+                    emptyList()
+                }
+                mainHandler.post {
+                    cachedApps = apps
+                    cachedAppsKey = key
+                    appsStale = false
+                    appsLoading = false
+                    Log.d(TAG, "Panel apps loaded: ${apps.size}")
+                    val waiters = appsWaiters.toList()
+                    appsWaiters.clear()
+                    waiters.forEach { it(apps) }
+                }
+            }
+        } catch (t: java.util.concurrent.RejectedExecutionException) {
+            appsLoading = false
+            val waiters = appsWaiters.toList()
+            appsWaiters.clear()
+            waiters.forEach { it(cached ?: emptyList()) }
+        }
+    }
+
+    /** 按背屏的显示密度预加载应用列表（宿主进程启动、应用变化时调用）。 */
+    @JvmStatic
+    fun preloadApps(context: Context) {
+        try {
+            val display = context.getSystemService(DisplayManager::class.java)
+                ?.getDisplay(Constants.SYSTEM_SECONDARY_DISPLAY_ID) ?: return
+            val rear = context.createDisplayContext(display)
+            requestApps(rear, dp(rear, APP_ICON_DP).toInt(), null)
+        } catch (t: Throwable) {
+            Log.w(TAG, "Panel app preload skipped", t)
+        }
+    }
+
+    /** 应用安装、卸载或变更：缓存过期并在后台重载。 */
+    @JvmStatic
+    fun invalidateApps(context: Context) {
+        appsStale = true
+        preloadApps(context)
+    }
+
+    /** 当前用户的桌面入口：按组件去重、排除模块与宿主等包、按本地化名称排序，图标按显示尺寸转成位图。 */
+    private fun loadPanelApps(packageManager: PackageManager, locale: java.util.Locale?, iconPx: Int): List<PanelApp> {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val collator = java.text.Collator.getInstance(locale ?: java.util.Locale.getDefault())
+        return packageManager.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(0))
+            .asSequence()
+            .filter { it.activityInfo != null && !RearCastPolicy.isExcludedPackage(it.activityInfo.packageName) }
+            .distinctBy { ComponentName(it.activityInfo.packageName, it.activityInfo.name) }
+            .map { info ->
+                val label = runCatching { info.loadLabel(packageManager).toString() }
+                    .getOrDefault(info.activityInfo.packageName)
+                info to label
+            }
+            .sortedWith { a, b -> collator.compare(a.second, b.second) }
+            .map { (info, label) ->
+                PanelApp(
+                    ComponentName(info.activityInfo.packageName, info.activityInfo.name),
+                    label,
+                    runCatching { drawableToBitmap(info.loadIcon(packageManager), iconPx) }.getOrNull(),
+                )
+            }
+            .toList()
+    }
+
+    private fun drawableToBitmap(drawable: android.graphics.drawable.Drawable, sizePx: Int): Bitmap {
+        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        drawable.setBounds(0, 0, sizePx, sizePx)
+        drawable.draw(Canvas(bitmap))
+        return bitmap
+    }
+
+    private fun fillAppGrid(
+        activity: Activity,
+        grid: LinearLayout,
+        palette: PanelPalette,
+        strings: PanelStrings,
+        apps: List<PanelApp>,
+        columns: Int,
+        status: TextView,
+    ) {
+        grid.removeAllViews()
+        if (apps.isEmpty()) {
+            grid.addView(TextView(activity).apply {
+                text = strings.appsEmpty
+                textSize = TILE_VALUE_TEXT_SP
+                setTextColor(palette.summary)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(activity, 24).toInt(), 0, 0)
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            return
+        }
+        apps.chunked(columns).forEachIndexed { index, rowApps ->
+            val row = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL }
+            for (i in 0 until columns) {
+                val app = rowApps.getOrNull(i)
+                val cell = if (app == null) Space(activity) else appCell(activity, palette, app, grid, status)
+                row.addView(cell, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            }
+            grid.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT).apply { if (index > 0) topMargin = dp(activity, 4).toInt() })
+        }
+    }
+
+    private fun appCell(activity: Activity, palette: PanelPalette, app: PanelApp, grid: View, status: TextView): View {
+        val iconPx = dp(activity, APP_ICON_DP).toInt()
+        val cell = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            val padding = dp(activity, 4).toInt()
+            setPadding(padding, padding, padding, padding)
+            contentDescription = app.label
+            accessibilityDelegate = buttonDelegate()
+            addView(ImageView(activity).apply {
+                if (app.icon != null) setImageBitmap(app.icon)
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(iconPx, iconPx))
+            addView(TextView(activity).apply {
+                text = app.label
+                textSize = APP_LABEL_TEXT_SP
+                setTextColor(palette.onTile)
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
+                gravity = Gravity.CENTER_HORIZONTAL
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                setPadding(0, dp(activity, 3).toInt(), 0, 0)
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        cell.setOnTouchListener { view, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> view.animate().scaleX(TILE_PRESSED_SCALE).scaleY(TILE_PRESSED_SCALE)
+                    .setDuration(90L).setInterpolator(DecelerateInterpolator()).start()
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> view.animate().scaleX(1f).scaleY(1f)
+                    .setDuration(160L).setInterpolator(cardInterpolator).start()
+            }
+            false
+        }
+        cell.setOnClickListener {
+            if (RearDesktopPanel.isLaunchInFlight()) return@setOnClickListener
+            cell.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+            grid.alpha = 0.6f
+            RearDesktopPanel.launch(activity, app.component) { message ->
+                grid.alpha = 1f
+                if (message != null) showStatus(status, message)
+            }
+        }
+        return cell
     }
 
     /**
@@ -770,10 +1127,16 @@ object SwipePanelHost {
         val displayContext = display?.let { context.createDisplayContext(it) } ?: context
         val palette = PanelPalette.of(dark)
         val strings = PanelStrings(displayContext, allowModuleResources = true)
+        // 预览画的是设置页：标签行选中「设置」，下面是卡片网格。
+        val header = panelHeader(displayContext, palette, strings, KNOWN_BACKSCREEN_SAFE_LEFT_PX)
+        styleTab(header.appsTab, palette, false)
+        styleTab(header.settingsTab, palette, true)
         val frame = LinearLayout(displayContext).apply {
             orientation = LinearLayout.VERTICAL
             background = panelBackground(palette, displayContext)
-            addView(buildPanelContent(displayContext, palette, strings, KNOWN_BACKSCREEN_SAFE_LEFT_PX, host = null))
+            addView(header.row)
+            addView(buildPanelContent(displayContext, palette, strings, KNOWN_BACKSCREEN_SAFE_LEFT_PX,
+                host = null, status = header.status))
         }
         frame.measure(
             View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
@@ -795,6 +1158,8 @@ object SwipePanelHost {
         val strings = PanelStrings(context, allowModuleResources = true)
         buildString {
             append(BuildConfig.VERSION_CODE).append('|')
+            // 布局版本：同一版本号内改了预览图排版时加一，已导出的旧预览图会重画。
+            append(PREVIEW_LAYOUT_REVISION).append('|')
             append(context.resources.configuration.locales.toLanguageTags()).append('|')
             for (spec in panelTileSpecs(strings)) {
                 append(spec.title).append('=')
@@ -813,12 +1178,11 @@ object SwipePanelHost {
     }
 
     /**
-     * 面板内容：两列网格。第一行左格是模块标识（下方是失败提示），右格是「投放」动作卡片；
-     * 其后是开关 / 循环卡片。
+     * 设置页内容：两列网格，第一张是「投放」动作卡片，其后是开关 / 循环卡片；失败原因显示在标签行的 [status]。
      *
-     * 背屏离眼睛远，整张卡片都是点击区；行数按卡片数量平分全部高度，校准机型 4 行（标识行 + 6 张），
-     * 其它机型 3 行（标识行 + 4 张，卡片更高）。动作卡片放进原来标题行右侧的空位，
-     * 不额外加一行，6 张开关卡片的高度几乎不变。[host] 为 null 时用于离屏预览，卡片不响应点击。
+     * 背屏离眼睛远，整张卡片都是点击区；每行高度至少 [TILE_ROW_HEIGHT_DP]，标题和取值完整显示，
+     * 超出一屏的卡片上下滑动查看。[host] 为 null 时用于离屏预览：卡片不响应点击，
+     * 超出预览图高度的行直接裁掉。
      */
     private fun buildPanelContent(
         context: Context,
@@ -826,7 +1190,8 @@ object SwipePanelHost {
         strings: PanelStrings,
         safeLeft: Int,
         host: Activity?,
-    ): View {
+        status: TextView,
+    ): LinearLayout {
         val gap = dp(context, 8).toInt()
         val column = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -836,30 +1201,22 @@ object SwipePanelHost {
                 dp(context, 12).toInt(),
                 dp(context, 12).toInt(),
             )
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
         }
-        val status = TextView(context).apply {
-            textSize = 12f
-            setTextColor(palette.error)
-            maxLines = 2
-            ellipsize = TextUtils.TruncateAt.END
-            gravity = Gravity.START or Gravity.CENTER_VERTICAL
-            visibility = View.GONE
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = dp(context, 2).toInt() }
-        }
-
         val specs = panelTileSpecs(strings)
         val action = specs.firstOrNull { it is ActionTileSpec }
-        val cells = mutableListOf<View>(brandCell(context, palette, status))
-        cells += action?.let { tileView(context, palette, strings, it, host, status) } ?: Space(context)
+        val cells = mutableListOf<View>()
+        if (action != null) cells += tileView(context, palette, strings, action, host, status)
         cells += specs.filter { it !== action }.map { spec -> tileView(context, palette, strings, spec, host, status) }
+        val rowHeight = dp(context, TILE_ROW_HEIGHT_DP).toInt()
         cells.chunked(2).forEachIndexed { index, pair ->
             val row = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply {
+                // 行高至少 TILE_ROW_HEIGHT_DP；系统字号调大时跟着文字长高，不裁掉文字。
+                minimumHeight = rowHeight
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply {
                     if (index > 0) topMargin = gap
                 }
             }
@@ -881,10 +1238,10 @@ object SwipePanelHost {
         return column
     }
 
-    /** 第一行左格（安全区之后）：模块图标 + 名称，下面是保存 / 投放失败之类的提示。 */
-    private fun brandCell(context: Context, palette: PanelPalette, status: TextView): LinearLayout {
+    /** 标签行最右侧的模块标识：模块图标 + 名称。 */
+    private fun brandLabel(context: Context, palette: PanelPalette): LinearLayout {
         val iconSize = dp(context, 20).toInt()
-        val titleRow = LinearLayout(context).apply {
+        return LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             val icon = runCatching { context.packageManager.getApplicationIcon(Constants.MODULE_PACKAGE) }.getOrNull()
@@ -893,7 +1250,7 @@ object SwipePanelHost {
                     setImageDrawable(icon)
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                     layoutParams = LinearLayout.LayoutParams(iconSize, iconSize).apply {
-                        marginEnd = dp(context, 8).toInt()
+                        marginEnd = dp(context, 6).toInt()
                     }
                 })
             }
@@ -903,35 +1260,43 @@ object SwipePanelHost {
                 setTypeface(typeface, Typeface.BOLD)
                 setTextColor(palette.title)
                 maxLines = 1
-                // 第一行右格放了「投放」卡片后左格变窄：放不下时按可用宽度把字号缩小（最小 10sp），不截断。
-                addOnLayoutChangeListener { view, left, _, right, _, _, _, _, _ ->
-                    val label = view as TextView
-                    val available = (right - left - label.paddingLeft - label.paddingRight).toFloat()
-                    if (available <= 0f) return@addOnLayoutChangeListener
-                    val metrics = label.resources.displayMetrics
-                    fun px(sp: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, sp, metrics)
-                    var sp = HEADER_TEXT_SP
-                    val probe = android.text.TextPaint(label.paint)
-                    while (sp > 10f) {
-                        probe.textSize = px(sp)
-                        if (probe.measureText(MODULE_TITLE) <= available) break
-                        sp -= 0.5f
-                    }
-                    if (kotlin.math.abs(label.textSize - px(sp)) > 0.5f) {
-                        label.post { label.textSize = sp }
-                    }
-                }
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
-        return LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
+    }
+
+    private class PanelHeader(val row: LinearLayout, val appsTab: TextView, val settingsTab: TextView, val status: TextView)
+
+    /**
+     * 面板顶部一行：左边「应用 / 设置」两个标签，最右边是模块标识，
+     * 中间剩余宽度是提示文字（保存失败、启动失败等），靠右贴着模块标识显示。
+     */
+    private fun panelHeader(context: Context, palette: PanelPalette, strings: PanelStrings, safeLeft: Int): PanelHeader {
+        val status = TextView(context).apply {
+            textSize = 12f
+            setTextColor(palette.error)
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            visibility = View.INVISIBLE
+        }
+        val appsTab = tabLabel(context, strings.tabApps)
+        val settingsTab = tabLabel(context, strings.tabSettings)
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(titleRow, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
+            setPadding(safeLeft + dp(context, 12).toInt(), dp(context, 8).toInt(), dp(context, 12).toInt(), 0)
+            addView(appsTab)
+            addView(settingsTab, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
-            ))
-            addView(status)
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { marginStart = dp(context, 16).toInt() })
+            addView(status, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = dp(context, 12).toInt()
+                marginEnd = dp(context, 12).toInt()
+            })
+            addView(brandLabel(context, palette))
         }
+        return PanelHeader(row, appsTab, settingsTab, status)
     }
 
     /** 面板里的一张卡片：开关（点一下切换开 / 关）、循环项（点一下换到下一档）或动作（点一下执行一次）。 */
@@ -1031,6 +1396,30 @@ object SwipePanelHost {
                 AutoWallpaperRotationHost.updateIntervalForAll(AutoWallpaperInterval.fromPref(value).minutes)
             },
         )
+        specs += ToggleTileSpec(
+            title = strings.appCardLimitTitle,
+            onText = strings.appCardLimitOn,
+            offText = strings.appCardLimitOff,
+            read = { PrefsBridge.readRemoveAppCardLimitForRemote() },
+            write = { context, value -> PrefsBridge.requestRemoveAppCardLimitWrite(context, value) },
+        )
+        // 歌词由本进程的 RearLyricHost 绘制：保存后直接通知它，与模块 App 的同步广播效果相同。
+        specs += ToggleTileSpec(
+            title = strings.rearLyricTitle,
+            onText = strings.rearLyricOn,
+            offText = strings.rearLyricOff,
+            read = { PrefsBridge.readEnableRearLyricForRemote() },
+            write = { context, value -> PrefsBridge.requestEnableRearLyricWrite(context, value) },
+            onSaved = { _, value -> RearLyricHost.onPanelPreferenceChanged(Constants.KEY_ENABLE_REAR_LYRIC, value) },
+        )
+        specs += ToggleTileSpec(
+            title = strings.lyricInAodTitle,
+            onText = strings.lyricInAodOn,
+            offText = strings.lyricInAodOff,
+            read = { PrefsBridge.readRearLyricInAodForRemote() },
+            write = { context, value -> PrefsBridge.requestRearLyricInAodWrite(context, value) },
+            onSaved = { _, value -> RearLyricHost.onPanelPreferenceChanged(Constants.KEY_REAR_LYRIC_IN_AOD, value) },
+        )
         specs += rearCastTileSpec(strings)
         return specs
     }
@@ -1090,13 +1479,15 @@ object SwipePanelHost {
             text = spec.title
             textSize = TILE_TITLE_TEXT_SP
             maxLines = 1
-            setAutoSizeTextTypeUniformWithConfiguration(10, TILE_TITLE_TEXT_SP.toInt(), 1, TypedValue.COMPLEX_UNIT_SP)
+            ellipsize = TextUtils.TruncateAt.END
+            includeFontPadding = false
         }
         val value = TextView(context).apply {
             textSize = TILE_VALUE_TEXT_SP
             maxLines = 1
-            setAutoSizeTextTypeUniformWithConfiguration(9, TILE_VALUE_TEXT_SP.toInt(), 1, TypedValue.COMPLEX_UNIT_SP)
-            setPadding(0, dp(context, 2).toInt(), 0, 0)
+            ellipsize = TextUtils.TruncateAt.END
+            includeFontPadding = false
+            setPadding(0, dp(context, 4).toInt(), 0, 0)
         }
         val tile = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -1329,7 +1720,8 @@ object SwipePanelHost {
         status.text = message
         status.visibility = View.VISIBLE
         status.removeCallbacks(status.tag as? Runnable)
-        val hide = Runnable { status.visibility = View.GONE }
+        // INVISIBLE 保留占位：提示行在标签行中间占满剩余宽度，模块标识才能一直贴在最右边。
+        val hide = Runnable { status.visibility = View.INVISIBLE }
         status.tag = hide
         status.postDelayed(hide, STATUS_VISIBLE_MS)
     }
@@ -1412,6 +1804,7 @@ object SwipePanelHost {
         showGeneration++
         container = null
         panel = null
+        panelStatus = null
         originRect = null
         hostActivity.clear()
         dismissing = false
@@ -1485,9 +1878,21 @@ object SwipePanelHost {
         val ringStyleTitle = get(R.string.panel_tile_ring_style, "电量环样式", "Ring style")
         val offTimeoutTitle = get(R.string.panel_tile_off_timeout, "息屏时间", "Screen timeout")
         val autoWallpaperTitle = get(R.string.panel_tile_auto_wallpaper, "定时换壁纸", "Auto wallpaper")
+        val appCardLimitTitle = get(R.string.panel_tile_app_card_limit, "应用卡数量上限", "App card limit")
+        val appCardLimitOn = get(R.string.panel_tile_app_card_limit_on, "已移除", "Removed")
+        val appCardLimitOff = get(R.string.panel_tile_app_card_limit_off, "原厂限制", "Stock")
+        val rearLyricTitle = get(R.string.panel_tile_rear_lyric, "实时歌词", "Live lyrics")
+        val rearLyricOn = get(R.string.panel_tile_rear_lyric_on, "显示", "Shown")
+        val rearLyricOff = get(R.string.panel_tile_rear_lyric_off, "关闭", "Off")
+        val lyricInAodTitle = get(R.string.panel_tile_lyric_in_aod, "息屏歌词", "Lyrics in AOD")
+        val lyricInAodOn = get(R.string.panel_tile_lyric_in_aod_on, "显示", "Shown")
+        val lyricInAodOff = get(R.string.panel_tile_lyric_in_aod_off, "隐藏", "Hidden")
         val castTitle = get(R.string.panel_tile_rear_cast, "投放", "Cast")
         val castToRear = get(R.string.panel_tile_rear_cast_to_rear, "切到背屏", "To rear")
         val castToMain = get(R.string.panel_tile_rear_cast_to_main, "拉回主屏", "Back to main")
+        val tabApps = get(R.string.panel_tab_apps, "应用", "Apps")
+        val tabSettings = get(R.string.panel_tab_settings, "设置", "Settings")
+        val appsEmpty = get(R.string.panel_apps_empty, "没有应用", "No apps")
 
         /** 投放失败的原因（与控制中心磁贴共用同一组字符串）。 */
         fun castMessage(outcome: RearCastPolicy.Outcome): String = when (outcome) {
@@ -1533,7 +1938,7 @@ object SwipePanelHost {
                     downY = event.rawY
                     draggingUp = false
                     dismissDistance = 0f
-                    fromBottom = event.y > height * BOTTOM_SWIPE_REGION_RATIO
+                    fromBottom = isInBottomEdge(this, event.y)
                     velocity.clear()
                     velocity.add(event)
                     Log.d(TAG, "dismiss card down: y=" + event.y + " height=" + height
@@ -1567,7 +1972,7 @@ object SwipePanelHost {
                     downY = event.rawY
                     draggingUp = false
                     dismissDistance = 0f
-                    fromBottom = event.y > height * BOTTOM_SWIPE_REGION_RATIO
+                    fromBottom = isInBottomEdge(this, event.y)
                     velocity.clear()
                     velocity.add(event)
                     return true
@@ -1590,14 +1995,8 @@ object SwipePanelHost {
 
                 MotionEvent.ACTION_UP -> {
                     if (draggingUp) {
-                        val threshold = max(
-                            dp(context, 8),
-                            min(height * 0.04f, dp(context, 18)),
-                        )
                         velocity.add(event)
-                        Log.d(TAG, "dismiss card up released: distance=" + dismissDistance
-                                + " threshold=" + threshold)
-                        releaseDismissDrag(this, dismissDistance, threshold, velocity.upwardVelocity())
+                        releaseDismissDrag(this, dismissDistance, velocity.upwardVelocity())
                         draggingUp = false
                         dismissDistance = 0f
                         return true

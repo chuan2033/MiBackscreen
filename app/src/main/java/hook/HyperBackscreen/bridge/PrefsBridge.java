@@ -93,8 +93,7 @@ public final class PrefsBridge {
             Constants.KEY_LIQUID_GLASS,
             Constants.KEY_BOTTOM_BAR_STYLE,
             Constants.KEY_BOTTOM_BAR_BLUR,
-            Constants.KEY_SHOW_FUNCTION_COUNT,
-            Constants.KEY_REAR_DESKTOP_DENSITY));
+            Constants.KEY_SHOW_FUNCTION_COUNT));
 
     public static final boolean DEFAULT_DISABLE_LONG_PRESS_EDIT = true;
     public static final boolean DEFAULT_REMOVE_WALLPAPER_LIMIT = true;
@@ -436,6 +435,31 @@ public final class PrefsBridge {
 
     private static String readStringForUi(@NonNull Context context, @NonNull String key, @NonNull String def) {
         return readStringForUi(local(context), remote(), key, def);
+    }
+
+    /** 字符串偏好的同步提交：远程提交成功清除待同步值，失败或服务未连接时保留待同步值。 */
+    private static boolean writeStringFromUiCommitted(@NonNull Context context, @NonNull String key,
+                                                      @NonNull String value) {
+        SharedPreferences localPrefs = local(context);
+        SharedPreferences remote = remote();
+        boolean saved = false;
+        if (remote != null) {
+            try {
+                saved = remote.edit().putString(key, value).commit();
+            } catch (Throwable error) {
+                Log.w(TAG, "Remote write failed for " + key, error);
+            }
+        }
+        SharedPreferences.Editor editor = localPrefs.edit().putString(key, value);
+        if (saved) {
+            editor.remove(PENDING_UI_PREFIX + key);
+        } else {
+            editor.putString(PENDING_UI_PREFIX + key, value);
+        }
+        editor.apply();
+        DiagnosticLogStore.recordLocalAsync(context, "preference_write key=" + key
+                + " destination=" + (saved ? "remote_commit" : "local_pending"));
+        return saved;
     }
 
     static String readStringForUi(@NonNull SharedPreferences localPrefs,
@@ -1336,16 +1360,26 @@ public final class PrefsBridge {
         local(context).edit().putBoolean(Constants.KEY_BOTTOM_BAR_BLUR, enabled).apply();
     }
 
-    /** 背屏桌面运行期间的背屏密度（dpi，0 = 不调整）。只在模块 App 本地，随会话请求交给 system_server。 */
-    public static int readRearDesktopDensity(@NonNull Context context) {
-        return RearDesktopPolicy.parseDensity(local(context).getString(
-                Constants.KEY_REAR_DESKTOP_DENSITY, String.valueOf(RearDesktopPolicy.DEFAULT_DENSITY)));
+    /** 背屏桌面会话期间的背屏密度（dpi，0 = 不调整）。 */
+    public static int readRearDesktopDensityForUi(@NonNull Context context) {
+        return RearDesktopPolicy.parseDensity(readStringForUi(
+                context, Constants.KEY_REAR_DESKTOP_DENSITY, String.valueOf(RearDesktopPolicy.DEFAULT_DENSITY)));
     }
 
-    public static void writeRearDesktopDensity(@NonNull Context context, int density) {
+    /**
+     * 写入密度档位并同步提交到远程偏好；返回 true 表示 system_server 已能读到新值。
+     * 会走 Binder，不要在主线程调用。
+     */
+    public static boolean writeRearDesktopDensityFromUi(@NonNull Context context, int density) {
         String normalized = RearDesktopPolicy.normalizeDensity(String.valueOf(density));
-        if (normalized == null) return;
-        local(context).edit().putString(Constants.KEY_REAR_DESKTOP_DENSITY, normalized).apply();
+        if (normalized == null) return false;
+        return writeStringFromUiCommitted(context, Constants.KEY_REAR_DESKTOP_DENSITY, normalized);
+    }
+
+    /** system_server 在会话开始与密度刷新时现读；缺失或非法值按默认档位。 */
+    public static int readRearDesktopDensity(@NonNull XposedModule module) {
+        return RearDesktopPolicy.parseDensity(readStringForHook(
+                module, Constants.KEY_REAR_DESKTOP_DENSITY, String.valueOf(RearDesktopPolicy.DEFAULT_DENSITY)));
     }
 
     public static boolean readShowFunctionCount(@NonNull Context context) {
@@ -1586,6 +1620,22 @@ public final class PrefsBridge {
         return requestPanelPreferenceWrite(context, Constants.KEY_REMOVE_APP_CARD_LIMIT, enabled);
     }
 
+    public static boolean readEnableRearLyricForRemote() {
+        return readRemoteBooleanWithOverride(Constants.KEY_ENABLE_REAR_LYRIC, DEFAULT_ENABLE_REAR_LYRIC);
+    }
+
+    public static boolean requestEnableRearLyricWrite(@NonNull Context context, boolean enabled) {
+        return requestPanelPreferenceWrite(context, Constants.KEY_ENABLE_REAR_LYRIC, enabled);
+    }
+
+    public static boolean readRearLyricInAodForRemote() {
+        return readRemoteBooleanWithOverride(Constants.KEY_REAR_LYRIC_IN_AOD, DEFAULT_REAR_LYRIC_IN_AOD);
+    }
+
+    public static boolean requestRearLyricInAodWrite(@NonNull Context context, boolean enabled) {
+        return requestPanelPreferenceWrite(context, Constants.KEY_REAR_LYRIC_IN_AOD, enabled);
+    }
+
     private static boolean requestPanelPreferenceWrite(@NonNull Context context,
                                                        @NonNull String key,
                                                        boolean value) {
@@ -1690,7 +1740,9 @@ public final class PrefsBridge {
         return Constants.KEY_DISABLE_LONG_PRESS_EDIT.equals(key)
                 || Constants.KEY_REMOVE_WALLPAPER_LIMIT.equals(key)
                 || Constants.KEY_ENABLE_BATTERY_RING.equals(key)
-                || Constants.KEY_REMOVE_APP_CARD_LIMIT.equals(key);
+                || Constants.KEY_REMOVE_APP_CARD_LIMIT.equals(key)
+                || Constants.KEY_ENABLE_REAR_LYRIC.equals(key)
+                || Constants.KEY_REAR_LYRIC_IN_AOD.equals(key);
     }
 
     static boolean applyPanelPreference(@NonNull Context context,
@@ -1741,6 +1793,8 @@ public final class PrefsBridge {
             flushPanelPreference(context, Constants.KEY_REMOVE_WALLPAPER_LIMIT);
             flushPanelPreference(context, Constants.KEY_ENABLE_BATTERY_RING);
             flushPanelPreference(context, Constants.KEY_REMOVE_APP_CARD_LIMIT);
+            flushPanelPreference(context, Constants.KEY_ENABLE_REAR_LYRIC);
+            flushPanelPreference(context, Constants.KEY_REAR_LYRIC_IN_AOD);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_DISABLE_LONG_PRESS_EDIT);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_ENABLE_APP_CARD);
             flushUiBooleanPreference(localPrefs, remotePrefs, Constants.KEY_APP_CARD_INSTALL_REQUEST);
@@ -1811,6 +1865,8 @@ public final class PrefsBridge {
                     localPrefs,
                     remotePrefs,
                     Constants.KEY_REAR_SCREEN_SCHEDULE_MODE);
+            flushUiStringPreference(localPrefs, remotePrefs, Constants.KEY_REAR_DESKTOP_DENSITY);
+            syncSavedStringKey(localPrefs, remotePrefs, Constants.KEY_REAR_DESKTOP_DENSITY);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_DISABLE_LONG_PRESS_EDIT, DEFAULT_DISABLE_LONG_PRESS_EDIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_WALLPAPER_LIMIT, DEFAULT_REMOVE_WALLPAPER_LIMIT);
             syncBooleanKey(localPrefs, remotePrefs, Constants.KEY_REMOVE_APP_CARD_LIMIT, DEFAULT_REMOVE_APP_CARD_LIMIT);
@@ -2034,6 +2090,21 @@ public final class PrefsBridge {
         if (value == null) value = "";
         if (remotePrefs.edit().putString(key, value).commit()) {
             localPrefs.edit().putString(key, value).remove(pendingKey).commit();
+        }
+    }
+
+    /**
+     * 原本只存在本地的键改为同步：已有远程值优先并回写本地；远程没有时只迁移本地实际保存过的值，
+     * 两边都没有时不写默认值（读取方按默认处理）。
+     */
+    static void syncSavedStringKey(@NonNull SharedPreferences localPrefs,
+                                   @NonNull SharedPreferences remotePrefs,
+                                   @NonNull String key) {
+        if (localPrefs.contains(PENDING_UI_PREFIX + key)) return;
+        if (remotePrefs.contains(key)) {
+            localPrefs.edit().putString(key, remotePrefs.getString(key, null)).apply();
+        } else if (localPrefs.contains(key)) {
+            remotePrefs.edit().putString(key, localPrefs.getString(key, null)).apply();
         }
     }
 

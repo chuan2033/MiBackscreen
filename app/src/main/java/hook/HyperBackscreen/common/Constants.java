@@ -192,35 +192,70 @@ public final class Constants {
     /** 发送方本地超时（不经过 system_server）。 */
     public static final int REAR_CAST_RESULT_TIMEOUT = -100;
 
-    // ---- 背屏桌面 ----
-    // 与投放共用 ACTION_REAR_CAST 通道与鉴权，执行端在 RearDesktopHost；只接受模块 App 发来的请求。
-    /** 在背屏上打开背屏桌面（system_server 以系统身份启动 Activity，免后台启动限制）。 */
-    public static final String REAR_CAST_OP_DESKTOP_OPEN = "desktop_open";
-    /** 开始背屏桌面会话：extra {@link #EXTRA_REAR_DESKTOP_TOKEN} 为会话令牌，{@link #EXTRA_REAR_DESKTOP_DENSITY} 为背屏密度。 */
-    public static final String REAR_CAST_OP_DESKTOP_START = "desktop_start";
-    /** 结束背屏桌面会话，恢复背屏密度与方向设置。 */
-    public static final String REAR_CAST_OP_DESKTOP_STOP = "desktop_stop";
-    /** 向背屏发送返回键。 */
-    public static final String REAR_CAST_OP_BACK = "back";
-    /** 会话令牌（Bundle#putBinder）：system_server 监听它的死亡，模块进程被杀时自动结束会话。 */
-    public static final String EXTRA_REAR_DESKTOP_TOKEN = "rear_desktop_token";
-    /** 会话期间背屏使用的密度；0 表示不调整。 */
-    public static final String EXTRA_REAR_DESKTOP_DENSITY = "rear_desktop_density";
-    /** 操作已执行（打开、开始、结束、返回键）。 */
+    // ---- 背屏桌面（快捷面板的应用区）----
+    // 与投放共用 ACTION_REAR_CAST 通道与鉴权，执行端在 RearDesktopHost。
+    // 会话的启动、查询和控制只接受背屏中心；密度刷新只接受模块 App。
+    /** 在背屏启动应用：extra 为组件、请求编号与协议版本。 */
+    public static final String REAR_CAST_OP_PANEL_LAUNCH = "panel_launch";
+    /** 查询当前会话：结果 extras 带会话编号、状态与最近一次结果码。 */
+    public static final String REAR_CAST_OP_PANEL_QUERY = "panel_query";
+    /** 会话控制：返回、回背屏首页、移到主屏、退出；extra 为会话编号。 */
+    public static final String REAR_CAST_OP_PANEL_BACK = "panel_back";
+    public static final String REAR_CAST_OP_PANEL_HOME = "panel_home";
+    public static final String REAR_CAST_OP_PANEL_TO_MAIN = "panel_to_main";
+    public static final String REAR_CAST_OP_PANEL_EXIT = "panel_exit";
+    /** 模块 App 的密度档位同步完成后请求 system_server 重新读取远程偏好。 */
+    public static final String REAR_CAST_OP_DENSITY_REFRESH = "density_refresh";
+    /** 面板与 system_server 之间的协议版本；不一致时按坏请求拒绝。 */
+    public static final int REAR_DESKTOP_PROTOCOL_VERSION = 1;
+    public static final String EXTRA_REAR_DESKTOP_PROTOCOL = "rear_desktop_protocol";
+    public static final String EXTRA_REAR_DESKTOP_REQUEST_ID = "rear_desktop_request_id";
+    /** {@link android.content.ComponentName#flattenToString()} 格式的组件。 */
+    public static final String EXTRA_REAR_DESKTOP_COMPONENT = "rear_desktop_component";
+    public static final String EXTRA_REAR_DESKTOP_SESSION_ID = "rear_desktop_session_id";
+    public static final String EXTRA_REAR_DESKTOP_STATE = "rear_desktop_state";
+    public static final String EXTRA_REAR_DESKTOP_REASON = "rear_desktop_reason";
+    public static final String EXTRA_REAR_DESKTOP_RESULT = "rear_desktop_result";
+    /**
+     * system_server → 背屏中心的会话状态通知：setPackage 背屏中心、按会话用户发送；
+     * 背屏中心以 RECEIVER_NOT_EXPORTED 注册，并核对发送方 uid 为 system。
+     */
+    public static final String ACTION_REAR_DESKTOP_STATUS = MODULE_PACKAGE + ".action.REAR_DESKTOP_STATUS";
+    /** 操作已执行（控制操作、查询、密度刷新）。 */
     public static final int REAR_CAST_RESULT_DONE = 12;
-    /** 背屏桌面 Activity。 */
-    public static final String REAR_DESKTOP_ACTIVITY = MODULE_PACKAGE + ".desktop.RearDesktopActivity";
-    /** 背屏桌面运行期间的背屏密度（仅本地偏好）：0 = 不调整，其余为 dpi，见 RearDesktopPolicy。 */
+    /** 启动请求已受理；后续进展经 {@link #ACTION_REAR_DESKTOP_STATUS} 通知。 */
+    public static final int REAR_CAST_RESULT_ACCEPTED = 13;
+    /** ROM 不允许该应用显示在背屏（isShouldShowOnRearDisplay 为 false 或启动被中止）。 */
+    public static final int REAR_CAST_RESULT_ROM_DENIED = 14;
+    /** 组件不是当前用户已导出、已启用的桌面入口，或面板不具备它要求的权限。 */
+    public static final int REAR_CAST_RESULT_BAD_COMPONENT = 15;
+    /** 控制操作指向的会话不存在、已结束或正在等待确认。 */
+    public static final int REAR_CAST_RESULT_NO_SESSION = 16;
+    /** 另一个会话正在启动或结束。 */
+    public static final int REAR_CAST_RESULT_BUSY = 17;
+    /** 背屏桌面会话期间的背屏密度：0 = 不调整，其余为 dpi，见 RearDesktopPolicy。经 PrefsBridge 同步到远程偏好。 */
     public static final String KEY_REAR_DESKTOP_DENSITY = "rear_desktop_density";
     /**
      * system_server 记录的会话现场（Settings.Global）：会话开始前背屏的强制密度与方向设置。
      * 会话正常结束时清掉；开机时仍在说明上次没恢复（重启 / 崩溃），按它恢复。
      */
     public static final String SETTING_REAR_DESKTOP_RESTORE = "mibackscreen_rear_desktop_restore";
-    // 背屏启动拦截：ActivityStarterImpl.isShouldShowOnRearDisplay(ActivityInfo) 按 meta-data
-    // miui.rear.policy 与内置名单决定 Activity 能否显示在背屏；背屏启动与「从背屏来源重定向到主屏」都调它。
+    // ROM 的背屏启动判定：
+    // isShouldShowOnRearDisplay(ActivityInfo) 按 meta-data miui.rear.policy 与内置名单判断背屏适用性，
+    // 背屏桌面会话期间对本次会话的应用放行；
+    // isAllowedToStartOnRearDisplay(ActivityRecord) 先调它，锁屏时再只认 SECONDARY_DISPLAY_WHITE_PACKAGE，只读诊断。
     public static final String SYSTEM_ACTIVITY_STARTER_IMPL_CLASS = "com.android.server.wm.ActivityStarterImpl";
     public static final String SYSTEM_SHOULD_SHOW_ON_REAR_METHOD = "isShouldShowOnRearDisplay";
+    public static final String SYSTEM_ALLOWED_TO_START_ON_REAR_METHOD = "isAllowedToStartOnRearDisplay";
+    // 任务变化通知（AOSP）：方法体只投递消息，Hook 在原方法之后安排一次锁外的任务快照核对。
+    public static final String SYSTEM_TASK_CHANGE_NOTIFICATION_CLASS =
+            "com.android.server.wm.TaskChangeNotificationController";
+    public static final String[] SYSTEM_TASK_CHANGE_NOTIFY_METHODS = {
+            "notifyTaskStackChanged",
+            "notifyTaskRemoved",
+            "notifyTaskDisplayChanged",
+            "notifyTaskMovedToFront",
+    };
 
     // Theme store hook targets
     // 注意：以下 R8 混淆名（o5、cmzf、qp5l 等）与目标应用版本绑定，主题商店一更新即可能失效。

@@ -270,6 +270,15 @@ internal object RearLyricHost {
 
     // ---- 开关 ----
 
+    /** 快捷面板在本进程里改了歌词开关：与收到模块 App 的同步广播走同一套处理。 */
+    @JvmStatic
+    fun onPanelPreferenceChanged(key: String, value: Boolean) {
+        when (key) {
+            Constants.KEY_ENABLE_REAR_LYRIC -> setEnabled(value)
+            Constants.KEY_REAR_LYRIC_IN_AOD -> setShowInAod(value)
+        }
+    }
+
     private fun setEnabled(enabled: Boolean) {
         PrefsBridge.setRemoteBooleanOverride(Constants.KEY_ENABLE_REAR_LYRIC, enabled)
         if (enabled) {

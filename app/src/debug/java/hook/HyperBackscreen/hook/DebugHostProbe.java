@@ -77,6 +77,20 @@ public final class DebugHostProbe {
                         if (host == null) throw new IllegalStateException("No host activity");
                         SwipePanelHost.show(host, null);
                         Log.i(Constants.LOG_TAG, "PROBE panel shown");
+                    } else if ("rear-launch".equals(command)) {
+                        Activity host = activity.get();
+                        if (host == null) throw new IllegalStateException("No host activity");
+                        android.content.ComponentName component = android.content.ComponentName
+                                .unflattenFromString(String.valueOf(intent.getStringExtra("component")));
+                        if (component == null) throw new IllegalArgumentException("component missing");
+                        hook.HyperBackscreen.panel.RearDesktopPanel.INSTANCE.launch(host, component, message -> {
+                            Log.i(Constants.LOG_TAG, "PROBE rear launch done message=" + message);
+                            return kotlin.Unit.INSTANCE;
+                        });
+                    } else if ("rear-control".equals(command)) {
+                        hook.HyperBackscreen.panel.RearDesktopPanel.INSTANCE.control(ctx,
+                                intent.getStringExtra("op"), intent.getIntExtra("session", 0));
+                        Log.i(Constants.LOG_TAG, "PROBE rear control sent");
                     } else throw new IllegalArgumentException("Unknown probe command");
                 } catch (Throwable error) { Log.e(Constants.LOG_TAG, "PROBE FAIL " + command, error); }
             }

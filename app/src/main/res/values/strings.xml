@@ -226,6 +226,15 @@
     <string name="panel_tile_ring_style">Ring style</string>
     <string name="panel_tile_off_timeout">Screen timeout</string>
     <string name="panel_tile_auto_wallpaper">Auto wallpaper</string>
+    <string name="panel_tile_app_card_limit">App card limit</string>
+    <string name="panel_tile_app_card_limit_on">Removed</string>
+    <string name="panel_tile_app_card_limit_off">Stock</string>
+    <string name="panel_tile_rear_lyric">Live lyrics</string>
+    <string name="panel_tile_rear_lyric_on">Shown</string>
+    <string name="panel_tile_rear_lyric_off">Off</string>
+    <string name="panel_tile_lyric_in_aod">Lyrics in AOD</string>
+    <string name="panel_tile_lyric_in_aod_on">Shown</string>
+    <string name="panel_tile_lyric_in_aod_off">Hidden</string>
 
     <!-- Restart Scope Dialog -->
     <string name="restart_title">Restart scopes</string>
@@ -489,32 +498,28 @@
     <string name="rear_widgets_already_added">Added</string>
     <!-- 背屏桌面 -->
     <string name="rear_desktop_title">Rear desktop</string>
-    <string name="rear_desktop_tile_label">MiBackscreen Rear desktop</string>
-    <string name="rear_desktop_entry_summary">Open and run apps directly on the rear screen</string>
-    <string name="rear_desktop_open">Open on the rear screen</string>
-    <string name="rear_desktop_open_summary">Shows the app list on the rear screen; tap an app to run it there</string>
-    <string name="rear_desktop_exit">Exit rear desktop</string>
-    <string name="rear_desktop_running">Running. Exiting restores the rear screen density</string>
+    <string name="rear_desktop_entry_summary">Open apps on the rear screen from the quick panel</string>
     <string name="rear_desktop_density_title">Rear screen density</string>
-    <string name="rear_desktop_density_summary">A lower value gives apps a wider layout on the small rear screen. Applies only while the rear desktop runs</string>
+    <string name="rear_desktop_density_summary">Lower is wider. Restored when the app leaves the rear screen</string>
     <string name="rear_desktop_density_unchanged">Unchanged</string>
     <string name="rear_desktop_density_value">%1$d dpi</string>
-    <string name="rear_desktop_overlay_title">Floating controls</string>
-    <string name="rear_desktop_overlay_summary">Needs the display-over-other-apps permission. When another app covers the rear desktop, a handle on the right of the rear screen opens Back, Desktop, Move to main screen and Exit</string>
-    <string name="rear_desktop_overlay_manual">Grant the permission in the system settings page that opens</string>
-    <string name="rear_desktop_note_reboot">Apps can run on the rear screen only after the System Framework scope is enabled and the phone is rebooted.</string>
-    <string name="rear_desktop_note_locked">Unlock the phone before opening the rear desktop or launching apps from it. Apps already running on the rear screen keep running after the main screen locks.</string>
-    <string name="rear_desktop_note_tile">The Control Center \"Rear desktop\" tile opens and exits it. The \"Cast to rear\" tile still moves the current main-screen app to the rear screen and back.</string>
-    <string name="rear_desktop_note_timeout">The rear screen follows the sleep timer in \"Sleep and schedule\". Choose \"Always on\" to keep it on while using apps.</string>
-    <string name="rear_desktop_note_compat">Some apps refuse small windows or check the screen they run on and may not display correctly on the rear screen.</string>
-    <string name="rear_desktop_locked">Unlock the phone first</string>
-    <string name="rear_desktop_failed">Could not open the rear desktop</string>
-    <string name="rear_desktop_launch_failed">Could not open this app on the rear screen</string>
-    <string name="rear_desktop_empty">No apps</string>
-    <string name="rear_desktop_notification_title">Rear desktop is running</string>
+    <string name="rear_desktop_density_pending">Saved. Applies after the module service reconnects</string>
+    <string name="rear_desktop_note_entry">Tap the MiBackscreen card on the rear screen, then pick an app under \"Apps\".</string>
+    <string name="rear_desktop_note_reboot">Needs the System Framework and rear screen center scopes, then a reboot.</string>
+    <string name="rear_desktop_note_locked">Unlock the main screen first. The system only allows its built-in apps on the rear screen while locked.</string>
+    <string name="rear_desktop_note_compat">Some apps may not display correctly on the rear screen.</string>
+    <string name="rear_desktop_note_timeout">The rear screen follows the sleep timer. Choose \"Always on\" to keep it on.</string>
+    <string name="panel_tab_apps">Apps</string>
+    <string name="panel_tab_settings">Settings</string>
+    <string name="panel_apps_empty">No apps</string>
+    <string name="rear_desktop_launch_locked">Unlock the main screen first</string>
+    <string name="rear_desktop_launch_rom_denied">Not allowed on the rear screen</string>
+    <string name="rear_desktop_launch_bad_component">Cannot open this app</string>
+    <string name="rear_desktop_launch_busy">Busy, try again</string>
+    <string name="rear_desktop_launch_failed">Could not open on the rear screen</string>
     <string name="rear_desktop_control_back">Back</string>
-    <string name="rear_desktop_control_home">Rear desktop</string>
+    <string name="rear_desktop_control_home">Rear home</string>
     <string name="rear_desktop_control_to_main">Move to main screen</string>
-    <string name="rear_desktop_control_exit">Exit rear desktop</string>
+    <string name="rear_desktop_control_exit">Exit</string>
     <string name="rear_desktop_control_expand">Show controls</string>
 </resources>

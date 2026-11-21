@@ -51,8 +51,6 @@ public final class SystemServerHooks {
     private static volatile Field sGestureEnableField;
     /** 最近一次因名单关掉双击熄屏的包名，只在变化时记日志。 */
     private volatile String lastDoubleTapSleepBlockedPackage;
-    /** 最近一次因背屏桌面放行的包名，只在变化时记日志。 */
-    private volatile String lastRearDesktopAllowedPackage;
 
     public SystemServerHooks(@NonNull ModuleMain module) {
         this.module = module;
@@ -323,45 +321,107 @@ public final class SystemServerHooks {
         );
         // 按应用禁用双击熄屏：与上面的 Hook 互不依赖，类缺失只记 WARN，不影响返回值。
         installDoubleTapSleepFilterHook(classLoader);
-        // 背屏桌面：会话期间放行应用显示在背屏。同样互不依赖。
-        installRearDesktopLaunchHook(classLoader);
+        // 背屏桌面：ROM 启动判定诊断与任务变化通知。同样互不依赖。
+        installRearDesktopHooks(classLoader);
         return coverHookInstalled && (powerWakeHookInstalled || coverWakeHookInstalled);
     }
 
     /**
-     * 背屏桌面会话期间放行应用显示在背屏。
+     * 背屏桌面：本次会话应用的背屏放行、ROM 背屏启动判定的诊断，以及任务变化通知。
      *
      * <p>{@code ActivityStarterImpl.isShouldShowOnRearDisplay(ActivityInfo)} 按 meta-data
-     * {@code miui.rear.policy} 与内置名单判定；背屏启动（不通过就以 102 中止）和「从背屏来源启动时重定向到主屏」
-     * 都调它。原结果为 false 且会话进行中时改成 true。锁屏时系统另有一层只认内置名单的检查，这里不改。
-     * 回调在 WindowManager 全局锁内，只读 volatile 会话状态。
+     * {@code miui.rear.policy} 与内置名单判定背屏适用性（ActivityRecord 重载转调它）；原结果为 false
+     * 且是本次会话的应用时改为 true，其它应用保持原样。
+     * {@code isAllowedToStartOnRearDisplay(ActivityRecord)} 先调它，锁屏时再只认内置名单，
+     * 不通过时背屏启动被中止；这一层返回值不改，结果交给 {@link RearDesktopHost} 记录。
+     *
+     * <p>{@code TaskChangeNotificationController} 的几个通知方法在任务前台变化、移屏、移除时调用，
+     * 原方法之后只安排一次锁外的任务快照核对。
+     *
+     * <p>这些回调都可能在 WindowManager 全局锁内：只读写 volatile 值与投递 Handler 消息。
      */
-    private void installRearDesktopLaunchHook(@NonNull ClassLoader classLoader) {
+    private void installRearDesktopHooks(@NonNull ClassLoader classLoader) {
         Class<?> starterClass = findClass(Constants.SYSTEM_ACTIVITY_STARTER_IMPL_CLASS, classLoader);
         if (starterClass == null) {
             module.log(Log.WARN, Constants.LOG_TAG,
                     "System hook target missing: " + Constants.SYSTEM_ACTIVITY_STARTER_IMPL_CLASS);
-            return;
-        }
-        module.hookMethodIfPresent(
-                starterClass,
-                Constants.SYSTEM_SHOULD_SHOW_ON_REAR_METHOD,
-                new Class[]{android.content.pm.ActivityInfo.class},
-                Constants.SYSTEM_ACTIVITY_STARTER_IMPL_CLASS + "#" + Constants.SYSTEM_SHOULD_SHOW_ON_REAR_METHOD,
-                chain -> {
-                    Object result = chain.proceed();
-                    if (Boolean.TRUE.equals(result) || !RearDesktopHost.isSessionActive()) return result;
-                    Object info = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
-                    String packageName = info instanceof android.content.pm.ActivityInfo
-                            ? ((android.content.pm.ActivityInfo) info).packageName
-                            : null;
-                    if (packageName != null && !packageName.equals(lastRearDesktopAllowedPackage)) {
-                        lastRearDesktopAllowedPackage = packageName;
-                        module.log(Log.INFO, Constants.LOG_TAG, "Rear desktop allowed " + packageName);
+        } else {
+            module.hookMethodIfPresent(
+                    starterClass,
+                    Constants.SYSTEM_SHOULD_SHOW_ON_REAR_METHOD,
+                    new Class[]{android.content.pm.ActivityInfo.class},
+                    Constants.SYSTEM_ACTIVITY_STARTER_IMPL_CLASS + "#" + Constants.SYSTEM_SHOULD_SHOW_ON_REAR_METHOD,
+                    chain -> {
+                        Object result = chain.proceed();
+                        Object info = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                        if (Boolean.FALSE.equals(result) && info instanceof android.content.pm.ActivityInfo
+                                && RearDesktopHost.allowsSessionApp((android.content.pm.ActivityInfo) info)) {
+                            return true;
+                        }
+                        return result;
                     }
-                    return true;
+            );
+            Method allowed = uniqueDeclaredMethod(starterClass, Constants.SYSTEM_ALLOWED_TO_START_ON_REAR_METHOD, 1);
+            module.hookMethodIfPresent(
+                    allowed != null && allowed.getReturnType() == boolean.class ? allowed : null,
+                    Constants.SYSTEM_ACTIVITY_STARTER_IMPL_CLASS + "#" + Constants.SYSTEM_ALLOWED_TO_START_ON_REAR_METHOD,
+                    chain -> {
+                        Object result = chain.proceed();
+                        Object record = chain.getArgs().isEmpty() ? null : chain.getArgs().get(0);
+                        Object packageName = getFieldValue(record, Constants.SYSTEM_ACTIVITY_RECORD_PACKAGE_FIELD);
+                        if (packageName instanceof String && result instanceof Boolean) {
+                            RearDesktopHost.onRomLaunchDecision((String) packageName, (Boolean) result,
+                                    Constants.SYSTEM_ALLOWED_TO_START_ON_REAR_METHOD);
+                        }
+                        return result;
+                    }
+            );
+        }
+        Class<?> notifierClass = findClass(Constants.SYSTEM_TASK_CHANGE_NOTIFICATION_CLASS, classLoader);
+        int installed = 0;
+        if (notifierClass == null) {
+            module.log(Log.WARN, Constants.LOG_TAG,
+                    "System hook target missing: " + Constants.SYSTEM_TASK_CHANGE_NOTIFICATION_CLASS);
+        } else {
+            for (String name : Constants.SYSTEM_TASK_CHANGE_NOTIFY_METHODS) {
+                Method method = uniqueDeclaredMethod(notifierClass, name, -1);
+                if (module.hookMethodIfPresent(
+                        method,
+                        Constants.SYSTEM_TASK_CHANGE_NOTIFICATION_CLASS + "#" + name,
+                        chain -> {
+                            Object result = chain.proceed();
+                            RearDesktopHost.onTaskChanged();
+                            return result;
+                        })) {
+                    installed++;
                 }
-        );
+            }
+        }
+        RearDesktopHost.setTaskEventsAvailable(installed > 0);
+        module.log(Log.INFO, Constants.LOG_TAG, "Rear desktop: task change hooks " + installed + "/"
+                + Constants.SYSTEM_TASK_CHANGE_NOTIFY_METHODS.length);
+    }
+
+    /**
+     * 按名称（与参数个数，-1 表示不限）取唯一的声明方法；不存在或有多个重载时返回 null 并记 WARN，
+     * 对应接入点停用。
+     */
+    @Nullable
+    private Method uniqueDeclaredMethod(@NonNull Class<?> type, @NonNull String name, int parameterCount) {
+        Method found = null;
+        int matches = 0;
+        for (Method method : type.getDeclaredMethods()) {
+            if (!name.equals(method.getName())) continue;
+            if (parameterCount >= 0 && method.getParameterTypes().length != parameterCount) continue;
+            found = method;
+            matches++;
+        }
+        if (matches > 1) {
+            module.log(Log.WARN, Constants.LOG_TAG, "System hook target ambiguous: " + type.getName() + "#" + name
+                    + " (" + matches + " overloads)");
+            return null;
+        }
+        return found;
     }
 
     /**
