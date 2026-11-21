@@ -19,7 +19,7 @@ if (signingValue('RELEASE_STORE_FILE') && !hasReleaseSigning) {
 }
 
 // miuix 各模块共用的版本号，升级时只改这一处。
-def miuixVersion = '0.9.5-beta02'
+def miuixVersion = '0.9.5-beta03'
 
 // Modern Xposed（libxposed）API 版本的单一来源：依赖坐标、libs/ 下两个 jar 的文件名都由
 // 这里派生；META-INF/xposed/module.prop 的 targetApiVersion 与 jar 是否存在在构建时校验，
